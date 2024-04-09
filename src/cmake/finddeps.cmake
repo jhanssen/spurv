@@ -20,3 +20,28 @@ definelib(FONTCONFIG FontConfig::FontConfig)
 
 pkg_check_modules(LIBFMT REQUIRED fmt)
 definelib(LIBFMT Fmt::Fmt)
+
+pkg_check_modules(GLFW REQUIRED glfw3)
+definelib(GLFW Glfw::Glfw)
+
+if (APPLE)
+    # attempt to use moltenvk from homebrew
+    set(MOLTENVK_DIR "/opt/homebrew/opt/molten-vk" CACHE STRING "MoltenVK directory")
+
+    if (EXISTS "${MOLTENVK_DIR}/lib/libMoltenVK.dylib")
+        set(Vulkan_FOUND 1)
+        set(Vulkan_INCLUDE_DIRS "${THIRDPARTY_DIR}/Vulkan-Headers/include")
+        set(Vulkan_LIBRARIES MoltenVK)
+        set(Vulkan_LIBRARY_DIRS "${MOLTENVK_DIR}/lib")
+        message("-- Found MoltenVK")
+    else()
+        message(FATAL_ERROR "MoltenVK not found, looked in ${MOLTENVK_DIR}\nset MOLTENVK_DIR as an option if this resides elsewhere")
+    endif()
+else()
+    find_package(Vulkan REQUIRED)
+    if (Vulkan_FOUND)
+        # always use our Vulkan-Headers
+        set(Vulkan_INCLUDE_DIRS "${THIRDPARTY_DIR}/Vulkan-Headers/include")
+    endif()
+endif()
+definelib(Vulkan Vulkan::Vulkan)

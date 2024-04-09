@@ -10,6 +10,10 @@ set(SOURCES
 set(LIBS
     FontConfig::FontConfig
     Fmt::Fmt
+    Glfw::Glfw
+    Vulkan::Vulkan
+    msdf-atlas-gen::msdf-atlas-gen
+    vk-bootstrap::vk-bootstrap
 )
 
 link_libraries(${LIBS})

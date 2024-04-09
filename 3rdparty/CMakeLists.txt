@@ -1,3 +1,5 @@
 set(MSDF_ATLAS_USE_VCPKG OFF)
 set(MSDF_ATLAS_USE_SKIA OFF)
+set(VK_BOOTSTRAP_VULKAN_HEADER_DIR ${CMAKE_CURRENT_LIST_DIR}/Vulkan-Headers/include)
 add_subdirectory(msdf-atlas-gen)
+add_subdirectory(vk-bootstrap)

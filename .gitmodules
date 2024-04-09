@@ -1,3 +1,9 @@
 [submodule "3rdparty/msdf-atlas-gen"]
 	path = 3rdparty/msdf-atlas-gen
 	url = https://github.com/Chlumsky/msdf-atlas-gen.git
+[submodule "3rdparty/vk-bootstrap"]
+	path = 3rdparty/vk-bootstrap
+	url = https://github.com/charles-lunarg/vk-bootstrap.git
+[submodule "3rdparty/Vulkan-Headers"]
+	path = 3rdparty/Vulkan-Headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git
