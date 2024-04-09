@@ -11,12 +11,15 @@ set(LIBS
     FontConfig::FontConfig
     Fmt::Fmt
     Glfw::Glfw
+    Harfbuzz::Harfbuzz
     Vulkan::Vulkan
     msdf-atlas-gen::msdf-atlas-gen
+    simdutf::simdutf
     vk-bootstrap::vk-bootstrap
 )
 
 link_libraries(${LIBS})
+add_compile_options(-Wall -Wextra -pedantic -Werror)
 
 add_subdirectory(text)
 

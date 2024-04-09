@@ -24,6 +24,9 @@ definelib(LIBFMT Fmt::Fmt)
 pkg_check_modules(GLFW REQUIRED glfw3)
 definelib(GLFW Glfw::Glfw)
 
+pkg_check_modules(HARFBUZZ REQUIRED harfbuzz)
+definelib(HARFBUZZ Harfbuzz::Harfbuzz)
+
 if (APPLE)
     # attempt to use moltenvk from homebrew
     set(MOLTENVK_DIR "/opt/homebrew/opt/molten-vk" CACHE STRING "MoltenVK directory")

@@ -7,3 +7,6 @@
 [submodule "3rdparty/Vulkan-Headers"]
 	path = 3rdparty/Vulkan-Headers
 	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+[submodule "3rdparty/simdutf"]
+	path = 3rdparty/simdutf
+	url = https://github.com/simdutf/simdutf.git
