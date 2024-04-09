@@ -13,7 +13,7 @@
 
 namespace proj
 {
-  using std::string;
+  using std::u32string;
   
   // A rope_node represents a string as a binary tree of string fragments
   //
@@ -40,17 +40,17 @@ namespace proj
     // Construct internal node by concatenating the given nodes
     rope_node(handle l, handle r);
     // Construct leaf node from the given string
-    rope_node(const string& str);
+    rope_node(const u32string& str);
     // Copy constructor
     rope_node(const rope_node&);
     
     // ACCESSORS
     size_t getLength(void) const;
-    char getCharByIndex(size_t) const;
+    char32_t getCharByIndex(size_t) const;
     // Get the substring of (len) chars beginning at index (start)
-    string getSubstring(size_t start, size_t len) const;
+    u32string getSubstring(size_t start, size_t len) const;
     // Get string contained in current node and its children
-    string treeToString(void) const;
+    u32string treeToString(void) const;
     
     // MUTATORS
     // Split the represented string at the specified index
@@ -69,7 +69,7 @@ namespace proj
     size_t weight_;
     handle left_;
     handle right_;
-    string fragment_;
+    u32string fragment_;
     
   }; // class rope_node
   

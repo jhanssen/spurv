@@ -8,12 +8,13 @@
 #pragma once
 
 #include <algorithm>
+#include <string>
 #include "node.hpp"
 
 namespace proj
 {
-  using std::string;
-  
+  using std::u32string;
+
   // A rope represents a string as a binary tree wherein the leaves contain fragments of the
   //   string. More accurately, a rope consists of a pointer to a root rope_node, which
   //   describes a binary tree of string fragments.
@@ -42,18 +43,18 @@ namespace proj
     // Default constructor - produces a rope representing the empty string
     rope(void);
     // Construct a rope from the given string
-    rope(const string&);
+    rope(const u32string&);
     // Copy constructor
     rope(const rope&);
     
     // Get the string stored in the rope
-    string toString(void) const;
+    u32string toString(void) const;
     // Get the length of the stored string
     size_t length(void) const;
     // Get the character at the given position in the represented string
-    char at(size_t index) const;
+    char32_t at(size_t index) const;
     // Return the substring of length (len) beginning at the specified index
-    string substring(size_t start, size_t len) const;
+    u32string substring(size_t start, size_t len) const;
     // Determine if rope is balanced
     bool isBalanced(void) const;
     // Balance the rope
@@ -61,10 +62,10 @@ namespace proj
     
     // MUTATORS
     // Insert the given string/rope into the rope, beginning at the specified index (i)
-    void insert(size_t i, const string& str);
+    void insert(size_t i, const u32string& str);
     void insert(size_t i, const rope& r);
     // Concatenate the existing string/rope with the argument
-    void append(const string&);
+    void append(const u32string&);
     void append(const rope&);
     // Delete the substring of (len) characters beginning at index (start)
     void rdelete(size_t start, size_t len);

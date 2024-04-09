@@ -16,11 +16,11 @@ namespace proj
   std::invalid_argument ERROR_OOB_ROPE = std::invalid_argument("Error: string index out of bounds");
 
   // Default constructor - produces a rope representing the empty string
-  rope::rope(void) : rope("")
+  rope::rope(void) : rope(u32string {})
   {}
   
   // Construct a rope from the given string
-  rope::rope(const string& str) {
+  rope::rope(const u32string& str) {
     this->root_ = make_unique<rope_node>(str);
   }
   
@@ -31,9 +31,9 @@ namespace proj
   }
   
   // Get the string stored in the rope
-  string rope::toString(void) const {
+  u32string rope::toString(void) const {
     if(this->root_ == nullptr)
-      return "";
+      return {};
     return this->root_->treeToString();
   }
   
@@ -45,21 +45,21 @@ namespace proj
   }
   
   // Get the character at the given position in the represented string
-  char rope::at(size_t index) const {
+  char32_t rope::at(size_t index) const {
     if(this->root_ == nullptr)
       throw ERROR_OOB_ROPE;
     return this->root_->getCharByIndex(index);
   }
 
   // Return the substring of length (len) beginning at the specified index
-  string rope::substring(size_t start, size_t len) const {
+  u32string rope::substring(size_t start, size_t len) const {
     size_t actualLength = this->length();
     if (start > actualLength || (start+len) > actualLength) throw ERROR_OOB_ROPE;
     return this->root_->getSubstring(start, len);
   }
 
   // Insert the given string into the rope, beginning at the specified index (i)
-  void rope::insert(size_t i, const string& str) {
+  void rope::insert(size_t i, const u32string& str) {
     this->insert(i,rope(str));
   }
 
@@ -76,7 +76,7 @@ namespace proj
   }
   
   // Append the argument to the existing rope
-  void rope::append(const string& str) {
+  void rope::append(const u32string& str) {
     rope tmp = rope(str);
     this->root_ = make_unique<rope_node>(std::move(this->root_), std::move(tmp.root_));
   }
