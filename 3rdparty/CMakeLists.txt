@@ -6,7 +6,7 @@ set(SIMDUTF_BENCHMARKS OFF)
 set(SIMDUTF_TOOLS OFF)
 set(SIMDUTF_CXX_STANDARD 20 CACHE STRING "")
 
-set(VK_BOOTSTRAP_VULKAN_HEADER_DIR ${CMAKE_CURRENT_LIST_DIR}/Vulkan-Headers/include)
+set(VK_BOOTSTRAP_VULKAN_HEADER_DIR ${CMAKE_CURRENT_LIST_DIR}/Vulkan-Headers/include CACHE FILEPATH "")
 
 add_subdirectory(msdf-atlas-gen)
 add_subdirectory(rope)
