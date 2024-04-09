@@ -12,6 +12,7 @@ set(LIBS
     Fmt::Fmt
     Glfw::Glfw
     Harfbuzz::Harfbuzz
+    Rope::Rope
     Vulkan::Vulkan
     msdf-atlas-gen::msdf-atlas-gen
     simdutf::simdutf

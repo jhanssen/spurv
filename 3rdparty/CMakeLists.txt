@@ -9,5 +9,6 @@ set(SIMDUTF_CXX_STANDARD 20 CACHE STRING "")
 set(VK_BOOTSTRAP_VULKAN_HEADER_DIR ${CMAKE_CURRENT_LIST_DIR}/Vulkan-Headers/include)
 
 add_subdirectory(msdf-atlas-gen)
+add_subdirectory(rope)
 add_subdirectory(simdutf)
 add_subdirectory(vk-bootstrap)
