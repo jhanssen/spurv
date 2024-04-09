@@ -10,3 +10,6 @@
 [submodule "3rdparty/simdutf"]
 	path = 3rdparty/simdutf
 	url = https://github.com/simdutf/simdutf.git
+[submodule "3rdparty/FunctionTraits/FunctionTraits"]
+	path = 3rdparty/FunctionTraits/FunctionTraits
+	url = https://github.com/HexadigmSystems/FunctionTraits
