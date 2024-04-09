@@ -20,8 +20,8 @@ namespace proj
   rope_node::rope_node(handle l, handle r)
     : fragment_("")
   {
-    this->left_ = move(l);
-    this->right_ = move(r);
+    this->left_ = std::move(l);
+    this->right_ = std::move(r);
     this->weight_ = this->left_->getLength();
   }
 
@@ -128,26 +128,26 @@ namespace proj
 
     // if the given node is a concat (internal) node, compare index to weight and handle
     //   accordingly
-    handle oldRight = move(node->right_);
+    handle oldRight = std::move(node->right_);
     if (index < w) {
       node->right_ = nullptr;
       node->weight_ = index;
-      std::pair<handle, handle> splitLeftResult = splitAt(move(node->left_), index);
-      node->left_ = move(splitLeftResult.first);
+      std::pair<handle, handle> splitLeftResult = splitAt(std::move(node->left_), index);
+      node->left_ = std::move(splitLeftResult.first);
       return pair<handle,handle>{
-        move(node),
-        make_unique<rope_node>(move(splitLeftResult.second), move(oldRight))
+        std::move(node),
+        make_unique<rope_node>(std::move(splitLeftResult.second), std::move(oldRight))
       };
     } else if (w < index) {
-      pair<handle, handle> splitRightResult = splitAt(move(oldRight),index-w);
-      node->right_ = move(splitRightResult.first);
+      pair<handle, handle> splitRightResult = splitAt(std::move(oldRight),index-w);
+      node->right_ = std::move(splitRightResult.first);
       return pair<handle,handle>{
-        move(node),
-        move(splitRightResult.second)
+        std::move(node),
+        std::move(splitRightResult.second)
       };
     } else {
       return pair<handle,handle>{
-        move(node->left_), move(oldRight)
+        std::move(node->left_), std::move(oldRight)
       };
     }
   }

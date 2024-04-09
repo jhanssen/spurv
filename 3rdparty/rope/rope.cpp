@@ -69,22 +69,22 @@ namespace proj
       throw ERROR_OOB_ROPE;
     } else {
       rope tmp = rope(r);
-      pair<handle, handle> origRopeSplit = splitAt(move(this->root_),i);
-      handle tmpConcat = make_unique<rope_node>(move(origRopeSplit.first), move(tmp.root_));
-      this->root_ = make_unique<rope_node>(move(tmpConcat), move(origRopeSplit.second));
+      pair<handle, handle> origRopeSplit = splitAt(std::move(this->root_),i);
+      handle tmpConcat = make_unique<rope_node>(std::move(origRopeSplit.first), std::move(tmp.root_));
+      this->root_ = make_unique<rope_node>(std::move(tmpConcat), std::move(origRopeSplit.second));
     }
   }
   
   // Append the argument to the existing rope
   void rope::append(const string& str) {
     rope tmp = rope(str);
-    this->root_ = make_unique<rope_node>(move(this->root_), move(tmp.root_));
+    this->root_ = make_unique<rope_node>(std::move(this->root_), std::move(tmp.root_));
   }
 
   // Append the argument to the existing rope
   void rope::append(const rope& r) {
     rope tmp = rope(r);
-    this->root_ = make_unique<rope_node>(move(this->root_), move(tmp.root_));
+    this->root_ = make_unique<rope_node>(std::move(this->root_), std::move(tmp.root_));
   }
   
   // Delete the substring of (len) characters beginning at index (start)
@@ -93,10 +93,10 @@ namespace proj
     if (start > actualLength || start+len > actualLength) {
       throw ERROR_OOB_ROPE;
     } else {
-      pair<handle, handle> firstSplit = splitAt(move(this->root_),start);
-      pair<handle, handle> secondSplit = splitAt(move(firstSplit.second),len);
+      pair<handle, handle> firstSplit = splitAt(std::move(this->root_),start);
+      pair<handle, handle> secondSplit = splitAt(std::move(firstSplit.second),len);
       secondSplit.first.reset();
-      this->root_ = make_unique<rope_node>(move(firstSplit.first), move(secondSplit.second));
+      this->root_ = make_unique<rope_node>(std::move(firstSplit.first), std::move(secondSplit.second));
     }
   }
   
@@ -148,8 +148,8 @@ namespace proj
                 // concatenate encountered entries with node to be inserted
                 tmp = make_unique<rope_node>(*nodes[i].get());
                 acc = make_unique<rope_node>(*acc.get());
-                acc = make_unique<rope_node>(move(tmp),move(acc));
-                
+                acc = make_unique<rope_node>(std::move(tmp),std::move(acc));
+
                 // update len
                 len = acc->getLength();
                 
@@ -170,8 +170,8 @@ namespace proj
               // concatenate encountered entries with node to be inserted
               tmp = make_unique<rope_node>(*nodes[i].get());
               acc = make_unique<rope_node>(*acc.get());
-              acc = make_unique<rope_node>(move(tmp),move(acc));
-              
+              acc = make_unique<rope_node>(std::move(tmp),std::move(acc));
+
               // update len
               len = acc->getLength();
               
@@ -184,14 +184,14 @@ namespace proj
       }
       
       // concatenate remaining entries to produce balanced rope
-      acc = move(nodes[currMaxInterval]);
+      acc = std::move(nodes[currMaxInterval]);
       for(int idx = currMaxInterval; idx >= 0; idx--) {
         if(nodes[idx] != nullptr) {
           tmp = make_unique<rope_node>(*nodes[idx].get());
-          acc = make_unique<rope_node>(move(acc),move(tmp));
+          acc = make_unique<rope_node>(std::move(acc),std::move(tmp));
         }
       }
-      this->root_ = move(acc); // reset root
+      this->root_ = std::move(acc); // reset root
       
     }
   }
