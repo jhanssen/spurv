@@ -67,7 +67,7 @@ void Signal<T>::emit(Args&& ...args)
 
 template<typename T>
 template<typename Func>
-inline void Signal<T>::connect(Func&& f)
+void Signal<T>::connect(Func&& f)
 {
     mFuncs.push_back(std::move(f));
 }

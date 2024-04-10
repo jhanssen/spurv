@@ -23,8 +23,15 @@ set(LIBS
 link_libraries(${LIBS})
 add_compile_options(-Wall -Wextra -pedantic -Werror -Wno-comment)
 
+set(USE_GLFW ON)
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config/config.h)
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/config ${CMAKE_CURRENT_LIST_DIR})
+
 add_subdirectory(signal)
+add_subdirectory(window)
+add_subdirectory(event)
 add_subdirectory(text)
 
-add_executable(spurv ${SOURCES} $<TARGET_OBJECTS:Spurv::Text>)
+add_executable(spurv ${SOURCES} $<TARGET_OBJECTS:Spurv::Window> $<TARGET_OBJECTS:Spurv::Event> $<TARGET_OBJECTS:Spurv::Text>)
 target_link_libraries(spurv Spurv::Signal)
