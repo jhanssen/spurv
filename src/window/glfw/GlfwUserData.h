@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
+#include <cassert>
 
 namespace spurv {
 
@@ -17,7 +18,10 @@ public:
     void set(T* t);
 
     template<std::size_t Idx, typename T>
-    static T* get(GLFWwindow *win);
+    static T* get(GLFWwindow* win);
+
+    template<std::size_t Idx, typename T>
+    static void set(GLFWwindow* win, T* t);
 
 private:
     enum { NumEntries = 4 };
@@ -43,7 +47,16 @@ template<std::size_t Idx, typename T>
 T* GlfwUserData::get(GLFWwindow *win)
 {
     auto userData = reinterpret_cast<GlfwUserData*>(glfwGetWindowUserPointer(win));
+    assert(userData != nullptr);
     return userData->get<Idx, T>();
+}
+
+template<std::size_t Idx, typename T>
+void GlfwUserData::set(GLFWwindow* win, T* t)
+{
+    auto userData = reinterpret_cast<GlfwUserData*>(glfwGetWindowUserPointer(win));
+    assert(userData != nullptr);
+    userData->set<Idx>(t);
 }
 
 } // namespace spurv

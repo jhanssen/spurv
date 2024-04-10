@@ -3,7 +3,6 @@
 #include <window/glfw/GlfwUserData.h>
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
-#include <cassert>
 
 using namespace spurv;
 
@@ -13,9 +12,7 @@ void EventLoop::run()
     if (!mainWindow)
         return;
 
-    GlfwUserData* userData = reinterpret_cast<GlfwUserData*>(glfwGetWindowUserPointer(mainWindow));
-    assert(userData != nullptr);
-    userData->set<1>(this);
+    GlfwUserData::set<1>(mainWindow, this);
 
     glfwSetCharCallback(mainWindow, [](GLFWwindow* win, unsigned int codepoint) {
         auto eventLoop = GlfwUserData::get<1, EventLoop>(win);
