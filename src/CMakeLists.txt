@@ -35,3 +35,9 @@ add_subdirectory(text)
 
 add_executable(spurv ${SOURCES} $<TARGET_OBJECTS:Spurv::Window> $<TARGET_OBJECTS:Spurv::Event> $<TARGET_OBJECTS:Spurv::Text>)
 target_link_libraries(spurv Spurv::Signal)
+
+set_target_properties(spurv PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
