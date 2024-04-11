@@ -46,7 +46,7 @@ void GlfwUserData::set(T* t)
 template<std::size_t Idx, typename T>
 T* GlfwUserData::get(GLFWwindow *win)
 {
-    auto userData = reinterpret_cast<GlfwUserData*>(glfwGetWindowUserPointer(win));
+    auto userData = static_cast<GlfwUserData*>(glfwGetWindowUserPointer(win));
     assert(userData != nullptr);
     return userData->get<Idx, T>();
 }
@@ -54,7 +54,7 @@ T* GlfwUserData::get(GLFWwindow *win)
 template<std::size_t Idx, typename T>
 void GlfwUserData::set(GLFWwindow* win, T* t)
 {
-    auto userData = reinterpret_cast<GlfwUserData*>(glfwGetWindowUserPointer(win));
+    auto userData = static_cast<GlfwUserData*>(glfwGetWindowUserPointer(win));
     assert(userData != nullptr);
     userData->set<Idx>(t);
 }

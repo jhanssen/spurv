@@ -22,10 +22,9 @@ public:
     void show();
     void hide();
 
-    bool isMainWindow() const;
-
     const Rect& rect() const;
 
+    bool isMainWindow() const;
     static Window* mainWindow();
 
 #if defined(USE_GLFW)
@@ -51,6 +50,11 @@ private:
 private:
     static Window* sMainWindow;
 };
+
+inline const Rect& Window::rect() const
+{
+    return mRect;
+}
 
 inline bool Window::isMainWindow() const
 {
