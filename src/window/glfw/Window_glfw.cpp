@@ -10,6 +10,8 @@ void Window::init_sys()
     }
     mWindow = glfwCreateWindow(mWidth, mHeight, "Spurv", nullptr, nullptr);
     if (mWindow != nullptr) {
+        glfwSetWindowPos(mWindow, mX, mY);
+
         auto userData = new GlfwUserData;
         userData->set<0>(this);
         glfwSetWindowUserPointer(mWindow, userData);
