@@ -4,8 +4,8 @@ using namespace spurv;
 
 Window* Window::sMainWindow = nullptr;
 
-Window::Window(int32_t x, int32_t y, uint32_t width, uint32_t height)
-    : mX(x), mY(y), mWidth(width), mHeight(height)
+Window::Window(const Rect& rect)
+    : mRect(rect)
 {
     if (sMainWindow == nullptr) {
         sMainWindow = this;

@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <memory>
 #include <config.h>
+#include <Geometry.h>
+#include <Signal.h>
 
 #if defined(USE_GLFW)
 # include <vulkan/vulkan.h>
@@ -14,7 +16,7 @@ namespace spurv {
 class Window
 {
 public:
-    Window(int32_t x, int32_t y, uint32_t width, uint32_t height);
+    Window(const Rect& rect);
     ~Window();
 
     void show();
@@ -22,19 +24,25 @@ public:
 
     bool isMainWindow() const;
 
+    const Rect& rect() const;
+
     static Window* mainWindow();
 
 #if defined(USE_GLFW)
     GLFWwindow* glfwWindow() const;
 #endif
 
-private:
-    int32_t mX, mY;
-    uint32_t mWidth, mHeight;
+    Signal<void(int32_t, int32_t)>& onMove();
+    Signal<void(uint32_t, uint32_t)>& onResize();
 
 private:
     void init_sys();
     void cleanup_sys();
+
+private:
+    Rect mRect;
+    Signal<void(int32_t, int32_t)> mOnMove;
+    Signal<void(uint32_t, uint32_t)> mOnResize;
 
 #if defined(USE_GLFW)
     GLFWwindow* mWindow = nullptr;
@@ -60,5 +68,15 @@ inline GLFWwindow* Window::glfwWindow() const
     return mWindow;
 }
 #endif
+
+inline Signal<void(uint32_t, uint32_t)>& Window::onResize()
+{
+    return mOnResize;
+}
+
+inline Signal<void(int32_t, int32_t)>& Window::onMove()
+{
+    return mOnMove;
+}
 
 } // namespace spurv

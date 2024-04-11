@@ -26,7 +26,7 @@ add_compile_options(-Wall -Wextra -pedantic -Werror -Wno-comment)
 set(USE_GLFW ON)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config/config.h)
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/config ${CMAKE_CURRENT_LIST_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/config ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/common)
 
 add_subdirectory(signal)
 add_subdirectory(window)

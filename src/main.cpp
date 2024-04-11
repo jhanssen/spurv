@@ -2,6 +2,7 @@
 #include "window/Window.h"
 #include "event/EventLoop.h"
 #include "Args.h"
+#include "common/Geometry.h"
 #include <fmt/core.h>
 #include <cstdint>
 
@@ -17,12 +18,17 @@ int main(int argc, char** argv, char** envp)
     Font font("Corsiva");
     fmt::print("hello world {}\n", font.file().string());
 
-    const auto x = args.value<int32_t>("x", 0);
-    const auto y = args.value<int32_t>("y", 0);
-    const auto width = args.value<uint32_t>("width", 1920);
-    const auto height = args.value<uint32_t>("height", 1920);
+    const Rect rect = {
+        .x = args.value<int32_t>("x", 0),
+        .y = args.value<int32_t>("y", 0),
+        .width = args.value<uint32_t>("width", 1920),
+        .height = args.value<uint32_t>("height", 1920)
+    };
 
-    Window window(x, y, width, height);
+    Window window(rect);
+    window.onResize().connect([](uint32_t w, uint32_t h) {
+        fmt::print("window resized {} {}\n", w, h);
+    });
     window.show();
 
     EventLoop loop;
