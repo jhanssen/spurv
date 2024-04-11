@@ -3,6 +3,7 @@
 #include "event/EventLoop.h"
 #include "Args.h"
 #include "common/Geometry.h"
+#include "thread/ThreadPool.h"
 #include <fmt/core.h>
 #include <cstdint>
 
