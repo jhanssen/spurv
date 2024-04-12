@@ -113,16 +113,22 @@ void EventLoop::run()
                 });
             }
 
-            const auto next = timers.front().next;
+            const uint64_t next = !timers.empty() ? timers.front().next : 0;
             lock.unlock();
 
             for (const auto& ev : tofire) {
                 ev->execute();
             }
 
-            now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-            if (next > now) {
-                glfwWaitEventsTimeout((next - now) / 1000.0);
+            if (next > 0) {
+                now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+                if (next > now) {
+                    glfwWaitEventsTimeout((next - now) / 1000.0);
+                }
+            } else {
+                // next == 0 means timers were empty after
+                // removing the SingleShot ones
+                glfwWaitEvents();
             }
 
             lock.lock();
