@@ -42,6 +42,8 @@ EventLoopImplMain::~EventLoopImplMain()
 EventLoopMain::EventLoopMain()
     : EventLoop()
 {
+    assert(sMainEventLoop == nullptr);
+    sMainEventLoop = this;
 }
 
 EventLoopMain::~EventLoopMain()

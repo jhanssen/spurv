@@ -82,8 +82,10 @@ private:
     // ### probably just hold two raw pointers here instead of a variant
     std::variant<EventLoopImplMain*, EventLoopImplUv*, std::nullopt_t> mImpl = std::nullopt;
 
-private:
+protected:
     static EventLoop* sMainEventLoop;
+
+private:
     thread_local static EventLoop* tEventLoop;
 
     friend class EventLoopMain;

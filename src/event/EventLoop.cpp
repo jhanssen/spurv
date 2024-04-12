@@ -77,9 +77,6 @@ private:
 
 EventLoop::EventLoop()
 {
-    if (sMainEventLoop == nullptr) {
-        sMainEventLoop = this;
-    }
     assert(tEventLoop == nullptr);
     tEventLoop = this;
 }

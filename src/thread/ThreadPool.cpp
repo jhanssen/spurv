@@ -2,6 +2,8 @@
 
 using namespace spurv;
 
+ThreadPool* ThreadPool::sMainThreadPool = nullptr;
+
 ThreadPool::ThreadPool()
     : ThreadPool(std::thread::hardware_concurrency())
 {
@@ -9,6 +11,9 @@ ThreadPool::ThreadPool()
 
 ThreadPool::ThreadPool(uint32_t numThreads)
 {
+    if (sMainThreadPool == nullptr) {
+        sMainThreadPool = this;
+    }
     // start <numThreads> threads
     for (uint32_t t = 0; t < numThreads; ++t) {
         mThreads.push_back(std::thread(&ThreadPool::thread_internal, this));
@@ -24,6 +29,9 @@ ThreadPool::~ThreadPool()
     }
     for (auto& t : mThreads) {
         t.join();
+    }
+    if (sMainThreadPool == this) {
+        sMainThreadPool = nullptr;
     }
 }
 

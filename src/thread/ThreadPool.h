@@ -25,6 +25,9 @@ public:
     ThreadPool(uint32_t numThreads);
     ~ThreadPool();
 
+    bool isMainThreadPool() const;
+    static ThreadPool* mainThreadPool();
+
     template<NonVoidReturn Func>
     std::future<typename FunctionTraits<Func>::ReturnType> post(Func&& func);
 
@@ -80,6 +83,8 @@ private:
     std::deque<std::unique_ptr<Task>> mTasks;
     std::vector<std::thread> mThreads;
     bool mStopped = false;
+
+    static ThreadPool* sMainThreadPool;
 };
 
 template<NonVoidReturn Func>
@@ -104,4 +109,14 @@ void ThreadPool::post(Func&& func)
     mCond.notify_one();
 }
 
-} // namespace spurv
+inline bool ThreadPool::isMainThreadPool() const
+{
+    return sMainThreadPool == this;
+}
+
+inline ThreadPool* ThreadPool::mainThreadPool()
+{
+    return sMainThreadPool;
+}
+
+} // namespacespurv
