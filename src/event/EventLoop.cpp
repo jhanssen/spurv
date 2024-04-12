@@ -77,8 +77,6 @@ private:
 
 EventLoop::EventLoop()
 {
-    assert(tEventLoop == nullptr);
-    tEventLoop = this;
 }
 
 EventLoop::~EventLoop()
@@ -89,6 +87,12 @@ EventLoop::~EventLoop()
     }
     assert(tEventLoop == this);
     tEventLoop = nullptr;
+}
+
+void EventLoop::install()
+{
+    assert(tEventLoop == nullptr);
+    tEventLoop = this;
 }
 
 bool EventLoop::processEvents()
@@ -139,6 +143,16 @@ uint64_t EventLoop::startTimer(std::function<void()>&& event, uint64_t timeout, 
 void EventLoop::stopTimer(uint64_t id)
 {
     stopTimer_internal(id);
+}
+
+void* EventLoop::handle() const
+{
+    auto uvImpl = std::get_if<EventLoopImplUv*>(&mImpl);
+    if (uvImpl) {
+        auto uvloop = &(*uvImpl)->uvloop;
+        return uvloop;
+    }
+    return nullptr;
 }
 
 void EventLoop::post_internal(std::unique_ptr<Event>&& event)
@@ -225,5 +239,9 @@ void EventLoop::run_internal()
     uv_loop_set_data(&uvImpl->uvloop, this);
     uv_async_init(&uvImpl->uvloop, &uvImpl->uvpost, EventLoopImplUv::processPost);
     uvImpl->uvpost.data = this;
+
+    // give events a chance to run
+    processEvents();
+
     uv_run(&uvImpl->uvloop, UV_RUN_DEFAULT);
 }

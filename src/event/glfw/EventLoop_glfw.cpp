@@ -44,6 +44,7 @@ MainEventLoop::MainEventLoop()
 {
     assert(sMainEventLoop == nullptr);
     sMainEventLoop = this;
+    install();
 }
 
 MainEventLoop::~MainEventLoop()
@@ -207,4 +208,9 @@ void MainEventLoop::stopTimer(uint64_t id)
         }
         ++it;
     }
+}
+
+void* MainEventLoop::handle() const
+{
+    return nullptr;
 }

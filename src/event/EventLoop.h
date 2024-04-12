@@ -35,6 +35,8 @@ public:
     EventLoop();
     virtual ~EventLoop();
 
+    void install();
+
     virtual void run();
     virtual void stop();
 
@@ -60,6 +62,8 @@ public:
         Direct,
         Queued
     };
+
+    virtual void* handle() const;
 
 private:
     void run_internal();

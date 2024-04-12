@@ -4,6 +4,7 @@
 #include "Args.h"
 #include "common/Geometry.h"
 #include "thread/ThreadPool.h"
+#include "render/Renderer.h"
 #include <fmt/core.h>
 #include <cstdint>
 
@@ -36,5 +37,8 @@ int main(int argc, char** argv, char** envp)
     loop.onUnicode().connect([](uint32_t uc) {
         fmt::print("unicode {}\n", uc);
     });
+
+    Renderer::initialize();
+
     loop.run();
 }

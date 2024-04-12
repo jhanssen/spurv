@@ -21,6 +21,8 @@ public:
     virtual uint64_t startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot) override;
     virtual void stopTimer(uint64_t id) override;
 
+    virtual void* handle() const override;
+
     EventEmitter<void(uint32_t)>& onUnicode();
 
 private:
