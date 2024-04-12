@@ -34,6 +34,7 @@ public:
 private:
     struct Task
     {
+        virtual ~Task() { }
         virtual void run() = 0;
     };
 

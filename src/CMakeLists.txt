@@ -29,14 +29,13 @@ set(USE_GLFW ON)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config/config.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/config ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/common)
 
-add_subdirectory(signal)
 add_subdirectory(window)
 add_subdirectory(event)
 add_subdirectory(text)
 add_subdirectory(thread)
 
 add_executable(spurv ${SOURCES} $<TARGET_OBJECTS:Spurv::Window> $<TARGET_OBJECTS:Spurv::Event> $<TARGET_OBJECTS:Spurv::Text> $<TARGET_OBJECTS:Spurv::Thread>)
-target_link_libraries(spurv Spurv::Signal)
+target_link_libraries(spurv Spurv::Event)
 
 set_target_properties(spurv PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"

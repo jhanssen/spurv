@@ -4,7 +4,7 @@
 #include <memory>
 #include <config.h>
 #include <Geometry.h>
-#include <Signal.h>
+#include <EventEmitter.h>
 
 #if defined(USE_GLFW)
 # include <vulkan/vulkan.h>
@@ -31,8 +31,8 @@ public:
     GLFWwindow* glfwWindow() const;
 #endif
 
-    Signal<void(int32_t, int32_t)>& onMove();
-    Signal<void(uint32_t, uint32_t)>& onResize();
+    EventEmitter<void(int32_t, int32_t)>& onMove();
+    EventEmitter<void(uint32_t, uint32_t)>& onResize();
 
 private:
     void init_sys();
@@ -40,8 +40,8 @@ private:
 
 private:
     Rect mRect;
-    Signal<void(int32_t, int32_t)> mOnMove;
-    Signal<void(uint32_t, uint32_t)> mOnResize;
+    EventEmitter<void(int32_t, int32_t)> mOnMove;
+    EventEmitter<void(uint32_t, uint32_t)> mOnResize;
 
 #if defined(USE_GLFW)
     GLFWwindow* mWindow = nullptr;
@@ -73,12 +73,12 @@ inline GLFWwindow* Window::glfwWindow() const
 }
 #endif
 
-inline Signal<void(uint32_t, uint32_t)>& Window::onResize()
+inline EventEmitter<void(uint32_t, uint32_t)>& Window::onResize()
 {
     return mOnResize;
 }
 
-inline Signal<void(int32_t, int32_t)>& Window::onMove()
+inline EventEmitter<void(int32_t, int32_t)>& Window::onMove()
 {
     return mOnMove;
 }

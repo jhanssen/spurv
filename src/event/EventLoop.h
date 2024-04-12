@@ -7,7 +7,7 @@
 #include <vector>
 #include <optional>
 #include <cstdint>
-#include <Signal.h>
+#include <EventEmitter.h>
 
 namespace spurv {
 
@@ -49,7 +49,7 @@ public:
     uint64_t startTimer(std::function<void()>&& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
     void stopTimer(uint64_t id);
 
-    Signal<void(uint32_t)>& onUnicode();
+    EventEmitter<void(uint32_t)>& onUnicode();
 
     bool isMainEventLoop() const;
     static EventLoop* mainEventLoop();
@@ -77,7 +77,7 @@ private:
     std::vector<Timer> mTimers;
     uint64_t mNextTimerId = 0;
 
-    Signal<void(uint32_t)> mOnUnicode;
+    EventEmitter<void(uint32_t)> mOnUnicode;
     bool mStopped = false;
 
     // ### probably just hold two raw pointers here instead of a variant
@@ -90,7 +90,7 @@ private:
     friend struct EventLoopImplUv;
 };
 
-inline Signal<void(uint32_t)>& EventLoop::onUnicode()
+inline EventEmitter<void(uint32_t)>& EventLoop::onUnicode()
 {
     return mOnUnicode;
 }

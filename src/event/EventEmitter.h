@@ -20,13 +20,13 @@ struct FunctionBuilder<std::tuple<Ts...>>
 };
 
 template<typename T>
-class Signal
+class EventEmitter
 {
 public:
-    Signal();
-    Signal(Signal&&) = default;
+    EventEmitter();
+    EventEmitter(EventEmitter&&) = default;
 
-    Signal& operator=(Signal&&) = default;
+    EventEmitter& operator=(EventEmitter&&) = default;
 
     using ReturnType = typename FunctionTraits<T>::ReturnType;
     using ArgTypes = typename FunctionTraits<T>::ArgTypes;
@@ -38,22 +38,22 @@ public:
     void connect(Func&&);
 
 private:
-    Signal(const Signal&) = delete;
-    Signal& operator=(const Signal&) = delete;
+    EventEmitter(const EventEmitter&) = delete;
+    EventEmitter& operator=(const EventEmitter&) = delete;
 
 private:
     std::vector<typename FunctionBuilder<ArgTypes>::Type> mFuncs;
 };
 
 template<typename T>
-inline Signal<T>::Signal()
+inline EventEmitter<T>::EventEmitter()
 {
-    static_assert(std::is_void_v<ReturnType>, "Signal only supports void return types");
+    static_assert(std::is_void_v<ReturnType>, "EventEmitter only supports void return types");
 }
 
 template<typename T>
 template<typename ...Args>
-void Signal<T>::emit(Args&& ...args)
+void EventEmitter<T>::emit(Args&& ...args)
 {
     auto tuple = std::make_tuple(std::forward<Args>(args)...);
     if (mFuncs.size() == 1) {
@@ -67,7 +67,7 @@ void Signal<T>::emit(Args&& ...args)
 
 template<typename T>
 template<typename Func>
-void Signal<T>::connect(Func&& f)
+void EventEmitter<T>::connect(Func&& f)
 {
     mFuncs.push_back(std::move(f));
 }
