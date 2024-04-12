@@ -21,7 +21,12 @@ set(LIBS
     vk-bootstrap::vk-bootstrap
 )
 
-link_libraries(${LIBS})
+# add all LIBS interface dirs as include dirs to all of spurv
+foreach(LIB ${LIBS})
+    get_target_property(IFACE ${LIB} INTERFACE_INCLUDE_DIRECTORIES)
+    include_directories(${IFACE})
+endforeach()
+
 add_compile_options(-Wall -Wextra -pedantic -Werror -Wno-comment)
 
 set(USE_GLFW ON)
@@ -35,7 +40,7 @@ add_subdirectory(text)
 add_subdirectory(thread)
 
 add_executable(spurv ${SOURCES} $<TARGET_OBJECTS:Spurv::Window> $<TARGET_OBJECTS:Spurv::Event> $<TARGET_OBJECTS:Spurv::Text> $<TARGET_OBJECTS:Spurv::Thread>)
-target_link_libraries(spurv Spurv::Event)
+target_link_libraries(spurv Spurv::Event ${LIBS})
 
 set_target_properties(spurv PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
