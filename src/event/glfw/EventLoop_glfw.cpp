@@ -57,10 +57,13 @@ void EventLoop::run()
 
     GlfwUserData::set<1>(mainWindow, this);
 
+#warning fixme, unicode. probably make EventLoopGlfw thats a subclass
+    /*
     glfwSetCharCallback(mainWindow, [](GLFWwindow* win, unsigned int codepoint) {
         auto eventLoop = GlfwUserData::get<1, EventLoop>(win);
         eventLoop->mOnUnicode.emit(codepoint);
     });
+    */
 
     for (;;) {
         if (!processEvents())

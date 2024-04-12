@@ -33,8 +33,8 @@ int main(int argc, char** argv, char** envp)
     window.show();
 
     EventLoop loop;
-    loop.onUnicode().connect([](uint32_t uc) {
-        fmt::print("unicode {}\n", uc);
-    });
+    // loop.onUnicode().connect([](uint32_t uc) {
+    //     fmt::print("unicode {}\n", uc);
+    // });
     loop.run();
 }

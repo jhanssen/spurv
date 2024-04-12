@@ -5,6 +5,7 @@
 using namespace spurv;
 
 EventLoop* EventLoop::sMainEventLoop = nullptr;
+thread_local EventLoop* EventLoop::tEventLoop = nullptr;
 
 namespace spurv {
 struct EventLoopImplUv
@@ -79,6 +80,8 @@ EventLoop::EventLoop()
     if (sMainEventLoop == nullptr) {
         sMainEventLoop = this;
     }
+    assert(tEventLoop == nullptr);
+    tEventLoop = this;
 }
 
 EventLoop::~EventLoop()
@@ -87,6 +90,8 @@ EventLoop::~EventLoop()
     if (sMainEventLoop == this) {
         sMainEventLoop = nullptr;
     }
+    assert(tEventLoop == this);
+    tEventLoop = nullptr;
 }
 
 bool EventLoop::processEvents()
