@@ -5,7 +5,10 @@
 #include <mutex>
 #include <thread>
 #include <memory>
+#include <optional>
+#include <cstdint>
 #include <cassert>
+#include "Box.h"
 
 namespace spurv {
 
@@ -21,6 +24,11 @@ public:
     static Renderer* instance();
     static EventLoop* eventLoop();
 
+    using BoxRow = std::vector<Box>;
+    using Boxes = std::vector<BoxRow>;
+
+    void setBoxes(Boxes&& boxes);
+
 private:
     Renderer();
 
@@ -28,6 +36,8 @@ private:
     void thread_internal();
     void render();
     void stop();
+
+    bool recreateSwapchain();
 
 private:
     static std::unique_ptr<Renderer> sInstance;

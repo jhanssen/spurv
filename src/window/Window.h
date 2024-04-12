@@ -2,12 +2,13 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <config.h>
 #include <Geometry.h>
 #include <EventEmitter.h>
+#include <vulkan/vulkan.h>
 
 #if defined(USE_GLFW)
-# include <vulkan/vulkan.h>
 # include <GLFW/glfw3.h>
 #endif
 
@@ -27,6 +28,8 @@ public:
     bool isMainWindow() const;
     static Window* mainWindow();
 
+    VkSurfaceKHR surface(VkInstance instance);
+
 #if defined(USE_GLFW)
     GLFWwindow* glfwWindow() const;
 #endif
@@ -39,6 +42,7 @@ private:
     void cleanup_sys();
 
 private:
+    mutable std::mutex mMutex;
     Rect mRect;
     EventEmitter<void(int32_t, int32_t)> mOnMove;
     EventEmitter<void(uint32_t, uint32_t)> mOnResize;
@@ -49,10 +53,13 @@ private:
 
 private:
     static Window* sMainWindow;
+
+    VkSurfaceKHR mSurface = VK_NULL_HANDLE;
 };
 
 inline const Rect& Window::rect() const
 {
+    std::lock_guard lock(mMutex);
     return mRect;
 }
 

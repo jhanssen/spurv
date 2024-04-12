@@ -62,6 +62,7 @@ public:
         Direct,
         Queued
     };
+    using ConnectKey = uint32_t;
 
     virtual void* handle() const;
 

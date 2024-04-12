@@ -28,9 +28,6 @@ int main(int argc, char** argv, char** envp)
     };
 
     Window window(rect);
-    window.onResize().connect([](uint32_t w, uint32_t h) {
-        fmt::print("window resized {} {}\n", w, h);
-    });
     window.show();
 
     MainEventLoop loop;
@@ -39,6 +36,11 @@ int main(int argc, char** argv, char** envp)
     });
 
     Renderer::initialize();
-
+    Renderer::instance()->setBoxes({ {
+                Box {
+                    { 0.8, 0.0, 0.8, 0.8 },
+                    { 0.3, 0.0, 0.3, 0.3 }
+                }
+            } });
     loop.run();
 }

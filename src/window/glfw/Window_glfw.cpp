@@ -1,5 +1,6 @@
 #include <Window.h>
 #include "GlfwUserData.h"
+#include <fmt/core.h>
 
 using namespace spurv;
 
@@ -7,10 +8,16 @@ void Window::init_sys()
 {
     if (isMainWindow()) {
         glfwInit();
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     }
-    mWindow = glfwCreateWindow(mRect.width, mRect.height, "Spurv", nullptr, nullptr);
+    Rect rect;
+    {
+        std::lock_guard lock(mMutex);
+        rect = mRect;
+    }
+    mWindow = glfwCreateWindow(rect.width, rect.height, "Spurv", nullptr, nullptr);
     if (mWindow != nullptr) {
-        glfwSetWindowPos(mWindow, mRect.x, mRect.y);
+        glfwSetWindowPos(mWindow, rect.x, rect.y);
 
         auto userData = new GlfwUserData;
         userData->set<0>(this);
@@ -18,15 +25,21 @@ void Window::init_sys()
 
         glfwSetWindowPosCallback(mWindow, [](GLFWwindow* glfwwin, int x, int y) {
             auto window = GlfwUserData::get<0, Window>(glfwwin);
-            window->mRect.x = x;
-            window->mRect.y = y;
+            {
+                std::lock_guard lock(window->mMutex);
+                window->mRect.x = x;
+                window->mRect.y = y;
+            }
 
             window->mOnMove.emit(x, y);
         });
         glfwSetWindowSizeCallback(mWindow, [](GLFWwindow* glfwwin, int w, int h) {
             auto window = GlfwUserData::get<0, Window>(glfwwin);
-            window->mRect.width = w;
-            window->mRect.height = h;
+            {
+                std::lock_guard lock(window->mMutex);
+                window->mRect.width = w;
+                window->mRect.height = h;
+            }
 
             window->mOnResize.emit(w, h);
         });
@@ -57,4 +70,16 @@ void Window::hide()
         return;
     }
     glfwHideWindow(mWindow);
+}
+
+VkSurfaceKHR Window::surface(VkInstance instance)
+{
+    if (mSurface == VK_NULL_HANDLE && mWindow) {
+        VkResult err = glfwCreateWindowSurface(instance, mWindow, nullptr, &mSurface);
+        if (err) {
+            fmt::print(stderr, "Unable to create window surface: {}\n", err);
+            mSurface = VK_NULL_HANDLE; // just in case
+        }
+    }
+    return mSurface;
 }
