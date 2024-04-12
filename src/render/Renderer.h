@@ -46,7 +46,7 @@ private:
     std::condition_variable mCond;
     std::thread mThread;
     std::unique_ptr<EventLoop> mEventLoop;
-    bool mInitialized = false, mStopped = true;
+    bool mInitialized = false; //, mStopped = true;
 
     RendererImpl* mImpl;
 

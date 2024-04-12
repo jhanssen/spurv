@@ -1,6 +1,7 @@
 #include <Window.h>
 #include "GlfwUserData.h"
 #include <fmt/core.h>
+#include <Formatting.h>
 
 using namespace spurv;
 
