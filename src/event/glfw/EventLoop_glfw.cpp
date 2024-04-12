@@ -1,4 +1,4 @@
-#include <EventLoop.h>
+#include <EventLoopMain.h>
 #include <window/Window.h>
 #include <window/glfw/GlfwUserData.h>
 #include <vulkan/vulkan.h>
@@ -21,7 +21,7 @@ struct EventLoopImplMain
         uint64_t started;
         uint64_t next;
         uint64_t timeout;
-        std::shared_ptr<EventLoop::Event> event;
+        std::shared_ptr<EventLoopMain::Event> event;
         bool repeats;
     };
     std::vector<Timer> timers;
@@ -39,13 +39,18 @@ EventLoopImplMain::~EventLoopImplMain()
 }
 } // namespace spurv
 
-
-void EventLoop::run()
+EventLoopMain::EventLoopMain()
+    : EventLoop()
 {
-    if (!isMainEventLoop()) {
-        run_internal();
-        return;
-    }
+}
+
+EventLoopMain::~EventLoopMain()
+{
+}
+
+void EventLoopMain::run()
+{
+    assert(isMainEventLoop());
 
     assert(std::holds_alternative<std::nullopt_t>(mImpl));
     EventLoopImplMain* mainImpl = new EventLoopImplMain(this);
@@ -57,13 +62,10 @@ void EventLoop::run()
 
     GlfwUserData::set<1>(mainWindow, this);
 
-#warning fixme, unicode. probably make EventLoopGlfw thats a subclass
-    /*
     glfwSetCharCallback(mainWindow, [](GLFWwindow* win, unsigned int codepoint) {
-        auto eventLoop = GlfwUserData::get<1, EventLoop>(win);
+        auto eventLoop = GlfwUserData::get<1, EventLoopMain>(win);
         eventLoop->mOnUnicode.emit(codepoint);
     });
-    */
 
     for (;;) {
         if (!processEvents())
@@ -83,7 +85,7 @@ void EventLoop::run()
             // keep track of things to fire outside of the lock later
             // this ensures that we don't iterate over the event vector
             // while it could potentially be modified
-            std::vector<std::shared_ptr<EventLoop::Event>> tofire;
+            std::vector<std::shared_ptr<EventLoopMain::Event>> tofire;
 
             bool needsResort = false;
             auto it = timers.begin();
@@ -139,68 +141,68 @@ void EventLoop::run()
     }
 }
 
-void EventLoop::stop()
+void EventLoopMain::stop()
 {
+    assert(isMainEventLoop());
     stop_internal();
 
-    if (std::holds_alternative<EventLoopImplMain*>(mImpl)) {
-        assert(isMainEventLoop());
-        delete std::get<EventLoopImplMain*>(mImpl);
-        mImpl = std::nullopt;
-        glfwPostEmptyEvent();
-    }
+    delete std::get<EventLoopImplMain*>(mImpl);
+    mImpl = std::nullopt;
+    glfwPostEmptyEvent();
 }
 
-void EventLoop::post(std::unique_ptr<Event>&& event)
+void EventLoopMain::post(std::unique_ptr<Event>&& event)
 {
+    assert(isMainEventLoop());
     post_internal(std::move(event));
-    if (isMainEventLoop()) {
-        glfwPostEmptyEvent();
-    }
+    glfwPostEmptyEvent();
 }
 
-uint64_t EventLoop::startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode)
+uint64_t EventLoopMain::startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode)
 {
+    assert(isMainEventLoop());
+
     const auto id = startTimer_internal(event, timeout, mode);
-    auto glfwImpl = std::get_if<EventLoopImplMain*>(&mImpl);
-    if (glfwImpl) {
-        assert(isMainEventLoop());
-        const auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-        std::lock_guard lock(mMutex);
-        auto& timers = (*glfwImpl)->timers;
-        timers.push_back(EventLoopImplMain::Timer {
-                id,
-                now,
-                now + timeout,
-                timeout,
-                event,
-                mode == TimerMode::Repeat
-            });
-        // ###  optimize this by using std::lower_bound to insert the timer at the correct location
-        std::sort(timers.begin(), timers.end(), [](EventLoopImplMain::Timer& t1, EventLoopImplMain::Timer& t2) {
-            return t1.next < t2.next;
+    auto glfwImpl = std::get<EventLoopImplMain*>(mImpl);
+    assert(glfwImpl);
+
+    const auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+    std::lock_guard lock(mMutex);
+    auto& timers = glfwImpl->timers;
+    timers.push_back(EventLoopImplMain::Timer {
+            id,
+            now,
+            now + timeout,
+            timeout,
+            event,
+            mode == TimerMode::Repeat
         });
-        glfwPostEmptyEvent();
-    }
+    // ###  optimize this by using std::lower_bound to insert the timer at the correct location
+    std::sort(timers.begin(), timers.end(), [](EventLoopImplMain::Timer& t1, EventLoopImplMain::Timer& t2) {
+        return t1.next < t2.next;
+    });
+    glfwPostEmptyEvent();
+
     return id;
 }
 
-void EventLoop::stopTimer(uint64_t id)
+void EventLoopMain::stopTimer(uint64_t id)
 {
+    assert(isMainEventLoop());
+
     stopTimer_internal(id);
-    auto glfwImpl = std::get_if<EventLoopImplMain*>(&mImpl);
-    if (glfwImpl) {
-        assert(isMainEventLoop());
-        std::lock_guard lock(mMutex);
-        auto& timers = (*glfwImpl)->timers;
-        auto it = timers.begin();
-        const auto end = timers.end();
-        while (it != end) {
-            if (it->id == id) {
-                timers.erase(it);
-                break;
-            }
-            ++it;
+    auto glfwImpl = std::get<EventLoopImplMain*>(mImpl);
+    assert(glfwImpl);
+
+    std::lock_guard lock(mMutex);
+    auto& timers = glfwImpl->timers;
+    auto it = timers.begin();
+    const auto end = timers.end();
+    while (it != end) {
+        if (it->id == id) {
+            timers.erase(it);
+            break;
         }
+        ++it;
     }
 }

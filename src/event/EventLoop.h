@@ -10,6 +10,7 @@
 
 namespace spurv {
 
+class EventLoopMain;
 struct EventLoopImplMain;
 struct EventLoopImplUv;
 
@@ -26,27 +27,28 @@ public:
         virtual void execute() = 0;
 
         friend class EventLoop;
+        friend class EventLoopMain;
         friend struct EventLoopImplMain;
         friend struct EventLoopImplUv;
     };
 
     EventLoop();
-    ~EventLoop();
+    virtual ~EventLoop();
 
-    void run();
-    void stop();
+    virtual void run();
+    virtual void stop();
 
-    void post(std::unique_ptr<Event>&& event);
     void post(std::function<void()>&& event);
+    virtual void post(std::unique_ptr<Event>&& event);
 
     enum TimerMode
     {
         SingleShot,
         Repeat
     };
-    uint64_t startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
     uint64_t startTimer(std::function<void()>&& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
-    void stopTimer(uint64_t id);
+    virtual uint64_t startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
+    virtual void stopTimer(uint64_t id);
 
     bool isMainEventLoop() const;
     static EventLoop* mainEventLoop();
@@ -75,7 +77,6 @@ private:
     std::vector<Timer> mTimers;
     uint64_t mNextTimerId = 0;
 
-    // EventEmitter<void(uint32_t)> mOnUnicode;
     bool mStopped = false;
 
     // ### probably just hold two raw pointers here instead of a variant
@@ -85,6 +86,7 @@ private:
     static EventLoop* sMainEventLoop;
     thread_local static EventLoop* tEventLoop;
 
+    friend class EventLoopMain;
     friend struct EventLoopImplMain;
     friend struct EventLoopImplUv;
 };

@@ -109,14 +109,39 @@ bool EventLoop::processEvents()
     return true;
 }
 
+void EventLoop::run()
+{
+    run_internal();
+}
+
+void EventLoop::stop()
+{
+    stop_internal();
+}
+
+void EventLoop::post(std::unique_ptr<Event>&& event)
+{
+    post_internal(std::move(event));
+}
+
 void EventLoop::post(std::function<void()>&& event)
 {
     post(std::make_unique<FunctionEvent>(std::move(event)));
 }
 
+uint64_t EventLoop::startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode)
+{
+    return startTimer_internal(event, timeout, mode);
+}
+
 uint64_t EventLoop::startTimer(std::function<void()>&& event, uint64_t timeout, TimerMode mode)
 {
     return startTimer(std::make_shared<FunctionEvent>(std::move(event)), timeout, mode);
+}
+
+void EventLoop::stopTimer(uint64_t id)
+{
+    stopTimer_internal(id);
 }
 
 void EventLoop::post_internal(std::unique_ptr<Event>&& event)
