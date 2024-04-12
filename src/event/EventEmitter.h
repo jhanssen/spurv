@@ -26,6 +26,8 @@ template<typename T>
 class EventEmitter
 {
 public:
+    using ConnectMode = EventLoop::ConnectMode;
+
     EventEmitter();
     EventEmitter(EventEmitter&&) noexcept;
 
@@ -38,7 +40,7 @@ public:
     void emit(Args&& ...args);
 
     template<typename Func>
-    void connect(Func&&);
+    void connect(Func&&, ConnectMode mode = ConnectMode::Auto);
 
 private:
     EventEmitter(const EventEmitter&) = delete;
@@ -90,9 +92,9 @@ void EventEmitter<T>::emit(Args&& ...args)
 
 template<typename T>
 template<typename Func>
-void EventEmitter<T>::connect(Func&& f)
+void EventEmitter<T>::connect(Func&& f, ConnectMode mode)
 {
-    if (mOwnerThread == std::this_thread::get_id()) {
+    if ((mode == ConnectMode::Auto && mOwnerThread == std::this_thread::get_id()) || mode == ConnectMode::Direct) {
         mFuncs.push_back(std::move(f));
     } else {
         // make a std::function that posts an event

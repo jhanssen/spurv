@@ -54,6 +54,13 @@ public:
     static EventLoop* mainEventLoop();
     static EventLoop* eventLoop();
 
+    enum class ConnectMode
+    {
+        Auto,
+        Direct,
+        Queued
+    };
+
 private:
     void run_internal();
     void post_internal(std::unique_ptr<Event>&& event);
