@@ -13,3 +13,6 @@
 [submodule "3rdparty/FunctionTraits/FunctionTraits"]
 	path = 3rdparty/FunctionTraits/FunctionTraits
 	url = https://github.com/HexadigmSystems/FunctionTraits
+[submodule "3rdparty/libuv"]
+	path = 3rdparty/libuv
+	url = https://github.com/libuv/libuv.git

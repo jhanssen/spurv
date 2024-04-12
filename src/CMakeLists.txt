@@ -15,6 +15,7 @@ set(LIBS
     Harfbuzz::Harfbuzz
     Rope::Rope
     Vulkan::Vulkan
+    libuv::libuv
     msdf-atlas-gen::msdf-atlas-gen
     simdutf::simdutf
     vk-bootstrap::vk-bootstrap

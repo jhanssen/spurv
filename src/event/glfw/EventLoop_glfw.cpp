@@ -3,11 +3,54 @@
 #include <window/glfw/GlfwUserData.h>
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
+#include <chrono>
+#include <vector>
+#include <cassert>
 
 using namespace spurv;
 
+namespace spurv {
+struct EventLoopImplMain
+{
+    EventLoopImplMain(EventLoop* l);
+    ~EventLoopImplMain();
+
+    struct Timer
+    {
+        uint64_t id;
+        uint64_t started;
+        uint64_t next;
+        uint64_t timeout;
+        std::shared_ptr<EventLoop::Event> event;
+        bool repeats;
+    };
+    std::vector<Timer> timers;
+
+    EventLoop* loop;
+};
+
+EventLoopImplMain::EventLoopImplMain(EventLoop* l)
+    : loop(l)
+{
+}
+
+EventLoopImplMain::~EventLoopImplMain()
+{
+}
+} // namespace spurv
+
+
 void EventLoop::run()
 {
+    if (!isMainEventLoop()) {
+        run_internal();
+        return;
+    }
+
+    assert(std::holds_alternative<std::nullopt_t>(mImpl));
+    EventLoopImplMain* mainImpl = new EventLoopImplMain(this);
+    mImpl = mainImpl;
+
     auto mainWindow = Window::mainWindow()->glfwWindow();
     if (!mainWindow)
         return;
@@ -20,20 +63,135 @@ void EventLoop::run()
     });
 
     for (;;) {
-        if (!run_internal())
+        if (!processEvents())
             break;
-        glfwWaitEvents();
+        std::unique_lock lock(mMutex);
+        auto& timers = mainImpl->timers;
+        if (timers.empty()) {
+            lock.unlock();
+
+            glfwWaitEvents();
+
+            lock.lock();
+        } else {
+            // process timers
+            auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+
+            // keep track of things to fire outside of the lock later
+            // this ensures that we don't iterate over the event vector
+            // while it could potentially be modified
+            std::vector<std::shared_ptr<EventLoop::Event>> tofire;
+
+            bool needsResort = false;
+            auto it = timers.begin();
+            while (it != timers.end()) {
+                auto& timer = *it;
+                if (timer.next <= now) {
+                    tofire.push_back(timer.event);
+                    if (timer.repeats) {
+                        // reinsert and resort
+                        do {
+                            timer.next += timer.timeout;
+                        } while (timer.next <= now);
+                        if (timers.size() > 1) {
+                            needsResort = true;
+                        }
+                    } else {
+                        it = timers.erase(it);
+                        continue;
+                    }
+                } else {
+                    break;
+                }
+                ++it;
+            }
+            if (needsResort) {
+                // ### possibly optimize this by removing the timer and reinserting it using std::lower_bound
+                // I'm not 100% sure that would be better though
+                std::sort(timers.begin(), timers.end(), [](EventLoopImplMain::Timer& t1, EventLoopImplMain::Timer& t2) {
+                    return t1.next < t2.next;
+                });
+            }
+
+            const auto next = timers.front().next;
+            lock.unlock();
+
+            for (const auto& ev : tofire) {
+                ev->execute();
+            }
+
+            now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+            if (next > now) {
+                glfwWaitEventsTimeout((next - now) / 1000.0);
+            }
+
+            lock.lock();
+        }
     }
 }
 
 void EventLoop::stop()
 {
     stop_internal();
-    glfwPostEmptyEvent();
+
+    if (std::holds_alternative<EventLoopImplMain*>(mImpl)) {
+        assert(isMainEventLoop());
+        delete std::get<EventLoopImplMain*>(mImpl);
+        mImpl = std::nullopt;
+        glfwPostEmptyEvent();
+    }
 }
 
 void EventLoop::post(std::unique_ptr<Event>&& event)
 {
     post_internal(std::move(event));
-    glfwPostEmptyEvent();
+    if (isMainEventLoop()) {
+        glfwPostEmptyEvent();
+    }
+}
+
+uint64_t EventLoop::startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode)
+{
+    const auto id = startTimer_internal(event, timeout, mode);
+    auto glfwImpl = std::get_if<EventLoopImplMain*>(&mImpl);
+    if (glfwImpl) {
+        assert(isMainEventLoop());
+        const auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+        std::lock_guard lock(mMutex);
+        auto& timers = (*glfwImpl)->timers;
+        timers.push_back(EventLoopImplMain::Timer {
+                id,
+                now,
+                now + timeout,
+                timeout,
+                event,
+                mode == TimerMode::Repeat
+            });
+        // ###  optimize this by using std::lower_bound to insert the timer at the correct location
+        std::sort(timers.begin(), timers.end(), [](EventLoopImplMain::Timer& t1, EventLoopImplMain::Timer& t2) {
+            return t1.next < t2.next;
+        });
+        glfwPostEmptyEvent();
+    }
+    return id;
+}
+
+void EventLoop::stopTimer(uint64_t id)
+{
+    stopTimer_internal(id);
+    auto glfwImpl = std::get_if<EventLoopImplMain*>(&mImpl);
+    if (glfwImpl) {
+        assert(isMainEventLoop());
+        std::lock_guard lock(mMutex);
+        auto& timers = (*glfwImpl)->timers;
+        auto it = timers.begin();
+        const auto end = timers.end();
+        while (it != end) {
+            if (it->id == id) {
+                timers.erase(it);
+                break;
+            }
+            ++it;
+        }
+    }
 }

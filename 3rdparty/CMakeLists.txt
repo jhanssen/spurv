@@ -1,3 +1,7 @@
+cmake_policy(SET CMP0077 NEW)
+
+set(LIBUV_BUILD_SHARED OFF)
+
 set(MSDF_ATLAS_USE_VCPKG OFF)
 set(MSDF_ATLAS_USE_SKIA OFF)
 
@@ -8,6 +12,7 @@ set(SIMDUTF_CXX_STANDARD 20 CACHE STRING "")
 
 set(VK_BOOTSTRAP_VULKAN_HEADER_DIR ${CMAKE_CURRENT_LIST_DIR}/Vulkan-Headers/include CACHE FILEPATH "")
 
+add_subdirectory(libuv)
 add_subdirectory(msdf-atlas-gen)
 add_subdirectory(rope)
 add_subdirectory(simdutf)
