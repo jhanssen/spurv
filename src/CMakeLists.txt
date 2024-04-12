@@ -24,7 +24,9 @@ set(LIBS
 # add all LIBS interface dirs as include dirs to all of spurv
 foreach(LIB ${LIBS})
     get_target_property(IFACE ${LIB} INTERFACE_INCLUDE_DIRECTORIES)
-    include_directories(${IFACE})
+    if (IFACE)
+        include_directories(${IFACE})
+    endif()
 endforeach()
 
 add_compile_options(-Wall -Wextra -pedantic -Werror -Wno-comment)
