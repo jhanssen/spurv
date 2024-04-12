@@ -23,7 +23,7 @@ int main(int argc, char** argv, char** envp)
         .x = args.value<int32_t>("x", 0),
         .y = args.value<int32_t>("y", 0),
         .width = args.value<uint32_t>("width", 1920),
-        .height = args.value<uint32_t>("height", 1920)
+        .height = args.value<uint32_t>("height", 1080)
     };
 
     Window window(rect);

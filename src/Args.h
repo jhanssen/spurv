@@ -67,6 +67,7 @@ inline bool Args::has(const std::string& key) const
         return true;
     if (v->second.type() == typeid(int64_t)) {
         if (typeid(T) == typeid(int32_t) ||
+            typeid(T) == typeid(uint32_t) ||
             typeid(T) == typeid(float) ||
             typeid(T) == typeid(double))
             return true;
@@ -99,6 +100,8 @@ inline T Args::value(const std::string& key, T defaultValue) const
     if (v->second.type() == typeid(T))
         return std::any_cast<T>(v->second);
     if (typeid(T) == typeid(int32_t) && v->second.type() == typeid(int64_t))
+        return static_cast<T>(std::any_cast<int64_t>(v->second));
+    if (typeid(T) == typeid(uint32_t) && v->second.type() == typeid(int64_t))
         return static_cast<T>(std::any_cast<int64_t>(v->second));
     if (typeid(T) == typeid(bool) && v->second.type() == typeid(int64_t))
         return static_cast<T>(std::any_cast<int64_t>(v->second));
