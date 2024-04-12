@@ -5,11 +5,11 @@
 
 namespace spurv {
 
-class EventLoopMain : public EventLoop
+class MainEventLoop : public EventLoop
 {
 public:
-    EventLoopMain();
-    virtual ~EventLoopMain() override;
+    MainEventLoop();
+    virtual ~MainEventLoop() override;
 
     virtual void run() override;
     virtual void stop() override;
@@ -27,7 +27,7 @@ private:
     EventEmitter<void(uint32_t)> mOnUnicode;
 };
 
-inline EventEmitter<void(uint32_t)>& EventLoopMain::onUnicode()
+inline EventEmitter<void(uint32_t)>& MainEventLoop::onUnicode()
 {
     return mOnUnicode;
 }

@@ -1,4 +1,4 @@
-#include <EventLoopMain.h>
+#include <MainEventLoop.h>
 #include <window/Window.h>
 #include <window/glfw/GlfwUserData.h>
 #include <vulkan/vulkan.h>
@@ -21,7 +21,7 @@ struct EventLoopImplMain
         uint64_t started;
         uint64_t next;
         uint64_t timeout;
-        std::shared_ptr<EventLoopMain::Event> event;
+        std::shared_ptr<MainEventLoop::Event> event;
         bool repeats;
     };
     std::vector<Timer> timers;
@@ -39,18 +39,18 @@ EventLoopImplMain::~EventLoopImplMain()
 }
 } // namespace spurv
 
-EventLoopMain::EventLoopMain()
+MainEventLoop::MainEventLoop()
     : EventLoop()
 {
     assert(sMainEventLoop == nullptr);
     sMainEventLoop = this;
 }
 
-EventLoopMain::~EventLoopMain()
+MainEventLoop::~MainEventLoop()
 {
 }
 
-void EventLoopMain::run()
+void MainEventLoop::run()
 {
     assert(isMainEventLoop());
 
@@ -65,7 +65,7 @@ void EventLoopMain::run()
     GlfwUserData::set<1>(mainWindow, this);
 
     glfwSetCharCallback(mainWindow, [](GLFWwindow* win, unsigned int codepoint) {
-        auto eventLoop = GlfwUserData::get<1, EventLoopMain>(win);
+        auto eventLoop = GlfwUserData::get<1, MainEventLoop>(win);
         eventLoop->mOnUnicode.emit(codepoint);
     });
 
@@ -87,7 +87,7 @@ void EventLoopMain::run()
             // keep track of things to fire outside of the lock later
             // this ensures that we don't iterate over the event vector
             // while it could potentially be modified
-            std::vector<std::shared_ptr<EventLoopMain::Event>> tofire;
+            std::vector<std::shared_ptr<MainEventLoop::Event>> tofire;
 
             bool needsResort = false;
             auto it = timers.begin();
@@ -143,7 +143,7 @@ void EventLoopMain::run()
     }
 }
 
-void EventLoopMain::stop()
+void MainEventLoop::stop()
 {
     assert(isMainEventLoop());
     stop_internal();
@@ -153,14 +153,14 @@ void EventLoopMain::stop()
     glfwPostEmptyEvent();
 }
 
-void EventLoopMain::post(std::unique_ptr<Event>&& event)
+void MainEventLoop::post(std::unique_ptr<Event>&& event)
 {
     assert(isMainEventLoop());
     post_internal(std::move(event));
     glfwPostEmptyEvent();
 }
 
-uint64_t EventLoopMain::startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode)
+uint64_t MainEventLoop::startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode)
 {
     assert(isMainEventLoop());
 
@@ -188,7 +188,7 @@ uint64_t EventLoopMain::startTimer(const std::shared_ptr<Event>& event, uint64_t
     return id;
 }
 
-void EventLoopMain::stopTimer(uint64_t id)
+void MainEventLoop::stopTimer(uint64_t id)
 {
     assert(isMainEventLoop());
 

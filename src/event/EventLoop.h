@@ -10,7 +10,7 @@
 
 namespace spurv {
 
-class EventLoopMain;
+class MainEventLoop;
 struct EventLoopImplMain;
 struct EventLoopImplUv;
 
@@ -27,7 +27,7 @@ public:
         virtual void execute() = 0;
 
         friend class EventLoop;
-        friend class EventLoopMain;
+        friend class MainEventLoop;
         friend struct EventLoopImplMain;
         friend struct EventLoopImplUv;
     };
@@ -88,7 +88,7 @@ protected:
 private:
     thread_local static EventLoop* tEventLoop;
 
-    friend class EventLoopMain;
+    friend class MainEventLoop;
     friend struct EventLoopImplMain;
     friend struct EventLoopImplUv;
 };

@@ -1,6 +1,6 @@
 #include "text/Font.h"
 #include "window/Window.h"
-#include "event/EventLoopMain.h"
+#include "event/MainEventLoop.h"
 #include "Args.h"
 #include "common/Geometry.h"
 #include "thread/ThreadPool.h"
@@ -32,7 +32,7 @@ int main(int argc, char** argv, char** envp)
     });
     window.show();
 
-    EventLoopMain loop;
+    MainEventLoop loop;
     loop.onUnicode().connect([](uint32_t uc) {
         fmt::print("unicode {}\n", uc);
     });
