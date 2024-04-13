@@ -354,6 +354,7 @@ void Renderer::render()
     VK_CHECK_SUCCESS(vkEndCommandBuffer(cmdbuffer));
 
     auto fence = *mImpl->freeFences.get();
+    semaphores[currentSemaphore].setFence(fence);
 
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
