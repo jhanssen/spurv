@@ -3,6 +3,7 @@
 #include "SemaphorePool.h"
 #include <VulkanCommon.h>
 #include <Window.h>
+#include <Formatting.h>
 #include <uv.h>
 #include <VkBootstrap.h>
 #include <fmt/core.h>
