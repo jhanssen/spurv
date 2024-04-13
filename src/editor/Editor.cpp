@@ -1,4 +1,6 @@
 #include "Editor.h"
+#include <MainEventLoop.h>
+#include <fmt/core.h>
 #include <uv.h>
 
 using namespace spurv;
@@ -36,8 +38,12 @@ void Editor::thread_internal()
             mInitialized = true;
         }
 
-        EventLoop::mainEventLoop()->post([editor = this]() {
+        auto loop = static_cast<MainEventLoop*>(EventLoop::mainEventLoop());
+        loop->post([editor = this]() {
             editor->mOnReady.emit();
+        });
+        loop->onUnicode().connect([](uint32_t uc) {
+            fmt::print("editor uc {}\n", uc);
         });
     });
     mEventLoop->run();

@@ -32,9 +32,6 @@ int main(int argc, char** argv, char** envp)
     window.show();
 
     MainEventLoop loop;
-    loop.onUnicode().connect([](uint32_t uc) {
-        fmt::print("unicode {}\n", uc);
-    });
 
     Renderer::initialize();
     Renderer::instance()->onReady().connect([]() {
