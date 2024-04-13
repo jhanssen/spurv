@@ -67,6 +67,7 @@ template<typename T>
 template<typename ...Args>
 void EventEmitter<T>::emit(Args&& ...args)
 {
+    assert(mOwnerThread == std::this_thread::get_id());
     // this is not super optimal
     std::vector<std::pair<uint32_t, typename FunctionBuilder<ArgTypes>::Type>> funcs;
     {

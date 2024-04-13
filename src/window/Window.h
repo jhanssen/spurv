@@ -6,6 +6,7 @@
 #include <config.h>
 #include <Geometry.h>
 #include <EventEmitter.h>
+#include <EventLoop.h>
 #include <vulkan/vulkan.h>
 
 #if defined(USE_GLFW)
@@ -28,6 +29,7 @@ public:
     bool isMainWindow() const;
     static Window* mainWindow();
 
+    EventLoop* eventLoop() const;
     VkSurfaceKHR surface(VkInstance instance);
 
 #if defined(USE_GLFW)

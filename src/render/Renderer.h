@@ -1,5 +1,6 @@
 #pragma once
 
+#include <EventEmitter.h>
 #include <EventLoop.h>
 #include <condition_variable>
 #include <mutex>
@@ -30,10 +31,11 @@ public:
 
     void setBoxes(Boxes&& boxes);
 
+    EventEmitter<void()>& onReady();
+
 private:
     Renderer();
 
-    void waitForInitalize();
     void thread_internal();
     void render();
     void stop();
@@ -49,6 +51,7 @@ private:
     std::condition_variable mCond;
     std::thread mThread;
     std::unique_ptr<EventLoop> mEventLoop;
+    EventEmitter<void()> mOnReady;
     bool mInitialized = false; //, mStopped = true;
 
     RendererImpl* mImpl;
@@ -77,6 +80,11 @@ inline void Renderer::destroy()
         return;
     instance->stop();
     sInstance.reset();
+}
+
+inline EventEmitter<void()>& Renderer::onReady()
+{
+    return mOnReady;
 }
 
 } // namespace spurv

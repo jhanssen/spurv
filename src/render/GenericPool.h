@@ -86,7 +86,7 @@ GenericPool<T, Num>::GenericPool()
     static_assert(std::is_trivial_v<T>);
 
     // base bitset only goes up to 32
-    static_assert(Num < 32);
+    static_assert(Num <= 32);
 
     // all entries are available
     for (std::size_t n = 0; n < Num; ++n) {

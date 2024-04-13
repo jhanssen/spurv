@@ -24,5 +24,6 @@ add_subdirectory(rope)
 add_subdirectory(simdutf)
 add_subdirectory(vk-bootstrap)
 add_subdirectory(FunctionTraits)
+add_subdirectory(VulkanMemoryAllocator)
 
 add_library(glfw::glfw ALIAS glfw)

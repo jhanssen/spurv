@@ -249,6 +249,11 @@ void Renderer::thread_internal()
         });
 
         mInitialized = true;
+
+        window->eventLoop()->post([renderer = this]() {
+            renderer->mOnReady.emit();
+        });
+
         mCond.notify_all();
     });
 
@@ -293,19 +298,10 @@ bool Renderer::recreateSwapchain()
     return true;
 }
 
-void Renderer::waitForInitalize()
-{
-    std::unique_lock lock(mMutex);
-    while (!mInitialized) {
-        mCond.wait(lock);
-    }
-}
-
 void Renderer::initialize()
 {
     assert(!sInstance);
     sInstance = std::unique_ptr<Renderer>(new Renderer());
-    sInstance->waitForInitalize();
 }
 
 void Renderer::stop()
