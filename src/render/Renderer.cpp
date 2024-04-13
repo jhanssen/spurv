@@ -41,6 +41,8 @@ struct RendererImpl
     uint32_t currentSwapchain = 0;
     uint32_t currentSwapchainImage = 0;
 
+    uint32_t width = 0, height = 0;
+
     GenericPool<VkCommandBuffer, 5> freeCommandBuffers = {};
 
     std::unordered_map<VkFence, FenceInfo> fenceInfos = {};
@@ -235,6 +237,9 @@ void Renderer::thread_internal()
     // so post a task here that will be invoked after the
     // loop has fully started
     mEventLoop->post([this, window, &onResizeKey]() {
+        const auto& rect = window->rect();
+        mImpl->width = rect.width;
+        mImpl->height = rect.height;
         recreateSwapchain();
 
         std::unique_lock lock(mMutex);
@@ -245,6 +250,8 @@ void Renderer::thread_internal()
 
         onResizeKey = window->onResize().connect([this](uint32_t width, uint32_t height) {
             fmt::print(stderr, "Window resized, recreating swapchain {}x{}\n", width, height);
+            mImpl->width = width;
+            mImpl->height = height;
             recreateSwapchain();
         });
 
@@ -270,6 +277,9 @@ bool Renderer::recreateSwapchain()
     vkb::SwapchainBuilder swapchainBuilder { mImpl->vkbDevice };
     auto maybeSwapchain = swapchainBuilder
         .set_old_swapchain(mImpl->vkbSwapchain)
+        .set_desired_extent(mImpl->width, mImpl->height)
+        .set_desired_present_mode(VK_PRESENT_MODE_FIFO_RELAXED_KHR)
+        .add_fallback_present_mode(VK_PRESENT_MODE_FIFO_KHR)
         .build();
     if (!maybeSwapchain) {
         fmt::print(stderr, "Unable to create swapchain: {}\n", maybeSwapchain.error().message());
