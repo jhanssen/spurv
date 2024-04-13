@@ -4,6 +4,7 @@
 #include "Args.h"
 #include "common/Geometry.h"
 #include "thread/ThreadPool.h"
+#include "editor/Editor.h"
 #include "render/Renderer.h"
 #include <fmt/core.h>
 #include <cstdint>
@@ -36,6 +37,14 @@ int main(int argc, char** argv, char** envp)
     });
 
     Renderer::initialize();
+    Renderer::instance()->onReady().connect([]() {
+        fmt::print("renderer ready\n");
+
+        Editor::initialize();
+        Editor::instance()->onReady().connect([]() {
+            fmt::print("editor ready\n");
+        });
+    });
     Renderer::instance()->setBoxes({ {
                 Box {
                     { 0.8, 0.0, 0.8, 0.8 },

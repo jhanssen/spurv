@@ -36,6 +36,11 @@ public:
 private:
     Renderer();
 
+    Renderer(Renderer&&) = delete;
+    Renderer(const Renderer&) = delete;
+    Renderer& operator=(Renderer&&) = delete;
+    Renderer& operator=(const Renderer&) = delete;
+
     void thread_internal();
     void render();
     void stop();

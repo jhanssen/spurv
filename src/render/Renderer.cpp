@@ -77,7 +77,7 @@ void RendererImpl::runFenceCallbacks(FenceInfo& info)
 
 void RendererImpl::checkFence(VkFence fence)
 {
-    const VkResult result = vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+    VkResult result = vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
     switch(result) {
     case VK_SUCCESS: {
         auto& info = fenceInfos[fence];
@@ -88,6 +88,7 @@ void RendererImpl::checkFence(VkFence fence)
     case VK_TIMEOUT:
         break;
     default:
+        fmt::print(stderr, "Unable to check fence: [{}]\n", result);
         break;
     }
 }
@@ -98,7 +99,7 @@ void RendererImpl::checkFences()
         if (!fence.second.valid) {
             continue;
         }
-        const VkResult result = vkWaitForFences(device, 1, &fence.first, VK_TRUE, 0);
+        VkResult result = vkWaitForFences(device, 1, &fence.first, VK_TRUE, 0);
         switch(result) {
         case VK_SUCCESS:
             runFenceCallbacks(fence.second);
@@ -107,6 +108,7 @@ void RendererImpl::checkFences()
         case VK_TIMEOUT:
             break;
         default:
+            fmt::print(stderr, "Unable to check fence: [{}]\n", result);
             break;
         }
     }
@@ -242,26 +244,26 @@ void Renderer::thread_internal()
         mImpl->height = rect.height;
         recreateSwapchain();
 
-        std::unique_lock lock(mMutex);
-        mImpl->loop = static_cast<uv_loop_t*>(mEventLoop->handle());
-        uv_idle_init(mImpl->loop, &mImpl->idle);
-        mImpl->idle.data = this;
-        uv_idle_start(&mImpl->idle, RendererImpl::idleCallback);
+        {
+            std::unique_lock lock(mMutex);
+            mImpl->loop = static_cast<uv_loop_t*>(mEventLoop->handle());
+            uv_idle_init(mImpl->loop, &mImpl->idle);
+            mImpl->idle.data = this;
+            uv_idle_start(&mImpl->idle, RendererImpl::idleCallback);
 
-        onResizeKey = window->onResize().connect([this](uint32_t width, uint32_t height) {
-            fmt::print(stderr, "Window resized, recreating swapchain {}x{}\n", width, height);
-            mImpl->width = width;
-            mImpl->height = height;
-            recreateSwapchain();
-        });
+            onResizeKey = window->onResize().connect([this](uint32_t width, uint32_t height) {
+                fmt::print(stderr, "Window resized, recreating swapchain {}x{}\n", width, height);
+                mImpl->width = width;
+                mImpl->height = height;
+                recreateSwapchain();
+            });
 
-        mInitialized = true;
+            mInitialized = true;
+        }
 
         window->eventLoop()->post([renderer = this]() {
             renderer->mOnReady.emit();
         });
-
-        mCond.notify_all();
     });
 
     mEventLoop->run();
@@ -452,7 +454,6 @@ void Renderer::render()
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &mImpl->vkbSwapchain.swapchain;
     vkQueuePresentKHR(mImpl->presentQueue, &presentInfo);
-    //Log::info(TRACE_LOG, "[VulkanContext.cpp:%d]: PRESENT(%d) %p(%d)", __LINE__, pending, presentInfo.pWaitSemaphores, mSwapCurrentSemaphore);
     semaphores[currentSemaphore].reset();
     mImpl->currentSwapchain = (currentSemaphore + 1) % semaphores.size();
     mImpl->currentSwapchainImage = UINT_MAX;
