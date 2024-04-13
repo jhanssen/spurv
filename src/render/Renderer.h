@@ -13,6 +13,7 @@
 namespace spurv {
 
 struct RendererImpl;
+class GenericPoolBase;
 
 class Renderer
 {
@@ -39,6 +40,8 @@ private:
 
     bool recreateSwapchain();
 
+    void afterCurrentFrame(std::function<void()>&& func);
+
 private:
     static std::unique_ptr<Renderer> sInstance;
 
@@ -51,6 +54,7 @@ private:
     RendererImpl* mImpl;
 
     friend struct RendererImpl;
+    friend class GenericPoolBase;
 };
 
 inline Renderer* Renderer::instance()

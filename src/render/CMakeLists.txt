@@ -1,4 +1,6 @@
 set(SOURCES
+    GenericPool.cpp
+    SemaphorePool.cpp
     Renderer.cpp
 )
 
