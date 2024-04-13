@@ -16,6 +16,7 @@ namespace spurv {
 struct FenceInfo
 {
     std::vector<std::function<void()>> callbacks;
+    SemaphorePool* semaphore = nullptr;
     bool valid = false;
 };
 
@@ -66,6 +67,10 @@ void RendererImpl::runFenceCallbacks(FenceInfo& info)
     }
     info.callbacks.clear();
     info.valid = false;
+    if (info.semaphore) {
+        info.semaphore->setFence(VK_NULL_HANDLE);
+        info.semaphore = nullptr;
+    }
 }
 
 void RendererImpl::checkFence(VkFence fence)
@@ -74,7 +79,9 @@ void RendererImpl::checkFence(VkFence fence)
     switch(result) {
     case VK_SUCCESS: {
         auto& info = fenceInfos[fence];
+        assert(info.valid);
         runFenceCallbacks(info);
+        freeFences.makeAvailableNow(fence);
         break; }
     case VK_TIMEOUT:
         break;
@@ -89,10 +96,11 @@ void RendererImpl::checkFences()
         if (!fence.second.valid) {
             continue;
         }
-        const VkResult result = vkWaitForFences(device, 1, &fence.first, VK_TRUE, UINT64_MAX);
+        const VkResult result = vkWaitForFences(device, 1, &fence.first, VK_TRUE, 0);
         switch(result) {
         case VK_SUCCESS:
             runFenceCallbacks(fence.second);
+            freeFences.makeAvailableNow(fence.first);
             break;
         case VK_TIMEOUT:
             break;
@@ -197,9 +205,11 @@ void Renderer::thread_internal()
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         VK_CHECK_SUCCESS(vkCreateFence(impl->device, &fenceInfo, nullptr, &fence));
         return fence;
-    }, [impl = mImpl](VkFence& fence) -> void {
+    }, [impl = mImpl](VkFence fence) -> void {
         vkDestroyFence(impl->device, fence, nullptr);
-    });
+    }, [impl = mImpl](VkFence fence) -> void {
+        vkResetFences(impl->device, 1, &fence);
+    }, GenericPoolBase::AvailabilityMode::Manual);
 
     mImpl->freeCommandBuffers.initialize([impl = mImpl]() -> VkCommandBuffer {
         VkCommandBufferAllocateInfo allocInfo = {};
@@ -210,9 +220,9 @@ void Renderer::thread_internal()
         VkCommandBuffer commandBuffer;
         VK_CHECK_SUCCESS(vkAllocateCommandBuffers(impl->device, &allocInfo, &commandBuffer));
         return commandBuffer;
-    }, [impl = mImpl](VkCommandBuffer& cmdbuffer) -> void {
+    }, [impl = mImpl](VkCommandBuffer cmdbuffer) -> void {
         vkFreeCommandBuffers(impl->device, impl->commandPool, 1, &cmdbuffer);
-    }, [](VkCommandBuffer& cmdbuffer) -> void {
+    }, [](VkCommandBuffer cmdbuffer) -> void {
         vkResetCommandBuffer(cmdbuffer, 0);
     });
 
@@ -277,6 +287,9 @@ bool Renderer::recreateSwapchain()
     }
     mImpl->imageViews = maybeImageViews.value();
     mImpl->semaphores.resize(mImpl->imageViews.size());
+    for (auto& sem : mImpl->semaphores) {
+        sem.setDevice(mImpl->device);
+    }
     return true;
 }
 
@@ -322,12 +335,11 @@ void Renderer::render()
     auto& semaphores = mImpl->semaphores;
     const auto currentSemaphore = mImpl->currentSwapchain;
     auto semaphore = semaphores[currentSemaphore].next();
-    if(VkFence fence = semaphores[currentSemaphore].fence()) {
-        //Log::info(TRACE_LOG, "[VulkanContext.cpp:%d]: WAITFENCE(%p) %p(%d)", __LINE__, fence, semaphore, mSwapCurrentSemaphore);
+    if (VkFence fence = semaphores[currentSemaphore].fence()) {
         mImpl->checkFence(fence);
-        assert(!semaphores[currentSemaphore].fence());
+        assert(semaphores[currentSemaphore].fence() == VK_NULL_HANDLE);
     }
-    VkResult acquired = vkAcquireNextImageKHR(mImpl->device, mImpl->vkbSwapchain.swapchain, UINT64_MAX, *semaphore, VK_NULL_HANDLE, &mImpl->currentSwapchainImage);
+    VkResult acquired = vkAcquireNextImageKHR(mImpl->device, mImpl->vkbSwapchain.swapchain, UINT64_MAX, semaphore, VK_NULL_HANDLE, &mImpl->currentSwapchainImage);
     switch (acquired) {
     case VK_SUCCESS:
         // everything good
@@ -342,7 +354,11 @@ void Renderer::render()
         return;
     }
 
-    auto cmdbuffer = *mImpl->freeCommandBuffers.get();
+    auto swapImage = mImpl->images[mImpl->currentSwapchainImage];
+
+    auto cmdbufferHandle = mImpl->freeCommandBuffers.get();
+    assert(cmdbufferHandle.isValid());
+    auto cmdbuffer = *cmdbufferHandle;
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     VK_CHECK_SUCCESS(vkBeginCommandBuffer(cmdbuffer, &beginInfo));
@@ -351,19 +367,59 @@ void Renderer::render()
     //     // fmt::print("render {}.\n", mImpl->boxes.size());
     // }
 
+    VkImageMemoryBarrier attachmentBarrier = {};
+    attachmentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    attachmentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    attachmentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    attachmentBarrier.image = swapImage;
+    attachmentBarrier.srcAccessMask = VK_ACCESS_NONE;
+    attachmentBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    attachmentBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachmentBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachmentBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    attachmentBarrier.subresourceRange.baseMipLevel = 0;
+    attachmentBarrier.subresourceRange.levelCount = 1;
+    attachmentBarrier.subresourceRange.baseArrayLayer = 0;
+    attachmentBarrier.subresourceRange.layerCount = 1;
+    vkCmdPipelineBarrier(cmdbuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, {}, 0, nullptr, 0, nullptr, 1, &attachmentBarrier);
+
+    VkImageMemoryBarrier presentBarrier = {};
+    presentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    presentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    presentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    presentBarrier.image = swapImage;
+    presentBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    presentBarrier.dstAccessMask = VK_ACCESS_NONE;
+    presentBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    presentBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    presentBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    presentBarrier.subresourceRange.baseMipLevel = 0;
+    presentBarrier.subresourceRange.levelCount = 1;
+    presentBarrier.subresourceRange.baseArrayLayer = 0;
+    presentBarrier.subresourceRange.layerCount = 1;
+    vkCmdPipelineBarrier(cmdbuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, {}, 0, nullptr, 0, nullptr, 1, &presentBarrier);
+
     VK_CHECK_SUCCESS(vkEndCommandBuffer(cmdbuffer));
 
-    auto fence = *mImpl->freeFences.get();
+    auto fenceHandle = mImpl->freeFences.get();
+    assert(fenceHandle.isValid());
+    auto fence = *fenceHandle;
+    auto& fenceInfo = mImpl->fenceInfos[fence];
+
     semaphores[currentSemaphore].setFence(fence);
+    fenceInfo.semaphore = &semaphores[currentSemaphore];
+
+    VkSemaphore semCurrent = semaphores[currentSemaphore].current();
+    VkSemaphore semNext = semaphores[currentSemaphore].next();
 
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     const static VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = semaphores[currentSemaphore].current();
+    submitInfo.pWaitSemaphores = &semCurrent;
     submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = semaphores[currentSemaphore].next();
+    submitInfo.pSignalSemaphores = &semNext;
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &cmdbuffer;
     const VkResult submitted = vkQueueSubmit(mImpl->graphicsQueue, 1, &submitInfo, fence);
@@ -376,16 +432,17 @@ void Renderer::render()
         break;
     }
 
-    auto& fenceInfo = mImpl->fenceInfos[fence];
     fenceInfo.callbacks = std::move(mImpl->frameCallbacks);
     fenceInfo.valid = true;
     mImpl->frameCallbacks.clear();
+
+    // fmt::print("render\n");
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.pImageIndices = &mImpl->currentSwapchainImage;
     presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = semaphores[currentSemaphore].current();
+    presentInfo.pWaitSemaphores = &semNext;
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &mImpl->vkbSwapchain.swapchain;
     vkQueuePresentKHR(mImpl->presentQueue, &presentInfo);

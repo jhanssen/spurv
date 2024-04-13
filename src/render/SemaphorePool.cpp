@@ -11,12 +11,12 @@ SemaphorePool::~SemaphorePool()
     }
 }
 
-VkSemaphore* SemaphorePool::current()
+VkSemaphore SemaphorePool::current()
 {
-    return &mSemaphores[mCurrent - 1];
+    return mSemaphores[mCurrent - 1];
 }
 
-VkSemaphore* SemaphorePool::next()
+VkSemaphore SemaphorePool::next()
 {
     if (mDevice != VK_NULL_HANDLE) {
         if(mCurrent >= mSemaphores.size()) {
@@ -26,7 +26,7 @@ VkSemaphore* SemaphorePool::next()
             VK_CHECK_SUCCESS(vkCreateSemaphore(mDevice, &semaphoreInfo, nullptr, &semaphore));
             mSemaphores.push_back(semaphore);
         }
-        return &mSemaphores[mCurrent++];
+        return mSemaphores[mCurrent++];
     }
-    return nullptr;
+    return VK_NULL_HANDLE;
 }

@@ -9,17 +9,18 @@ namespace spurv {
 class SemaphorePool
 {
 public:
-    SemaphorePool(VkDevice device = VK_NULL_HANDLE);
+    SemaphorePool();
     SemaphorePool(SemaphorePool&&) = default;
     ~SemaphorePool();
 
     SemaphorePool& operator=(SemaphorePool&& other) = default;
 
-    VkSemaphore* current();
-    VkSemaphore* next();
+    VkSemaphore current();
+    VkSemaphore next();
 
     VkFence fence() const;
     void setFence(VkFence fence);
+    void setDevice(VkDevice device);
 
     void reset();
 
@@ -28,14 +29,13 @@ private:
     SemaphorePool& operator=(const SemaphorePool&&) = delete;
 
 private:
-    VkDevice mDevice;
+    VkDevice mDevice = VK_NULL_HANDLE;
+    VkFence mFence = VK_NULL_HANDLE;
     std::vector<VkSemaphore> mSemaphores;
     uint32_t mCurrent = 0;
-    VkFence mFence = VK_NULL_HANDLE;
 };
 
-inline SemaphorePool::SemaphorePool(VkDevice device)
-    : mDevice(device)
+inline SemaphorePool::SemaphorePool()
 {
 }
 
@@ -47,6 +47,11 @@ inline VkFence SemaphorePool::fence() const
 inline void SemaphorePool::setFence(VkFence fence)
 {
     mFence = fence;
+}
+
+inline void SemaphorePool::setDevice(VkDevice device)
+{
+    mDevice = device;
 }
 
 inline void SemaphorePool::reset()

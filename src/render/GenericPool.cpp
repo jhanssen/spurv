@@ -8,9 +8,9 @@ void GenericPoolBase::runLater(std::function<void()>&& run)
     Renderer::instance()->afterCurrentFrame(std::move(run));
 }
 
-void GenericPoolBase::makeAvailable(std::size_t index)
+void GenericPoolBase::makeIndexAvailable(std::size_t index)
 {
-    Renderer::instance()->afterCurrentFrame([this, index]() {
-        mAvailable.set(index);
+    Renderer::instance()->afterCurrentFrame([pool = this, index]() {
+        pool->mAvailable.set(index);
     });
 }
