@@ -11,10 +11,10 @@ set(LIBS
     Fmt::Fmt
     FontConfig::FontConfig
     FunctionTraits::FunctionTraits
-    Glfw::Glfw
     Harfbuzz::Harfbuzz
     Rope::Rope
     Vulkan::Vulkan
+    glfw::glfw
     libuv::libuv
     msdf-atlas-gen::msdf-atlas-gen
     simdutf::simdutf
