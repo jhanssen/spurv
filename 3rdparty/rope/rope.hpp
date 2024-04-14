@@ -37,7 +37,7 @@ namespace proj
     
   public:
     
-    using handle = std::unique_ptr<rope_node>;
+    using node_handle = std::unique_ptr<rope_node>;
     
     // CONSTRUCTORS
     // Default constructor - produces a rope representing the empty string
@@ -46,7 +46,11 @@ namespace proj
     rope(const u32string&);
     // Copy constructor
     rope(const rope&);
-    
+    // Move constructor
+    rope(rope&&);
+    // Move construct a rope from a node
+    rope(node_handle&&);
+
     // Get the string stored in the rope
     u32string toString(void) const;
     // Get the length of the stored string
@@ -61,17 +65,21 @@ namespace proj
     void balance(void);
     
     // MUTATORS
-    // Insert the given string/rope into the rope, beginning at the specified index (i)
+    // Insert the given string/rope/node into the rope, beginning at the specified index (i)
     void insert(size_t i, const u32string& str);
     void insert(size_t i, const rope& r);
-    // Concatenate the existing string/rope with the argument
+    void insert(size_t i, node_handle&& r);
+    // Concatenate the existing string/rope/node with the argument
     void append(const u32string&);
     void append(const rope&);
-    // Delete the substring of (len) characters beginning at index (start)
-    void rdelete(size_t start, size_t len);
+    void append(node_handle&&);
+    // Remove the substring of (len) characters beginning at index (start)
+    node_handle remove(size_t start, size_t len);
     
     // OPERATORS
     rope& operator=(const rope& rhs);
+    rope& operator=(rope&& rhs);
+    rope& operator=(node_handle&& rhs);
     bool operator==(const rope& rhs) const;
     bool operator!=(const rope& rhs) const;
     friend std::ostream& operator<<(std::ostream& out, const rope& r);
@@ -79,7 +87,7 @@ namespace proj
   private:
     
     // Pointer to the root of the rope tree
-    handle root_;
+    node_handle root_;
     
   }; // class rope
   

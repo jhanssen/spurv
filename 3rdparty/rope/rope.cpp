@@ -29,7 +29,19 @@ namespace proj
     rope_node newRoot = rope_node(*r.root_);
     this->root_ = make_unique<rope_node>(newRoot);
   }
-  
+
+  // Move constructor
+  rope::rope(rope&& r) {
+    this->root_ = std::move(r.root_);
+    r.root_.reset();
+  }
+
+  // Move constructor
+  rope::rope(node_handle&& n) {
+    this->root_ = std::move(n);
+    n.reset();
+  }
+
   // Get the string stored in the rope
   u32string rope::toString(void) const {
     if(this->root_ == nullptr)
@@ -69,12 +81,23 @@ namespace proj
       throw ERROR_OOB_ROPE;
     } else {
       rope tmp = rope(r);
-      pair<handle, handle> origRopeSplit = splitAt(std::move(this->root_),i);
-      handle tmpConcat = make_unique<rope_node>(std::move(origRopeSplit.first), std::move(tmp.root_));
+      pair<node_handle, node_handle> origRopeSplit = splitAt(std::move(this->root_),i);
+      node_handle tmpConcat = make_unique<rope_node>(std::move(origRopeSplit.first), std::move(tmp.root_));
       this->root_ = make_unique<rope_node>(std::move(tmpConcat), std::move(origRopeSplit.second));
     }
   }
-  
+
+  // Insert the given node into the rope, beginning at the specified index (i)
+  void rope::insert(size_t i, node_handle&& n) {
+    if (this->length() < i) {
+      throw ERROR_OOB_ROPE;
+    } else {
+      pair<node_handle, node_handle> origRopeSplit = splitAt(std::move(this->root_),i);
+      node_handle tmpConcat = make_unique<rope_node>(std::move(origRopeSplit.first), std::move(n));
+      this->root_ = make_unique<rope_node>(std::move(tmpConcat), std::move(origRopeSplit.second));
+    }
+  }
+
   // Append the argument to the existing rope
   void rope::append(const u32string& str) {
     rope tmp = rope(str);
@@ -86,20 +109,25 @@ namespace proj
     rope tmp = rope(r);
     this->root_ = make_unique<rope_node>(std::move(this->root_), std::move(tmp.root_));
   }
-  
+
+  // Append the argument to the existing rope
+  void rope::append(node_handle&& n) {
+    this->root_ = make_unique<rope_node>(std::move(this->root_), std::move(n));
+  }
+
   // Delete the substring of (len) characters beginning at index (start)
-  void rope::rdelete(size_t start, size_t len) {
+  rope::node_handle rope::remove(size_t start, size_t len) {
     size_t actualLength = this->length();
     if (start > actualLength || start+len > actualLength) {
       throw ERROR_OOB_ROPE;
     } else {
-      pair<handle, handle> firstSplit = splitAt(std::move(this->root_),start);
-      pair<handle, handle> secondSplit = splitAt(std::move(firstSplit.second),len);
-      secondSplit.first.reset();
+      pair<node_handle, node_handle> firstSplit = splitAt(std::move(this->root_),start);
+      pair<node_handle, node_handle> secondSplit = splitAt(std::move(firstSplit.second),len);
       this->root_ = make_unique<rope_node>(std::move(firstSplit.first), std::move(secondSplit.second));
+      return std::move(secondSplit.first);
     }
   }
-  
+
   // Determine if rope is balanced
   //
   // A rope is balanced if and only if its length is greater than or equal to
@@ -111,24 +139,24 @@ namespace proj
     size_t d = this->root_->getDepth();
     return this->length() >= fib(d+2);
   }
-  
+
   // Balance a rope
   void rope::balance(void) {
     // initiate rebalancing only if rope is unbalanced
     if(!this->isBalanced()) {
       // build vector representation of Fibonacci intervals
       std::vector<size_t> intervals = buildFibList(this->length());
-      std::vector<handle> nodes(intervals.size());
-      
+      std::vector<node_handle> nodes(intervals.size());
+
       // get leaf nodes
       std::vector<rope_node *> leaves;
       this->root_->getLeaves(leaves);
-      
+
       size_t i;
       size_t max_i = intervals.size()-1;
       size_t currMaxInterval = 0;
-      handle acc = nullptr;
-      handle tmp = nullptr;
+      node_handle acc = nullptr;
+      node_handle tmp = nullptr;
 
       // attempt to insert each leaf into nodes vector based on length
       for (auto& leaf : leaves) {
@@ -206,7 +234,23 @@ namespace proj
     this->root_ = make_unique<rope_node>(*(rhs.root_.get()));
     return *this;
   }
-  
+
+  // Assignment operator
+  rope& rope::operator=(rope&& rhs) {
+    // check for self-assignment
+    if(this == &rhs) return *this;
+    this->root_ = std::move(rhs.root_);
+    rhs.root_.reset();
+    return *this;
+  }
+
+  // Assignment operator
+  rope& rope::operator=(node_handle&& rhs) {
+    this->root_ = std::move(rhs);
+    rhs.reset();
+    return *this;
+  }
+
   // Determine if two ropes contain identical strings
   bool rope::operator ==(const rope& rhs) const {
     return this->toString() == rhs.toString();
