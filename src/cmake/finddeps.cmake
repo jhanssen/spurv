@@ -18,12 +18,6 @@ endmacro()
 pkg_check_modules(FONTCONFIG REQUIRED fontconfig)
 definelib(FONTCONFIG FontConfig::FontConfig)
 
-pkg_check_modules(LIBFMT REQUIRED fmt)
-definelib(LIBFMT Fmt::Fmt)
-
-pkg_check_modules(HARFBUZZ REQUIRED harfbuzz)
-definelib(HARFBUZZ Harfbuzz::Harfbuzz)
-
 if (APPLE)
     # attempt to use moltenvk from homebrew
     set(MOLTENVK_DIR "/opt/homebrew/opt/molten-vk" CACHE STRING "MoltenVK directory")

@@ -8,14 +8,14 @@ set(SOURCES
 )
 
 set(LIBS
-    Fmt::Fmt
     FontConfig::FontConfig
     FunctionTraits::FunctionTraits
     GPUOpen::VulkanMemoryAllocator
-    Harfbuzz::Harfbuzz
     Rope::Rope
     Vulkan::Vulkan
+    fmt::fmt
     glfw::glfw
+    harfbuzz::harfbuzz
     libuv::libuv
     msdf-atlas-gen::msdf-atlas-gen
     simdutf::simdutf

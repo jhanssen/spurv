@@ -25,3 +25,9 @@
 [submodule "3rdparty/libqss"]
 	path = 3rdparty/libqss
 	url = https://github.com/jhanssen/libqss.git
+[submodule "3rdparty/fmt"]
+	path = 3rdparty/fmt
+	url = https://github.com/fmtlib/fmt.git
+[submodule "3rdparty/harfbuzz"]
+	path = 3rdparty/harfbuzz
+	url = https://github.com/harfbuzz/harfbuzz.git
