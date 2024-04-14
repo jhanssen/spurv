@@ -41,6 +41,8 @@ namespace proj
     rope_node(handle l, handle r);
     // Construct leaf node from the given string
     rope_node(const u32string& str);
+    // Construct leaf node from the given string
+    rope_node(u32string&& str);
     // Copy constructor
     rope_node(const rope_node&);
     
@@ -51,7 +53,7 @@ namespace proj
     u32string getSubstring(size_t start, size_t len) const;
     // Get string contained in current node and its children
     u32string treeToString(void) const;
-    
+
     // MUTATORS
     // Split the represented string at the specified index
     friend std::pair<handle, handle> splitAt(handle, size_t);
@@ -61,11 +63,11 @@ namespace proj
     size_t getDepth(void) const;
     void getLeaves(std::vector<rope_node *>& v);
     
-  private:
-
     // Determine whether a node is a leaf
     bool isLeaf(void) const;
-    
+
+  private:
+
     size_t weight_;
     handle left_;
     handle right_;

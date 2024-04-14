@@ -42,10 +42,15 @@ add_subdirectory(window)
 add_subdirectory(event)
 add_subdirectory(text)
 add_subdirectory(thread)
+add_subdirectory(document)
 add_subdirectory(editor)
 add_subdirectory(render)
 
-add_executable(spurv ${SOURCES} $<TARGET_OBJECTS:Spurv::Window> $<TARGET_OBJECTS:Spurv::Event> $<TARGET_OBJECTS:Spurv::Text> $<TARGET_OBJECTS:Spurv::Thread> $<TARGET_OBJECTS:Spurv::Editor> $<TARGET_OBJECTS:Spurv::Render>)
+add_executable(spurv ${SOURCES}
+    $<TARGET_OBJECTS:Spurv::Window> $<TARGET_OBJECTS:Spurv::Event> $<TARGET_OBJECTS:Spurv::Text>
+    $<TARGET_OBJECTS:Spurv::Thread> $<TARGET_OBJECTS:Spurv::Document> $<TARGET_OBJECTS:Spurv::Editor>
+    $<TARGET_OBJECTS:Spurv::Render>
+)
 target_link_libraries(spurv Spurv::Event ${LIBS})
 
 set_target_properties(spurv PROPERTIES

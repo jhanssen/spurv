@@ -44,6 +44,8 @@ namespace proj
     rope(void);
     // Construct a rope from the given string
     rope(const u32string&);
+    // Construct a rope from the given string
+    rope(u32string&&);
     // Copy constructor
     rope(const rope&);
     // Move constructor

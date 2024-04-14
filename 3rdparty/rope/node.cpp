@@ -29,6 +29,11 @@ namespace proj
     : weight_(str.length()), left_(nullptr), right_(nullptr), fragment_(str)
   {}
   
+  // Construct leaf node from the given string
+  rope_node::rope_node(std::u32string&& str)
+    : weight_(str.length()), left_(nullptr), right_(nullptr), fragment_(std::move(str))
+  {}
+
   // Copy constructor
   rope_node::rope_node(const rope_node& aNode)
    : weight_(aNode.weight_), fragment_(aNode.fragment_)

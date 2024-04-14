@@ -24,6 +24,11 @@ namespace proj
     this->root_ = make_unique<rope_node>(str);
   }
   
+  // Construct a rope from the given string
+  rope::rope(u32string&& str) {
+    this->root_ = make_unique<rope_node>(std::move(str));
+  }
+
   // Copy constructor
   rope::rope(const rope& r) {
     rope_node newRoot = rope_node(*r.root_);
@@ -120,6 +125,11 @@ namespace proj
     size_t actualLength = this->length();
     if (start > actualLength || start+len > actualLength) {
       throw ERROR_OOB_ROPE;
+    } else if (start == 0 && len == actualLength) {
+      // special case if we're taking the entire doc
+      auto ret = std::move(this->root_);
+      this->root_.reset();
+      return ret;
     } else {
       pair<node_handle, node_handle> firstSplit = splitAt(std::move(this->root_),start);
       pair<node_handle, node_handle> secondSplit = splitAt(std::move(firstSplit.second),len);
