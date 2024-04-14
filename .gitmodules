@@ -22,3 +22,6 @@
 [submodule "3rdparty/VulkanMemoryAllocator"]
 	path = 3rdparty/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "3rdparty/libqss"]
+	path = 3rdparty/libqss
+	url = https://github.com/jhanssen/libqss.git

@@ -20,6 +20,7 @@ set(LIBS
     msdf-atlas-gen::msdf-atlas-gen
     simdutf::simdutf
     vk-bootstrap::vk-bootstrap
+    qss::qss
 )
 
 # add all LIBS interface dirs as include dirs to all of spurv

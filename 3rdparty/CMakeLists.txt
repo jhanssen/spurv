@@ -23,6 +23,7 @@ add_subdirectory(msdf-atlas-gen)
 add_subdirectory(rope)
 add_subdirectory(simdutf)
 add_subdirectory(vk-bootstrap)
+add_subdirectory(libqss)
 add_subdirectory(FunctionTraits)
 add_subdirectory(VulkanMemoryAllocator)
 
