@@ -6,6 +6,7 @@
 #include <vulkan/vulkan.h>
 #include <algorithm>
 #include <filesystem>
+#include <cstdint>
 
 constexpr auto vectorColor = fmt::terminal_color::bright_yellow;
 
@@ -16,7 +17,7 @@ public:
     constexpr auto parse (format_parse_context& ctx) { return ctx.begin(); }
     template <typename Context>
     constexpr auto format (VkResult vkr, Context& ctx) const {
-        return format_to(ctx.out(), "VkResult {}", static_cast<std::underlying_type_t<VkResult>>(vkr));
+        return format_to(ctx.out(), "VkResult {}", static_cast<int32_t>(vkr));
     }
 };
 
