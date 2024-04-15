@@ -148,7 +148,9 @@ namespace proj
   size_t rope_node::retrieveLineBreaks(size_t adjust, std::vector<linebreak>& breaks, bool& hasEndCr) const {
     if(this->isLeaf()) {
       if(!this->lineBreaks_.empty()) {
-        std::transform(this->lineBreaks_.cbegin(), this->lineBreaks_.cend(), breaks.end(), [adjust](auto b) {
+        const auto end = breaks.size();
+        breaks.resize(end + this->lineBreaks_.size());
+        std::transform(this->lineBreaks_.cbegin(), this->lineBreaks_.cend(), breaks.begin() + end, [adjust](auto b) {
           return std::make_pair(b.first + adjust, b.second);
         });
         if (!hasEndCr && breaks.back().second == 0x000D) {
