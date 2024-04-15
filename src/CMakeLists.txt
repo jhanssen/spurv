@@ -27,7 +27,7 @@ set(LIBS
 foreach(LIB ${LIBS})
     get_target_property(IFACE ${LIB} INTERFACE_INCLUDE_DIRECTORIES)
     if (IFACE)
-        include_directories(${IFACE})
+        include_directories(SYSTEM ${IFACE})
     endif()
 endforeach()
 

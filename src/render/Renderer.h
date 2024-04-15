@@ -36,6 +36,8 @@ public:
 
     void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
 
+    void afterCurrentFrame(std::function<void()>&& func);
+
 private:
     Renderer();
 
@@ -49,8 +51,6 @@ private:
     void stop();
 
     bool recreateSwapchain();
-
-    void afterCurrentFrame(std::function<void()>&& func);
 
 private:
     static std::unique_ptr<Renderer> sInstance;

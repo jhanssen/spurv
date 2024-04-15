@@ -1,5 +1,6 @@
 #include "Renderer.h"
 #include "GenericPool.h"
+#include "GlyphAtlas.h"
 #include "SemaphorePool.h"
 #include <Logger.h>
 #include <VulkanCommon.h>
@@ -8,6 +9,7 @@
 #include <VkBootstrap.h>
 #include <fmt/core.h>
 #include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
 #include <vector>
 
 using namespace spurv;
@@ -33,9 +35,13 @@ struct RendererImpl
     VkDevice device = VK_NULL_HANDLE;
     VkCommandPool commandPool = VK_NULL_HANDLE;
     VkQueue graphicsQueue = VK_NULL_HANDLE;
+    VkQueue transferQueue = VK_NULL_HANDLE;
     VkQueue presentQueue = VK_NULL_HANDLE;
+    VmaAllocator allocator = VK_NULL_HANDLE;
     std::vector<VkImage> images = {};
     std::vector<VkImageView> imageViews = {};
+
+    GlyphTimeline glyphTimeline = {};
 
     std::vector<SemaphorePool> semaphores = {};
     uint32_t currentSwapchain = 0;
@@ -170,6 +176,8 @@ void Renderer::thread_internal()
     auto maybePhysicalDevice = selector
         .set_surface(surface)
         .set_minimum_version(1, 2)
+        .require_separate_transfer_queue()
+        .require_present()
         .select();
     if (!maybePhysicalDevice) {
         spdlog::critical("Unable to select vulkan physical device: {}", maybePhysicalDevice.error().message());
@@ -197,6 +205,12 @@ void Renderer::thread_internal()
         return;
     }
 
+    auto maybeTransferQueue = mImpl->vkbDevice.get_queue(vkb::QueueType::transfer);
+    if (!maybeTransferQueue) {
+        spdlog::critical("Unable to get vulkan transfer queue: {}", maybeTransferQueue.error().message());
+        return;
+    }
+
     auto maybePresentQueue = mImpl->vkbDevice.get_queue(vkb::QueueType::present);
     if (!maybePresentQueue) {
         spdlog::critical("Unable to get vulkan present queue: {}", maybePresentQueue.error().message());
@@ -204,13 +218,32 @@ void Renderer::thread_internal()
     }
 
     mImpl->graphicsQueue = maybeGraphicsQueue.value();
+    mImpl->transferQueue = maybeTransferQueue.value();
     mImpl->presentQueue = maybePresentQueue.value();
+
+    // create a timeline semaphore for glyph atlas transfers
+    VkSemaphoreTypeCreateInfo timelineInfo = {};
+    timelineInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+    timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+    timelineInfo.initialValue = mImpl->glyphTimeline.value;
+    VkSemaphoreCreateInfo semaphoreInfo = {};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    semaphoreInfo.pNext = &timelineInfo;
+    VK_CHECK_SUCCESS(vkCreateSemaphore(mImpl->device, &semaphoreInfo, nullptr, &mImpl->glyphTimeline.semaphore));
 
     VkCommandPoolCreateInfo poolInfo = {};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     poolInfo.queueFamilyIndex = maybeGraphicsQueueIndex.value();
     VK_CHECK_SUCCESS(vkCreateCommandPool(mImpl->device, &poolInfo, nullptr, &mImpl->commandPool));
+
+    // create a vma instance
+    VmaAllocatorCreateInfo vmaInfo = {};
+    vmaInfo.physicalDevice = maybePhysicalDevice.value();
+    vmaInfo.device = mImpl->device;
+    vmaInfo.instance = instance;
+    vmaInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+    VK_CHECK_SUCCESS(vmaCreateAllocator(&vmaInfo, &mImpl->allocator));
 
     mImpl->freeFences.initialize([impl = mImpl]() -> VkFence {
         VkFence fence;
@@ -464,9 +497,12 @@ void Renderer::render()
         break;
     }
 
-    fenceInfo.callbacks = std::move(mImpl->frameCallbacks);
-    fenceInfo.valid = true;
-    mImpl->frameCallbacks.clear();
+    {
+        std::unique_lock lock(mMutex);
+        fenceInfo.callbacks = std::move(mImpl->frameCallbacks);
+        fenceInfo.valid = true;
+        mImpl->frameCallbacks.clear();
+    }
 
     // fmt::print("render\n");
 
@@ -485,5 +521,6 @@ void Renderer::render()
 
 void Renderer::afterCurrentFrame(std::function<void()>&& func)
 {
+    std::unique_lock lock(mMutex);
     mImpl->frameCallbacks.push_back(std::move(func));
 }
