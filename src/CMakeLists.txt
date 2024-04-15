@@ -18,6 +18,7 @@ set(LIBS
     libuv::libuv
     msdf-atlas-gen::msdf-atlas-gen
     simdutf::simdutf
+    spdlog::spdlog
     vk-bootstrap::vk-bootstrap
     qss::qss
 )
