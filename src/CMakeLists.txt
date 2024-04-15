@@ -31,6 +31,11 @@ foreach(LIB ${LIBS})
     endif()
 endforeach()
 
+if (ASAN)
+    add_compile_options(-fsanitize=address)
+    add_link_options(-fsanitize=address)
+endif()
+
 add_compile_options(-Wall -Wextra -pedantic -Werror -Wno-comment)
 
 set(USE_GLFW ON)
