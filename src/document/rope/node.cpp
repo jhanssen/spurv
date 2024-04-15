@@ -6,6 +6,7 @@
 //
 
 #include "node.hpp"
+#include <limits>
 
 namespace proj
 {
