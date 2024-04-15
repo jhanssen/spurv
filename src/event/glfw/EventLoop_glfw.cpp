@@ -1,4 +1,5 @@
 #include <MainEventLoop.h>
+#include <Logger.h>
 #include <window/Window.h>
 #include <window/glfw/GlfwUserData.h>
 #include <vulkan/vulkan.h>

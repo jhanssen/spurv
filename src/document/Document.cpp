@@ -1,10 +1,11 @@
 #include "Document.h"
-#include <algorithm>
 #include <Formatting.h>
 #include <EventLoop.h>
+#include <Logger.h>
 #include <ThreadPool.h>
 #include <simdutf.h>
 #include <fmt/core.h>
+#include <algorithm>
 #include <cstdio>
 
 using namespace spurv;
@@ -106,7 +107,7 @@ void Document::load(const std::filesystem::path& path)
                         }
                         break; }
                     case simdutf::unspecified:
-                        fmt::print("No text encoding detected\n");
+                        spdlog::info("No text encoding detected");
                         break;
                     }
 
@@ -120,7 +121,7 @@ void Document::load(const std::filesystem::path& path)
             }
             fclose(f);
         } else {
-            fmt::print("Unable to open file {}\n", path);
+            spdlog::info("Unable to open file {}", path);
         }
         loop->post([doc]() -> void {
             doc->loadFinalize();
@@ -152,8 +153,8 @@ void Document::loadChunk(std::u32string&& data)
 
 void Document::loadFinalize()
 {
-    fmt::print("finalized doc {}\n", mRope.length());
-    fmt::print("- linebreaks {}\n", mRope.lineBreaks());
+    spdlog::info("finalized doc {}", mRope.length());
+    spdlog::info("- linebreaks {}", mRope.lineBreaks());
     initialize(0);
     mOnReady.emit();
 }
@@ -177,7 +178,7 @@ void Document::initialize(std::size_t offset)
         mChunk = {};
         mChunkStart = mChunkOffset = 0;
     }
-    fmt::print("initialize doc {} {}\n", mChunkStart, mChunk.size());
+    spdlog::info("initialize doc {} {}", mChunkStart, mChunk.size());
 }
 
 void Document::commit(Commit mode, std::size_t offset)

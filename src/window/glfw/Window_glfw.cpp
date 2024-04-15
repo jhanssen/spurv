@@ -1,4 +1,5 @@
 #include <Window.h>
+#include <Logger.h>
 #include "GlfwUserData.h"
 #include <fmt/core.h>
 #include <Formatting.h>
@@ -79,7 +80,7 @@ VkSurfaceKHR Window::surface(VkInstance instance)
     if (mSurface == VK_NULL_HANDLE && mWindow) {
         VkResult err = glfwCreateWindowSurface(instance, mWindow, nullptr, &mSurface);
         if (err) {
-            fmt::print(stderr, "Unable to create window surface: {}\n", err);
+            spdlog::error("Unable to create window surface: {}", err);
             mSurface = VK_NULL_HANDLE; // just in case
         }
     }

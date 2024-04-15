@@ -7,7 +7,7 @@
 #include "editor/Editor.h"
 #include "render/Renderer.h"
 #include <fmt/core.h>
-#include <spdlog/spdlog.h>
+#include <Logger.h>
 #include <cstdint>
 
 using namespace spurv;
@@ -39,7 +39,7 @@ int main(int argc, char** argv, char** envp)
     }
 
     Font font("Corsiva");
-    fmt::print("hello world {}\n", font.file().string());
+    spdlog::info("hello world {}", font.file().string());
 
     const Rect rect = {
         .x = args.value<int32_t>("x", 0),
@@ -57,12 +57,12 @@ int main(int argc, char** argv, char** envp)
 
     Renderer::initialize();
     Renderer::instance()->onReady().connect([filename = std::move(filename)]() {
-        fmt::print("renderer ready\n");
+        spdlog::info("renderer ready");
 
         Editor::initialize();
         Editor::instance()->load(std::filesystem::path(filename));
         Editor::instance()->onReady().connect([]() {
-            fmt::print("editor ready\n");
+            spdlog::info("editor ready");
         });
     });
     Renderer::instance()->setBoxes({ {

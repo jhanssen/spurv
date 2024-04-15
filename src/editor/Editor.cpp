@@ -1,5 +1,6 @@
 #include "Editor.h"
 #include <MainEventLoop.h>
+#include <Logger.h>
 #include <fmt/core.h>
 #include <uv.h>
 
@@ -43,7 +44,7 @@ void Editor::thread_internal()
             editor->mOnReady.emit();
         });
         loop->onUnicode().connect([this](uint32_t uc) {
-            fmt::print("editor uc {}\n", uc);
+            spdlog::error("editor uc {}", uc);
             if (mCurrentDoc) {
                 mCurrentDoc->insert(static_cast<char32_t>(uc));
             }

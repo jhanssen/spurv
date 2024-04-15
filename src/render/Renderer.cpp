@@ -1,9 +1,10 @@
 #include "Renderer.h"
 #include "GenericPool.h"
 #include "SemaphorePool.h"
+#include <Formatting.h>
+#include <Logger.h>
 #include <VulkanCommon.h>
 #include <Window.h>
-#include <Formatting.h>
 #include <uv.h>
 #include <VkBootstrap.h>
 #include <fmt/core.h>
@@ -88,7 +89,7 @@ void RendererImpl::checkFence(VkFence fence)
     case VK_TIMEOUT:
         break;
     default:
-        fmt::print(stderr, "Unable to check fence: [{}]\n", result);
+        spdlog::critical("Unable to check fence: [{}]", result);
         break;
     }
 }
@@ -108,7 +109,7 @@ void RendererImpl::checkFences()
         case VK_TIMEOUT:
             break;
         default:
-            fmt::print(stderr, "Unable to check fence: [{}]\n", result);
+            spdlog::critical("Unable to check fence: [{}]", result);
             break;
         }
     }
@@ -140,20 +141,20 @@ void Renderer::thread_internal()
         .use_default_debug_messenger()
         .build();
     if (!maybeInstance) {
-        fmt::print(stderr, "Unable to create vulkan instance: {}\n", maybeInstance.error().message());
+        spdlog::critical("Unable to create vulkan instance: {}", maybeInstance.error().message());
         return;
     }
     auto instance = maybeInstance.value();
 
     auto window = Window::mainWindow();
     if (window == nullptr) {
-        fmt::print(stderr, "No window created\n");
+        spdlog::critical("No window created");
         return;
     }
 
     auto surface = window->surface(instance);
     if (surface == VK_NULL_HANDLE) {
-        fmt::print(stderr, "No vulkan surface\n");
+        spdlog::critical("No vulkan surface");
         return;
     }
 
@@ -163,14 +164,14 @@ void Renderer::thread_internal()
         .set_minimum_version(1, 2)
         .select();
     if (!maybePhysicalDevice) {
-        fmt::print(stderr, "Unable to select vulkan physical device: {}\n", maybePhysicalDevice.error().message());
+        spdlog::critical("Unable to select vulkan physical device: {}", maybePhysicalDevice.error().message());
         return;
     }
 
     vkb::DeviceBuilder deviceBuilder { maybePhysicalDevice.value() };
     auto maybeDevice = deviceBuilder.build();
     if (!maybeDevice) {
-        fmt::print(stderr, "Unable to create vulkan device: {}\n", maybeDevice.error().message());
+        spdlog::critical("Unable to create vulkan device: {}", maybeDevice.error().message());
         return;
     }
 
@@ -179,18 +180,18 @@ void Renderer::thread_internal()
 
     auto maybeGraphicsQueue = mImpl->vkbDevice.get_queue(vkb::QueueType::graphics);
     if (!maybeGraphicsQueue) {
-        fmt::print(stderr, "Unable to get vulkan graphics queue: {}\n", maybeGraphicsQueue.error().message());
+        spdlog::critical("Unable to get vulkan graphics queue: {}", maybeGraphicsQueue.error().message());
         return;
     }
     auto maybeGraphicsQueueIndex = mImpl->vkbDevice.get_queue_index(vkb::QueueType::graphics);
     if (!maybeGraphicsQueueIndex) {
-        fmt::print(stderr, "Unable to get vulkan graphics queue index: {}\n", maybeGraphicsQueueIndex.error().message());
+        spdlog::critical("Unable to get vulkan graphics queue index: {}", maybeGraphicsQueueIndex.error().message());
         return;
     }
 
     auto maybePresentQueue = mImpl->vkbDevice.get_queue(vkb::QueueType::present);
     if (!maybePresentQueue) {
-        fmt::print(stderr, "Unable to get vulkan present queue: {}\n", maybePresentQueue.error().message());
+        spdlog::critical("Unable to get vulkan present queue: {}", maybePresentQueue.error().message());
         return;
     }
 
@@ -252,7 +253,7 @@ void Renderer::thread_internal()
             uv_idle_start(&mImpl->idle, RendererImpl::idleCallback);
 
             onResizeKey = window->onResize().connect([this](uint32_t width, uint32_t height) {
-                fmt::print(stderr, "Window resized, recreating swapchain {}x{}\n", width, height);
+                spdlog::info("Window resized, recreating swapchain {}x{}\n", width, height);
                 mImpl->width = width;
                 mImpl->height = height;
                 recreateSwapchain();
@@ -284,7 +285,7 @@ bool Renderer::recreateSwapchain()
         .add_fallback_present_mode(VK_PRESENT_MODE_FIFO_KHR)
         .build();
     if (!maybeSwapchain) {
-        fmt::print(stderr, "Unable to create swapchain: {}\n", maybeSwapchain.error().message());
+        spdlog::critical("Unable to create swapchain: {}", maybeSwapchain.error().message());
         mImpl->vkbSwapchain.swapchain = VK_NULL_HANDLE;
         return false;
     }
@@ -293,13 +294,13 @@ bool Renderer::recreateSwapchain()
     mImpl->vkbSwapchain = maybeSwapchain.value();
     auto maybeImages = mImpl->vkbSwapchain.get_images();
     if (!maybeImages) {
-        fmt::print(stderr, "Unable to get swapchain images: {}\n", maybeImages.error().message());
+        spdlog::critical("Unable to get swapchain images: {}", maybeImages.error().message());
         return false;
     }
     mImpl->images = maybeImages.value();
     auto maybeImageViews = mImpl->vkbSwapchain.get_image_views();
     if (!maybeImageViews) {
-        fmt::print(stderr, "Unable to get swapchain image views: {}\n", maybeImageViews.error().message());
+        spdlog::critical("Unable to get swapchain image views: {}", maybeImageViews.error().message());
         return false;
     }
     mImpl->imageViews = maybeImageViews.value();
@@ -358,7 +359,7 @@ void Renderer::render()
         return;
     default:
         // uh oh
-        fmt::print(stderr, "Failed to acquire vulkan image [{}]\n", acquired);
+        spdlog::critical("Failed to acquire vulkan image [{}]", acquired);
         return;
     }
 
@@ -372,7 +373,7 @@ void Renderer::render()
     VK_CHECK_SUCCESS(vkBeginCommandBuffer(cmdbuffer, &beginInfo));
 
     // if (!mImpl->boxes.empty()) {
-    //     // fmt::print("render {}.\n", mImpl->boxes.size());
+    //     // spdlog::info("render {}.", mImpl->boxes.size());
     // }
 
     VkImageMemoryBarrier attachmentBarrier = {};
@@ -436,7 +437,7 @@ void Renderer::render()
         mImpl->checkFences();
         break;
     default:
-        fmt::print(stderr, "Failed to submit vulkan [{}]\n", submitted);
+        spdlog::critical("Failed to submit vulkan [{}]", submitted);
         break;
     }
 
