@@ -49,6 +49,8 @@ struct RendererImpl
     GenericPool<VkFence, 5> freeFences = {};
     std::vector<std::function<void()>> frameCallbacks = {};
 
+    bool suboptimal = false;
+
     void checkFence(VkFence fence);
     void checkFences();
     void runFenceCallbacks(FenceInfo& info);
@@ -252,7 +254,7 @@ void Renderer::thread_internal()
             uv_idle_start(&mImpl->idle, RendererImpl::idleCallback);
 
             onResizeKey = window->onResize().connect([this](uint32_t width, uint32_t height) {
-                spdlog::info("Window resized, recreating swapchain {}x{}\n", width, height);
+                spdlog::info("Window resized, recreating swapchain {}x{}", width, height);
                 mImpl->width = width;
                 mImpl->height = height;
                 recreateSwapchain();
@@ -351,7 +353,15 @@ void Renderer::render()
     switch (acquired) {
     case VK_SUCCESS:
         // everything good
+        if (mImpl->suboptimal) {
+            spdlog::warn("Vulkan acquire normal");
+            mImpl->suboptimal = false;
+        }
         break;
+    case VK_SUBOPTIMAL_KHR:
+        spdlog::warn("Vulkan acquire suboptimal");
+        mImpl->suboptimal = true;
+        [[ fallthrough ]];
     case VK_ERROR_OUT_OF_DATE_KHR:
         // recreate swapchain, try again later
         recreateSwapchain();
