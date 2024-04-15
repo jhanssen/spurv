@@ -6,7 +6,6 @@
 //
 
 #include "node.hpp"
-#include <Unicode.h>
 
 namespace proj
 {

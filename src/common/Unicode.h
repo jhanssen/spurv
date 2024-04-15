@@ -1,5 +1,8 @@
 #pragma once
 
+#include <utility>
+#include <cstddef>
+
 namespace spurv {
 
 // users of this function need to deal with CR+LF (which is a single line break) themselves
@@ -19,5 +22,7 @@ static inline bool isLineBreak(char32_t ch)
     }
     return false;
 }
+
+using Linebreak = std::pair<size_t, char32_t>;
 
 } // namespace spurv

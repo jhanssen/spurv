@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <Unicode.h>
 
 namespace proj
 {
@@ -35,7 +36,7 @@ namespace proj
     
   public:
     using handle = std::unique_ptr<rope_node>;
-    using linebreak = std::pair<size_t, char32_t>;
+    using linebreak = spurv::Linebreak;
     
     // CONSTRUCTORS
     // Construct internal node by concatenating the given nodes

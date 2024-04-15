@@ -153,6 +153,7 @@ void Document::loadChunk(std::u32string&& data)
 void Document::loadFinalize()
 {
     fmt::print("finalized doc {}\n", mRope.length());
+    fmt::print("- linebreaks {}\n", mRope.lineBreaks());
     initialize(0);
     mOnReady.emit();
 }
