@@ -7,6 +7,7 @@
 #include "editor/Editor.h"
 #include "render/Renderer.h"
 #include <fmt/core.h>
+#include <spdlog/spdlog.h>
 #include <cstdint>
 
 using namespace spurv;
@@ -17,6 +18,25 @@ int main(int argc, char** argv, char** envp)
         fmt::print(stderr, "Spurv -- {}: {} ({})\n", msg, offset, arg);
         ::exit(1);
     });
+
+    const auto level = args.value<std::string>("log-level", "error");
+    if (level == "trace") {
+        spdlog::set_level(spdlog::level::trace);
+    } else if (level == "debug") {
+        spdlog::set_level(spdlog::level::debug);
+    } else if (level == "info" || level == "information") {
+        spdlog::set_level(spdlog::level::info);
+    } else if (level == "warn" || level == "warning") {
+        spdlog::set_level(spdlog::level::warn);
+    } else if (level == "err" || level == "error") {
+        spdlog::set_level(spdlog::level::err);
+    } else if (level == "critical") {
+        spdlog::set_level(spdlog::level::critical);
+    } else if (level == "off") {
+        spdlog::set_level(spdlog::level::off);
+    } else {
+        fmt::print("Spurv -- invalid log level {}\n", level);
+    }
 
     Font font("Corsiva");
     fmt::print("hello world {}\n", font.file().string());
