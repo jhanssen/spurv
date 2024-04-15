@@ -48,6 +48,8 @@ int main(int argc, char** argv, char** envp)
         .height = args.value<uint32_t>("height", 1080)
     };
 
+    ThreadPool::initializeMainThreadPool();
+
     Window window(rect);
     window.show();
 

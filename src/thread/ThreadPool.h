@@ -4,6 +4,7 @@
 #include <deque>
 #include <functional>
 #include <future>
+#include <memory>
 #include <mutex>
 #include <thread>
 
@@ -24,6 +25,9 @@ public:
     ThreadPool();
     ThreadPool(uint32_t numThreads);
     ~ThreadPool();
+
+    static void initializeMainThreadPool(uint32_t numThreads = 0);
+    static void destroyMainThreadPool();
 
     bool isMainThreadPool() const;
     static ThreadPool* mainThreadPool();
@@ -84,7 +88,7 @@ private:
     std::vector<std::thread> mThreads;
     bool mStopped = false;
 
-    static ThreadPool* sMainThreadPool;
+    static std::unique_ptr<ThreadPool> sMainThreadPool;
 };
 
 template<NonVoidReturn Func>
@@ -111,12 +115,12 @@ void ThreadPool::post(Func&& func)
 
 inline bool ThreadPool::isMainThreadPool() const
 {
-    return sMainThreadPool == this;
+    return sMainThreadPool.get() == this;
 }
 
 inline ThreadPool* ThreadPool::mainThreadPool()
 {
-    return sMainThreadPool;
+    return sMainThreadPool.get();
 }
 
 } // namespacespurv
