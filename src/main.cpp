@@ -35,7 +35,8 @@ int main(int argc, char** argv, char** envp)
     } else if (level == "off") {
         spdlog::set_level(spdlog::level::off);
     } else {
-        fmt::print("Spurv -- invalid log level {}\n", level);
+        fmt::print(stderr, "Spurv -- invalid log level {}\n", level);
+        ::exit(1);
     }
 
     Font font("Corsiva");
