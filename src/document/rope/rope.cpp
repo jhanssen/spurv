@@ -271,12 +271,6 @@ namespace proj
     return !(*this == rhs);
   }
   
-  // Print the rope
-  std::ostream& operator<<(std::ostream& out, const rope& r) {
-    return out << r.toString();
-  }
-  
-  
   // Compute the nth Fibonacci number, in O(n) time
   size_t fib(size_t n) {
     // initialize first two numbers in sequence
@@ -298,7 +292,7 @@ namespace proj
   //      buildFibList(8) -> {[1,2),[2,3),[3,5),[5,8),[8,13)}
   std::vector<size_t> buildFibList(size_t len) {
     // initialize a and b to the first and second fib numbers respectively
-    int a = 0, b = 1, next;
+    size_t a = 0, b = 1, next;
     std::vector<size_t> intervals = std::vector<size_t>();
     while (a <= len) {
       if (a > 0) {

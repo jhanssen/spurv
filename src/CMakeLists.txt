@@ -11,7 +11,6 @@ set(LIBS
     FontConfig::FontConfig
     FunctionTraits::FunctionTraits
     GPUOpen::VulkanMemoryAllocator
-    Rope::Rope
     Vulkan::Vulkan
     fmt::fmt
     glfw::glfw

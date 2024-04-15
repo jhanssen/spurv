@@ -84,8 +84,7 @@ namespace proj
     rope& operator=(node_handle&& rhs);
     bool operator==(const rope& rhs) const;
     bool operator!=(const rope& rhs) const;
-    friend std::ostream& operator<<(std::ostream& out, const rope& r);
-    
+
   private:
     
     // Pointer to the root of the rope tree
