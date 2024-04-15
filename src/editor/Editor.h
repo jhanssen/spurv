@@ -46,6 +46,7 @@ private:
     std::thread mThread;
     std::unique_ptr<EventLoop> mEventLoop;
     std::vector<std::unique_ptr<Document>> mDocuments;
+    Document* mCurrentDoc = nullptr;
     EventEmitter<void()> mOnReady;
     bool mInitialized = false;
 

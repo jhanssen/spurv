@@ -42,8 +42,11 @@ void Editor::thread_internal()
         loop->post([editor = this]() {
             editor->mOnReady.emit();
         });
-        loop->onUnicode().connect([](uint32_t uc) {
+        loop->onUnicode().connect([this](uint32_t uc) {
             fmt::print("editor uc {}\n", uc);
+            if (mCurrentDoc) {
+                mCurrentDoc->insert(static_cast<char32_t>(uc));
+            }
         });
     });
     mEventLoop->run();
@@ -72,7 +75,9 @@ void Editor::load(const std::filesystem::path& path)
     }
     mEventLoop->post([this, path]() {
         if (mDocuments.empty()) {
+            assert(mCurrentDoc == nullptr);
             mDocuments.push_back(std::make_unique<Document>());
+            mCurrentDoc = mDocuments.back().get();
         }
         mDocuments.back()->load(path);
     });
