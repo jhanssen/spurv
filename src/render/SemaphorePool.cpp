@@ -1,5 +1,4 @@
 #include "SemaphorePool.h"
-#include <Formatting.h>
 #include <VulkanCommon.h>
 
 using namespace spurv;

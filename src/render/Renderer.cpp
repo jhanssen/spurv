@@ -1,7 +1,6 @@
 #include "Renderer.h"
 #include "GenericPool.h"
 #include "SemaphorePool.h"
-#include <Formatting.h>
 #include <Logger.h>
 #include <VulkanCommon.h>
 #include <Window.h>

@@ -1,5 +1,4 @@
 #include "Document.h"
-#include <Formatting.h>
 #include <EventLoop.h>
 #include <Logger.h>
 #include <ThreadPool.h>
