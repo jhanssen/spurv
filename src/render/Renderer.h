@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cassert>
 #include "Box.h"
+#include "TextLine.h"
 
 namespace spurv {
 
@@ -32,6 +33,8 @@ public:
     void setBoxes(Boxes&& boxes);
 
     EventEmitter<void()>& onReady();
+
+    void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
 
 private:
     Renderer();

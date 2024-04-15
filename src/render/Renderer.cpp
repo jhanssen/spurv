@@ -54,6 +54,7 @@ struct RendererImpl
     void checkFence(VkFence fence);
     void checkFences();
     void runFenceCallbacks(FenceInfo& info);
+    void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
 
     static void idleCallback(uv_idle_t* idle);
 };
@@ -114,6 +115,12 @@ void RendererImpl::checkFences()
             break;
         }
     }
+}
+
+void RendererImpl::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
+{
+    (void)box;
+    (void)lines;
 }
 
 } // namespace spurv
@@ -333,6 +340,13 @@ void Renderer::setBoxes(Boxes&& boxes)
 {
     mEventLoop->post([boxes = std::move(boxes), impl = mImpl]() {
         impl->boxes = std::move(boxes);
+    });
+}
+
+void Renderer::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
+{
+    mEventLoop->post([box, lines = std::move(lines), impl = mImpl]() mutable {
+        impl->addTextLines(box, std::move(lines));
     });
 }
 
