@@ -152,6 +152,7 @@ void Document::loadChunk(std::u32string&& data)
 
 void Document::loadFinalize()
 {
+    fmt::print("finalized doc {}\n", mRope.length());
     initialize(0);
     mOnReady.emit();
 }
@@ -175,6 +176,7 @@ void Document::initialize(std::size_t offset)
         mChunk = {};
         mChunkStart = mChunkOffset = 0;
     }
+    fmt::print("initialize doc {} {}\n", mChunkStart, mChunk.size());
 }
 
 void Document::commit(Commit mode, std::size_t offset)

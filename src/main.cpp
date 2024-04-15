@@ -31,13 +31,16 @@ int main(int argc, char** argv, char** envp)
     Window window(rect);
     window.show();
 
+    std::string filename = args.freeformSize() > 0 ? args.freeformValue(0) : std::string {};
+
     MainEventLoop loop;
 
     Renderer::initialize();
-    Renderer::instance()->onReady().connect([]() {
+    Renderer::instance()->onReady().connect([filename = std::move(filename)]() {
         fmt::print("renderer ready\n");
 
         Editor::initialize();
+        Editor::instance()->load(std::filesystem::path(filename));
         Editor::instance()->onReady().connect([]() {
             fmt::print("editor ready\n");
         });

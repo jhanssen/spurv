@@ -65,7 +65,9 @@ namespace proj
     bool isBalanced(void) const;
     // Balance the rope
     void balance(void);
-    
+
+    std::vector<rope_node::linebreak> lineBreaks() const;
+
     // MUTATORS
     // Insert the given string/rope/node into the rope, beginning at the specified index (i)
     void insert(size_t i, const u32string& str);

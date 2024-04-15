@@ -35,6 +35,7 @@ namespace proj
     
   public:
     using handle = std::unique_ptr<rope_node>;
+    using linebreak = std::pair<size_t, char32_t>;
     
     // CONSTRUCTORS
     // Construct internal node by concatenating the given nodes
@@ -54,17 +55,23 @@ namespace proj
     // Get string contained in current node and its children
     u32string treeToString(void) const;
 
+    std::vector<linebreak> lineBreaks() const;
+
     // MUTATORS
     // Split the represented string at the specified index
     friend std::pair<handle, handle> splitAt(handle, size_t);
-    
+
     // HELPERS
     // Functions used in balancing
     size_t getDepth(void) const;
     void getLeaves(std::vector<rope_node *>& v);
-    
+
     // Determine whether a node is a leaf
     bool isLeaf(void) const;
+
+  private:
+    void rebuildLinebreaks();
+    size_t retrieveLineBreaks(size_t adjust, std::vector<linebreak>& breaks, bool& hasEndCr) const;
 
   private:
 
@@ -72,6 +79,7 @@ namespace proj
     handle left_;
     handle right_;
     u32string fragment_;
+    std::vector<linebreak> lineBreaks_;
     
   }; // class rope_node
   

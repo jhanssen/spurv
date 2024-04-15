@@ -1,10 +1,10 @@
 #pragma once
 
+#include <EventEmitter.h>
 #include <rope.hpp>
 #include <filesystem>
 #include <limits>
 #include <string>
-#include <EventEmitter.h>
 
 namespace spurv {
 
@@ -38,6 +38,12 @@ public:
 
     bool isReady() const;
     EventEmitter<void()>& onReady();
+
+private:
+    Document(Document&&) = delete;
+    Document(const Document&) = delete;
+    Document& operator=(Document&&) = delete;
+    Document& operator=(const Document&) = delete;
 
 private:
     void initialize(std::size_t offset);

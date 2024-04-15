@@ -64,3 +64,16 @@ void Editor::initialize()
     assert(!sInstance);
     sInstance = std::unique_ptr<Editor>(new Editor());
 }
+
+void Editor::load(const std::filesystem::path& path)
+{
+    if (path.empty()) {
+        return;
+    }
+    mEventLoop->post([this, path]() {
+        if (mDocuments.empty()) {
+            mDocuments.push_back(std::make_unique<Document>());
+        }
+        mDocuments.back()->load(path);
+    });
+}

@@ -6,6 +6,7 @@
 //
 
 #include "node.hpp"
+#include <Unicode.h>
 
 namespace proj
 {
@@ -27,12 +28,16 @@ namespace proj
   // Construct leaf node from the given string
   rope_node::rope_node(const std::u32string& str)
     : weight_(str.length()), left_(nullptr), right_(nullptr), fragment_(str)
-  {}
+  {
+      rebuildLinebreaks();
+  }
   
   // Construct leaf node from the given string
   rope_node::rope_node(std::u32string&& str)
     : weight_(str.length()), left_(nullptr), right_(nullptr), fragment_(std::move(str))
-  {}
+  {
+      rebuildLinebreaks();
+  }
 
   // Copy constructor
   rope_node::rope_node(const rope_node& aNode)
@@ -44,6 +49,9 @@ namespace proj
     else this->left_ = make_unique<rope_node>(*tmpLeft);
     if(tmpRight == nullptr) this->right_ = nullptr;
     else this->right_ = make_unique<rope_node>(*tmpRight);
+    if (isLeaf()) {
+      rebuildLinebreaks();
+    }
   }
   
   // Determine whether a node is a leaf
@@ -117,7 +125,48 @@ namespace proj
     u32string rResult = (this->right_ == nullptr) ? u32string {} : this->right_->treeToString();
     return lResult.append(rResult);
   }
-  
+
+  std::vector<rope_node::linebreak> rope_node::lineBreaks() const {
+    std::vector<linebreak> breaks;
+    bool hasEndCr = false;
+    retrieveLineBreaks(0, breaks, hasEndCr);
+    if (hasEndCr) {
+      // need to recheck if there are any CR+LF sequences
+      auto it = breaks.begin();
+      while (it != breaks.end()) {
+        if (it->second == 0x000A && it != breaks.begin()) {
+          if ((it - 1)->second == 0x000D) {
+            // remove prev, the ++it below will skip current
+            it = breaks.erase(it - 1);
+          }
+        }
+        ++it;
+      }
+    }
+    return breaks;
+  }
+
+  size_t rope_node::retrieveLineBreaks(size_t adjust, std::vector<linebreak>& breaks, bool& hasEndCr) const {
+    if(this->isLeaf()) {
+      if(!this->lineBreaks_.empty()) {
+        std::transform(this->lineBreaks_.cbegin(), this->lineBreaks_.cend(), breaks.end(), [adjust](auto b) {
+          return std::make_pair(b.first + adjust, b.second);
+        });
+        if (!hasEndCr && breaks.back().second == 0x000D) {
+          hasEndCr = true;
+        }
+      }
+      return adjust + this->fragment_.size();
+    }
+    if (this->left_ != nullptr) {
+      adjust += this->left_->retrieveLineBreaks(adjust, breaks, hasEndCr);
+    }
+    if (this->right_ != nullptr) {
+      adjust += this->right_->retrieveLineBreaks(adjust, breaks, hasEndCr);
+    }
+    return adjust;
+  }
+
   // Split the represented string at the specified index
   pair<handle, handle> splitAt(handle node, size_t index)
   {
@@ -174,6 +223,35 @@ namespace proj
       if (tmpLeft != nullptr) tmpLeft->getLeaves(v);
       rope_node * tmpRight = this->right_.get();
       if (tmpRight != nullptr) tmpRight->getLeaves(v);
+    }
+  }
+
+  void rope_node::rebuildLinebreaks() {
+    this->lineBreaks_.clear();
+    if (!this->isLeaf()) {
+      return;
+    }
+    size_t lastCr = std::numeric_limits<size_t>::max();
+    for (size_t idx = 0; idx < this->weight_; ++idx) {
+      const auto ch = this->fragment_[idx];
+      if (spurv::isLineBreak(ch)) {
+        switch (ch) {
+        case 0x000D:
+          this->lineBreaks_.push_back(std::make_pair(idx, ch));
+          lastCr = idx;
+          break;
+        case 0x000A:
+          if (idx > 0 && idx - 1 == lastCr) {
+            this->lineBreaks_.back().first += 1;
+          } else {
+            this->lineBreaks_.push_back(std::make_pair(idx, ch));
+          }
+          break;
+        default:
+          this->lineBreaks_.push_back(std::make_pair(idx, ch));
+          break;
+        }
+      }
     }
   }
   

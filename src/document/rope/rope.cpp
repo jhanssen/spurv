@@ -270,7 +270,14 @@ namespace proj
   bool rope::operator !=(const rope& rhs) const {
     return !(*this == rhs);
   }
-  
+
+  std::vector<rope_node::linebreak> rope::lineBreaks() const {
+    if (this->root_ == nullptr) {
+      return {};
+    }
+    return this->root_->lineBreaks();
+  }
+
   // Compute the nth Fibonacci number, in O(n) time
   size_t fib(size_t n) {
     // initialize first two numbers in sequence

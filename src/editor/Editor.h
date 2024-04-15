@@ -1,8 +1,11 @@
 #pragma once
 
+#include <Document.h>
 #include <EventEmitter.h>
 #include <EventLoop.h>
 #include <condition_variable>
+#include <filesystem>
+#include <memory>
 #include <mutex>
 #include <thread>
 
@@ -20,7 +23,9 @@ public:
     static Editor* instance();
     static EventLoop* eventLoop();
 
+    bool isReady() const;
     EventEmitter<void()>& onReady();
+    void load(const std::filesystem::path& path);
 
 private:
     Editor();
@@ -36,10 +41,11 @@ private:
 private:
     static std::unique_ptr<Editor> sInstance;
 
-    std::mutex mMutex;
+    mutable std::mutex mMutex;
     std::condition_variable mCond;
     std::thread mThread;
     std::unique_ptr<EventLoop> mEventLoop;
+    std::vector<std::unique_ptr<Document>> mDocuments;
     EventEmitter<void()> mOnReady;
     bool mInitialized = false;
 
@@ -71,6 +77,12 @@ inline void Editor::destroy()
 inline EventEmitter<void()>& Editor::onReady()
 {
     return mOnReady;
+}
+
+inline bool Editor::isReady() const
+{
+    std::scoped_lock lock(mMutex);
+    return mInitialized;
 }
 
 } // namespace spurv
