@@ -36,26 +36,26 @@ export class Process extends EventEmitter {
     }
 }
 
-// setProcessHandler((event: ProcessFinishedEvent | ProcessStdOutEvent | ProcessStdErrEvent) => {
-//     const data = processes.get(event.pid);
-//     if (!data) {
-//         error("Got event for unknown pid", event);
-//         return;
-//     }
+setProcessHandler((event: ProcessFinishedEvent | ProcessStdOutEvent | ProcessStdErrEvent) => {
+    const data = processes.get(event.pid);
+    if (!data) {
+        error("Got event for unknown pid", event);
+        return;
+    }
 
-//     switch (event.type) {
-//         case "finished":
-//             if (event.exitCode) {
-//                 data.reject(new Error(`Process ${data.name} exited with exit code: ${event.exitCode}${event.error ? "\n" + event.error : ""}`));
-//             } else {
-//                 // event
-//             }
-//             break;
-//         case "stdout":
-//         case "stderr":
-//             break;
-//     }
-// });
+    switch (event.type) {
+        case "finished":
+            if (event.exitCode) {
+                data.reject(new Error(`Process ${data.name} exited with exit code: ${event.exitCode}${event.error ? "\n" + event.error : ""}`));
+            } else {
+                // event
+            }
+            break;
+        case "stdout":
+        case "stderr":
+            break;
+    }
+});
 
 
 

@@ -67,6 +67,18 @@ async function copyTsConfig() {
     await fs.writeFile(tsconfigBuild, contents);
 }
 
+async function copyRollupConfig() {
+    const rollupConfigSrc = path.join(__dirname, "rollup.config.js");
+    const srcStat = await stat(rollupConfigSrc);
+    const rollupConfigBuild = path.join(process.cwd(), "rollup.config.js");
+    const buildStat = await stat(rollupConfigBuild);
+    if (buildStat >= srcStat) {
+        return;
+    }
+    const contents = (await fs.readFile(rollupConfigSrc, "utf8")).replaceAll("./", path.join(__dirname, "/"));
+    await fs.writeFile(rollupConfigBuild, contents);
+}
+
 async function eslint() {
     const eslintPath = path.join(process.cwd(), "node_modules", ".bin", "eslint");
     const eslintConfigSrc = path.join(__dirname, ".eslintrc");
@@ -99,7 +111,7 @@ async function rollup() {
         await npm_install();
     }
 
-    await copyTsConfig();
+    await Promise.all([copyTsConfig(), copyRollupConfig()]);
 
     await Promise.all([rollup(), eslint()]);
 })();
