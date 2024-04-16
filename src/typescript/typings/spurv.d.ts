@@ -20,20 +20,32 @@ declare interface ProcessParameters {
 
 declare interface ProcessFinishedEvent {
     type: "finished";
+    pid: number;
     exitCode: number;
+    error?: string;
 }
 
 declare interface ProcessStdOutEvent {
     type: "stdout";
+    pid: number;
     data: ArrayBuffer;
 }
 
 declare interface ProcessStdErrEvent {
     type: "stderr";
+    pid: number;
     data: ArrayBuffer;
+}
+
+declare interface SynchronousProcessResult {
+    exitCode: number;
+    error?: string;
+    stdout?: ArrayBuffer;
+    stderr?: ArrayBuffer;
 }
 
 declare function setProcessHandler(handler: (event: ProcessFinishedEvent | ProcessStdOutEvent | ProcessStdErrEvent) => void): void;
 declare function startProcess(parameters: ProcessParameters): number;
-declare function writeToStdin(id: number, data: ArrayBuffer | string): void;
-declare function closeStdin(id: number): void;
+declare function execProcess(parameters: ProcessParameters): SynchronousProcessResult;
+declare function writeToProcessStdin(id: number, data: ArrayBuffer | string): void;
+declare function closeProcessStdin(id: number): void;
