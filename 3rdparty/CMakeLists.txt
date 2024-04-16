@@ -21,17 +21,19 @@ set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "")
 
 set(VK_BOOTSTRAP_VULKAN_HEADER_DIR ${CMAKE_CURRENT_LIST_DIR}/Vulkan-Headers/include CACHE FILEPATH "")
 
+add_subdirectory(FunctionTraits)
+add_subdirectory(VulkanMemoryAllocator)
 add_subdirectory(fmt)
 add_subdirectory(glfw)
 add_subdirectory(harfbuzz)
+add_subdirectory(libqss)
 add_subdirectory(libuv)
 add_subdirectory(msdf-atlas-gen)
 add_subdirectory(simdutf)
-add_subdirectory(vk-bootstrap)
-add_subdirectory(libqss)
 add_subdirectory(spdlog)
-add_subdirectory(FunctionTraits)
-add_subdirectory(VulkanMemoryAllocator)
+add_subdirectory(vk-bootstrap)
+
+include(quickjs.cmake)
 
 add_library(glfw::glfw ALIAS glfw)
 add_library(harfbuzz::harfbuzz ALIAS harfbuzz)

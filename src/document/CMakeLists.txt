@@ -6,7 +6,7 @@ set(SOURCES
 
 add_library(spurv-document OBJECT ${SOURCES})
 add_library(Spurv::Document ALIAS spurv-document)
-target_link_libraries(spurv-document Spurv::Event Spurv::Thread)
+target_link_libraries(spurv-document Spurv::Event Spurv::Thread Spurv::Common)
 target_include_directories(spurv-document
     INTERFACE ${CMAKE_CURRENT_LIST_DIR}
     PUBLIC ${CMAKE_CURRENT_LIST_DIR}/rope
