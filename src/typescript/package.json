@@ -1,12 +1,7 @@
 {
     "name": "spurv",
     "version": "1.0.0",
-    "description": "",
-    "main": "index.js",
-    "scripts": {
-        "build": "tsc src/*.ts"
-    },
-    "author": "",
+    "main": "spurv.js",
     "license": "ISC",
     "devDependencies": {
         "@rollup/plugin-commonjs": "^25.0.7",

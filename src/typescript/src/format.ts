@@ -1,3 +1,5 @@
+import assert from "assert";
+
 export function format(...args: unknown[]): string {
     let ret = "";
     args.forEach((arg: unknown) => {
@@ -19,7 +21,8 @@ export function format(...args: unknown[]): string {
                 try {
                     str = JSON.stringify(arg);
                 } catch (err: unknown) {
-                    str = arg.toString();
+                    assert(err instanceof Error);
+                    str = JSON.stringify({error: error.message});
                 }
                 break;
 
@@ -27,6 +30,7 @@ export function format(...args: unknown[]): string {
             case "symbol":
             case "boolean":
             case "number":
+            case "bigint":
                 str = String(arg);
                 break;
         }
