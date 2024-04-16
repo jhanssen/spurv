@@ -4,16 +4,13 @@
 #include <vk_mem_alloc.h>
 #include <msdf-atlas-gen/msdf-atlas-gen.h>
 #include <filesystem>
+#include <limits>
 #include <unordered_map>
+#include <thread>
+#include <mutex>
 #include <cstdint>
 
 namespace spurv {
-
-struct GlyphTimeline
-{
-    VkSemaphore semaphore = VK_NULL_HANDLE;
-    uint64_t value = 0;
-};
 
 struct GlyphInfo
 {
@@ -22,27 +19,61 @@ struct GlyphInfo
     VkImageView view = VK_NULL_HANDLE;
 };
 
+struct GlyphsCreated
+{
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+    VkImage image = VK_NULL_HANDLE;
+    uint64_t wait = 0;
+};
+
+struct GlyphTimeline
+{
+    VkSemaphore semaphore = VK_NULL_HANDLE;
+    uint64_t value = 0;
+};
+
+struct GlyphVulkanQueue
+{
+    VkQueue queue = VK_NULL_HANDLE;
+    uint32_t family = std::numeric_limits<uint32_t>::max();
+};
+
+struct GlyphVulkanInfo
+{
+    VkDevice device = VK_NULL_HANDLE;
+    GlyphVulkanQueue graphics = {};
+    GlyphVulkanQueue transfer = {};
+    VmaAllocator allocator = VK_NULL_HANDLE;
+};
+
 class GlyphAtlas
 {
 public:
     GlyphAtlas();
     ~GlyphAtlas();
 
-    void setVulkanInfo(VkDevice device, VkQueue queue, VmaAllocator allocator);
+    void setVulkanInfo(const GlyphVulkanInfo& info);
     void setFontFile(const std::filesystem::path& path);
-    uint64_t generate(char32_t from, char32_t to, const GlyphTimeline& timeline);
+    void generate(char32_t from, char32_t to, GlyphTimeline& timeline, VkCommandBuffer cmdbuf);
 
     const GlyphInfo* glyphBox(char32_t unicode) const;
 
 private:
-    void destroy();
+    struct PerThreadInfo
+    {
+    };
 
 private:
-    VkDevice mDevice = VK_NULL_HANDLE;
-    VkQueue mQueue = VK_NULL_HANDLE;
-    VmaAllocator mAllocator = VK_NULL_HANDLE;
+    void destroy();
+
+    PerThreadInfo* perThread();
+
+private:
+    GlyphVulkanInfo mVulkanInfo = {};
     std::filesystem::path mFontFile;
     std::unordered_map<char32_t, GlyphInfo> mGlyphs;
+    std::mutex mMutex;
+    std::unordered_map<std::thread::id, std::unique_ptr<PerThreadInfo>> mPerThread;
     static thread_local msdfgen::FreetypeHandle* tFreetype;
 };
 
@@ -55,11 +86,9 @@ inline GlyphAtlas::~GlyphAtlas()
     destroy();
 }
 
-inline void GlyphAtlas::setVulkanInfo(VkDevice device, VkQueue queue, VmaAllocator allocator)
+inline void GlyphAtlas::setVulkanInfo(const GlyphVulkanInfo& info)
 {
-    mDevice = device;
-    mQueue = queue;
-    mAllocator = allocator;
+    mVulkanInfo = info;
 }
 
 inline void GlyphAtlas::setFontFile(const std::filesystem::path& path)

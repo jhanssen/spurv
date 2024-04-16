@@ -15,7 +15,9 @@
 namespace spurv {
 
 struct RendererImpl;
+struct GlyphsCreated;
 class GenericPoolBase;
+class GlyphAtlas;
 
 class Renderer
 {
@@ -51,6 +53,7 @@ private:
     void stop();
 
     bool recreateSwapchain();
+    void glyphsCreated(GlyphsCreated&& created);
 
 private:
     static std::unique_ptr<Renderer> sInstance;
@@ -65,6 +68,7 @@ private:
     RendererImpl* mImpl;
 
     friend struct RendererImpl;
+    friend class GlyphAtlas;
     friend class GenericPoolBase;
 };
 

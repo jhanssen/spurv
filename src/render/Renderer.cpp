@@ -33,15 +33,19 @@ struct RendererImpl
     vkb::Swapchain vkbSwapchain = {};
 
     VkDevice device = VK_NULL_HANDLE;
-    VkCommandPool commandPool = VK_NULL_HANDLE;
+    VkCommandPool graphicsCommandPool = VK_NULL_HANDLE;
+    VkCommandPool transferCommandPool = VK_NULL_HANDLE;
     VkQueue graphicsQueue = VK_NULL_HANDLE;
     VkQueue transferQueue = VK_NULL_HANDLE;
+    uint32_t graphicsFamily = 0;
+    uint32_t transferFamily = 0;
     VkQueue presentQueue = VK_NULL_HANDLE;
     VmaAllocator allocator = VK_NULL_HANDLE;
     std::vector<VkImage> images = {};
     std::vector<VkImageView> imageViews = {};
 
-    GlyphTimeline glyphTimeline = {};
+    GlyphTimeline transferTimeline = {};
+    GlyphTimeline graphicsTimeline = {};
 
     std::vector<SemaphorePool> semaphores = {};
     uint32_t currentSwapchain = 0;
@@ -49,7 +53,8 @@ struct RendererImpl
 
     uint32_t width = 0, height = 0;
 
-    GenericPool<VkCommandBuffer, 5> freeCommandBuffers = {};
+    GenericPool<VkCommandBuffer, 5> freeGraphicsCommandBuffers = {};
+    GenericPool<VkCommandBuffer, 5> freeTransferCommandBuffers = {};
 
     std::unordered_map<VkFence, FenceInfo> fenceInfos = {};
     GenericPool<VkFence, 5> freeFences = {};
@@ -210,6 +215,11 @@ void Renderer::thread_internal()
         spdlog::critical("Unable to get vulkan transfer queue: {}", maybeTransferQueue.error().message());
         return;
     }
+    auto maybeTransferQueueIndex = mImpl->vkbDevice.get_queue_index(vkb::QueueType::transfer);
+    if (!maybeTransferQueueIndex) {
+        spdlog::critical("Unable to get vulkan transfer queue index: {}", maybeTransferQueueIndex.error().message());
+        return;
+    }
 
     auto maybePresentQueue = mImpl->vkbDevice.get_queue(vkb::QueueType::present);
     if (!maybePresentQueue) {
@@ -218,24 +228,35 @@ void Renderer::thread_internal()
     }
 
     mImpl->graphicsQueue = maybeGraphicsQueue.value();
+    mImpl->graphicsFamily = maybeGraphicsQueueIndex.value();
     mImpl->transferQueue = maybeTransferQueue.value();
+    mImpl->transferFamily = maybeTransferQueueIndex.value();
     mImpl->presentQueue = maybePresentQueue.value();
 
-    // create a timeline semaphore for glyph atlas transfers
+    // create timeline semaphores for glyph atlas transfers
     VkSemaphoreTypeCreateInfo timelineInfo = {};
     timelineInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
     timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
-    timelineInfo.initialValue = mImpl->glyphTimeline.value;
+    timelineInfo.initialValue = mImpl->transferTimeline.value;
     VkSemaphoreCreateInfo semaphoreInfo = {};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     semaphoreInfo.pNext = &timelineInfo;
-    VK_CHECK_SUCCESS(vkCreateSemaphore(mImpl->device, &semaphoreInfo, nullptr, &mImpl->glyphTimeline.semaphore));
+    VK_CHECK_SUCCESS(vkCreateSemaphore(mImpl->device, &semaphoreInfo, nullptr, &mImpl->transferTimeline.semaphore));
 
-    VkCommandPoolCreateInfo poolInfo = {};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfo.queueFamilyIndex = maybeGraphicsQueueIndex.value();
-    VK_CHECK_SUCCESS(vkCreateCommandPool(mImpl->device, &poolInfo, nullptr, &mImpl->commandPool));
+    timelineInfo.initialValue = mImpl->graphicsTimeline.value;
+    VK_CHECK_SUCCESS(vkCreateSemaphore(mImpl->device, &semaphoreInfo, nullptr, &mImpl->graphicsTimeline.semaphore));
+
+    VkCommandPoolCreateInfo graphicsPoolInfo = {};
+    graphicsPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    graphicsPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    graphicsPoolInfo.queueFamilyIndex = maybeGraphicsQueueIndex.value();
+    VK_CHECK_SUCCESS(vkCreateCommandPool(mImpl->device, &graphicsPoolInfo, nullptr, &mImpl->graphicsCommandPool));
+
+    VkCommandPoolCreateInfo transferPoolInfo = {};
+    transferPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    transferPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    transferPoolInfo.queueFamilyIndex = maybeTransferQueueIndex.value();
+    VK_CHECK_SUCCESS(vkCreateCommandPool(mImpl->device, &transferPoolInfo, nullptr, &mImpl->transferCommandPool));
 
     // create a vma instance
     VmaAllocatorCreateInfo vmaInfo = {};
@@ -257,20 +278,35 @@ void Renderer::thread_internal()
         vkResetFences(impl->device, 1, &fence);
     }, GenericPoolBase::AvailabilityMode::Manual);
 
-    mImpl->freeCommandBuffers.initialize([impl = mImpl]() -> VkCommandBuffer {
+    mImpl->freeGraphicsCommandBuffers.initialize([impl = mImpl]() -> VkCommandBuffer {
         VkCommandBufferAllocateInfo allocInfo = {};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandPool = impl->commandPool;
+        allocInfo.commandPool = impl->graphicsCommandPool;
         allocInfo.commandBufferCount = 1;
         VkCommandBuffer commandBuffer;
         VK_CHECK_SUCCESS(vkAllocateCommandBuffers(impl->device, &allocInfo, &commandBuffer));
         return commandBuffer;
     }, [impl = mImpl](VkCommandBuffer cmdbuffer) -> void {
-        vkFreeCommandBuffers(impl->device, impl->commandPool, 1, &cmdbuffer);
+        vkFreeCommandBuffers(impl->device, impl->graphicsCommandPool, 1, &cmdbuffer);
     }, [](VkCommandBuffer cmdbuffer) -> void {
         vkResetCommandBuffer(cmdbuffer, 0);
     });
+
+    mImpl->freeTransferCommandBuffers.initialize([impl = mImpl]() -> VkCommandBuffer {
+        VkCommandBufferAllocateInfo allocInfo = {};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandPool = impl->transferCommandPool;
+        allocInfo.commandBufferCount = 1;
+        VkCommandBuffer commandBuffer;
+        VK_CHECK_SUCCESS(vkAllocateCommandBuffers(impl->device, &allocInfo, &commandBuffer));
+        return commandBuffer;
+    }, [impl = mImpl](VkCommandBuffer cmdbuffer) -> void {
+        vkFreeCommandBuffers(impl->device, impl->transferCommandPool, 1, &cmdbuffer);
+    }, [](VkCommandBuffer cmdbuffer) -> void {
+        vkResetCommandBuffer(cmdbuffer, 0);
+    }, GenericPoolBase::AvailabilityMode::Manual);
 
     EventLoop::ConnectKey onResizeKey = {};
 
@@ -421,7 +457,7 @@ void Renderer::render()
 
     auto swapImage = mImpl->images[mImpl->currentSwapchainImage];
 
-    auto cmdbufferHandle = mImpl->freeCommandBuffers.get();
+    auto cmdbufferHandle = mImpl->freeGraphicsCommandBuffers.get();
     assert(cmdbufferHandle.isValid());
     auto cmdbuffer = *cmdbufferHandle;
     VkCommandBufferBeginInfo beginInfo = {};
@@ -477,12 +513,30 @@ void Renderer::render()
     VkSemaphore semCurrent = semaphores[currentSemaphore].current();
     VkSemaphore semNext = semaphores[currentSemaphore].next();
 
+    // wait for the graphics timeline semaphore
+    uint64_t timelineSemValues[] = {
+        0, // ignored
+        mImpl->graphicsTimeline.value
+    };
+    VkSemaphore waitSems[] = {
+        semCurrent,
+        mImpl->graphicsTimeline.semaphore
+    };
+
+    VkTimelineSemaphoreSubmitInfo timelineInfo = {};
+    timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+    timelineInfo.waitSemaphoreValueCount = 2;
+    timelineInfo.pWaitSemaphoreValues = timelineSemValues;
+    timelineInfo.signalSemaphoreValueCount = 0;
+    timelineInfo.pSignalSemaphoreValues = nullptr;
+
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.pNext = &timelineInfo;
     const static VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.pWaitDstStageMask = waitStages;
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = &semCurrent;
+    submitInfo.waitSemaphoreCount = 2;
+    submitInfo.pWaitSemaphores = waitSems;
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &semNext;
     submitInfo.commandBufferCount = 1;
@@ -523,4 +577,68 @@ void Renderer::afterCurrentFrame(std::function<void()>&& func)
 {
     std::unique_lock lock(mMutex);
     mImpl->frameCallbacks.push_back(std::move(func));
+}
+
+void Renderer::glyphsCreated(GlyphsCreated&& created)
+{
+    // free transfer command buffer
+    mImpl->freeTransferCommandBuffers.makeAvailableNow(created.commandBuffer);
+
+    // finalize transferring the ownership of the image
+    auto cmdbufferHandle = mImpl->freeGraphicsCommandBuffers.get();
+    assert(cmdbufferHandle.isValid());
+    auto cmdbuffer = *cmdbufferHandle;
+    VkCommandBufferBeginInfo beginInfo = {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    VK_CHECK_SUCCESS(vkBeginCommandBuffer(cmdbuffer, &beginInfo));
+
+    // transition image to copy-dst
+    VkImageMemoryBarrier imgMemBarrier = {};
+    imgMemBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    imgMemBarrier.srcQueueFamilyIndex = mImpl->transferFamily;
+    imgMemBarrier.dstQueueFamilyIndex = mImpl->graphicsFamily;
+    imgMemBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imgMemBarrier.subresourceRange.baseMipLevel = 0;
+    imgMemBarrier.subresourceRange.levelCount = 1;
+    imgMemBarrier.subresourceRange.baseArrayLayer = 0;
+    imgMemBarrier.subresourceRange.layerCount = 1;
+    imgMemBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    imgMemBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imgMemBarrier.image = created.image;
+    imgMemBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    imgMemBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    vkCmdPipelineBarrier(
+        cmdbuffer,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &imgMemBarrier);
+
+    VK_CHECK_SUCCESS(vkEndCommandBuffer(cmdbuffer));
+
+    // submit and signal the graphics timeline
+    uint64_t semWait = created.wait;
+    uint64_t semSignal = ++mImpl->graphicsTimeline.value;
+    VkTimelineSemaphoreSubmitInfo timelineInfo = {};
+    timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+    timelineInfo.waitSemaphoreValueCount = 1;
+    timelineInfo.pWaitSemaphoreValues = &semWait;
+    timelineInfo.signalSemaphoreValueCount = 1;
+    timelineInfo.pSignalSemaphoreValues = &semSignal;
+
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.pNext = &timelineInfo;
+    const static VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_TRANSFER_BIT};
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = &mImpl->transferTimeline.semaphore;
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = &mImpl->graphicsTimeline.semaphore;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &cmdbuffer;
+    VK_CHECK_SUCCESS(vkQueueSubmit(mImpl->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
 }

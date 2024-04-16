@@ -8,7 +8,19 @@ using namespace spurv;
 
 thread_local msdfgen::FreetypeHandle* GlyphAtlas::tFreetype = nullptr;
 
-uint64_t GlyphAtlas::generate(char32_t from, char32_t to, const GlyphTimeline& timeline)
+GlyphAtlas::PerThreadInfo* GlyphAtlas::perThread()
+{
+    std::lock_guard lock(mMutex);
+    auto it = mPerThread.find(std::this_thread::get_id());
+    if (it == mPerThread.end()) {
+        auto perThread = new PerThreadInfo();
+        mPerThread.insert(std::make_pair(std::this_thread::get_id(), std::unique_ptr<PerThreadInfo>(perThread)));
+        return perThread;
+    }
+    return it->second.get();
+}
+
+void GlyphAtlas::generate(char32_t from, char32_t to, GlyphTimeline& timeline, VkCommandBuffer cmdbuffer)
 {
     std::vector<char32_t> missing;
     missing.reserve(to - from);
@@ -24,12 +36,13 @@ uint64_t GlyphAtlas::generate(char32_t from, char32_t to, const GlyphTimeline& t
     if (tFreetype == nullptr) {
         tFreetype = msdfgen::initializeFreetype();
         if (tFreetype == nullptr) {
-            return timeline.value;
+            return;
         }
     }
     auto pool = ThreadPool::mainThreadPool();
+    auto atlas = this;
     pool->post([
-        this, fontFile = mFontFile, ft = tFreetype, device = mDevice, queue = mQueue, allocator = mAllocator,
+        atlas, fontFile = mFontFile, ft = tFreetype, vulkan = mVulkanInfo, cmdbuffer,
         missing = std::move(missing), sem = timeline.semaphore, semVal = timeline.value
         ]() mutable {
         if (auto font = msdfgen::loadFont(ft, fontFile.c_str())) {
@@ -73,21 +86,145 @@ uint64_t GlyphAtlas::generate(char32_t from, char32_t to, const GlyphTimeline& t
             bufferAllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 
             VkBuffer buffer = VK_NULL_HANDLE;
-            VmaAllocation allocation = VK_NULL_HANDLE;
-            VK_CHECK_SUCCESS(vmaCreateBuffer(allocator, &bufferInfo, &bufferAllocationInfo, &buffer, &allocation, nullptr));
+            VmaAllocation bufferAllocation = VK_NULL_HANDLE;
+            VK_CHECK_SUCCESS(vmaCreateBuffer(vulkan.allocator, &bufferInfo, &bufferAllocationInfo, &buffer, &bufferAllocation, nullptr));
 
+            // copy glyph atlas to buffer
             void* data;
-            VK_CHECK_SUCCESS(vmaMapMemory(allocator, allocation, &data));
+            VK_CHECK_SUCCESS(vmaMapMemory(vulkan.allocator, bufferAllocation, &data));
             ::memcpy(data, bitmap.pixels, bitmap.width * bitmap.height * 3);
-            vmaUnmapMemory(allocator, allocation);
+            vmaUnmapMemory(vulkan.allocator, bufferAllocation);
 
-            Renderer::instance()->afterCurrentFrame([allocator, buffer, allocation]() {
-                vmaDestroyBuffer(allocator, buffer, allocation);
+            // create a vulkan image
+            VkImageCreateInfo imageInfo = {};
+            imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            imageInfo.imageType = VK_IMAGE_TYPE_2D;
+            imageInfo.extent.width = bitmap.width;
+            imageInfo.extent.height = bitmap.height;
+            imageInfo.extent.depth = 1;
+            imageInfo.mipLevels = 1;
+            imageInfo.arrayLayers = 1;
+            imageInfo.format = VK_FORMAT_R8G8B8_UNORM;
+            imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+            imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+            imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+            imageInfo.flags = 0;
+            VmaAllocationCreateInfo imageAllocationInfo = {};
+            imageAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+            VkImage image = VK_NULL_HANDLE;
+            VmaAllocation imageAllocation = VK_NULL_HANDLE;
+            VK_CHECK_SUCCESS(vmaCreateImage(vulkan.allocator, &imageInfo, &imageAllocationInfo, &image, &imageAllocation, nullptr));
+
+            VkCommandBufferBeginInfo beginInfo = {};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            VK_CHECK_SUCCESS(vkBeginCommandBuffer(cmdbuffer, &beginInfo));
+
+            // transition image to copy-dst
+            VkImageMemoryBarrier imgMemBarrier = {};
+            imgMemBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            imgMemBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            imgMemBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            imgMemBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imgMemBarrier.subresourceRange.baseMipLevel = 0;
+            imgMemBarrier.subresourceRange.levelCount = 1;
+            imgMemBarrier.subresourceRange.baseArrayLayer = 0;
+            imgMemBarrier.subresourceRange.layerCount = 1;
+            imgMemBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            imgMemBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            imgMemBarrier.image = image;
+            imgMemBarrier.srcAccessMask = 0;
+            imgMemBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+            vkCmdPipelineBarrier(cmdbuffer,
+                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 0,
+                                 0, nullptr,
+                                 0, nullptr,
+                                 1, &imgMemBarrier);
+
+            // copy buffer to image
+            VkBufferImageCopy region = {};
+            region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            region.imageSubresource.layerCount = 1;
+            region.imageExtent.width = bitmap.width;
+            region.imageExtent.height = bitmap.height;
+            region.imageExtent.depth = 1;
+
+            vkCmdCopyBufferToImage(cmdbuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+            // transition image to shader-read and transfer ownership to graphics
+            imgMemBarrier.srcQueueFamilyIndex = vulkan.transfer.family;
+            imgMemBarrier.dstQueueFamilyIndex = vulkan.graphics.family;
+            imgMemBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            imgMemBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imgMemBarrier.image = image;
+            imgMemBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            imgMemBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+            vkCmdPipelineBarrier(
+                cmdbuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &imgMemBarrier);
+
+            VK_CHECK_SUCCESS(vkEndCommandBuffer(cmdbuffer));
+
+            uint64_t semWait = semVal;
+            uint64_t semSignal = semVal + 1;
+            VkTimelineSemaphoreSubmitInfo timelineInfo = {};
+            timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+            timelineInfo.waitSemaphoreValueCount = 1;
+            timelineInfo.pWaitSemaphoreValues = &semWait;
+            timelineInfo.signalSemaphoreValueCount = 1;
+            timelineInfo.pSignalSemaphoreValues = &semSignal;
+            VkSemaphore timelineSem = sem;
+
+            // ### should do something to fix the fact that GlyphAtlas::generate calls
+            // are sequential due to the next one waiting for the semaphore signalled
+            // by the previous one
+            VkSubmitInfo submitInfo = {};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.pNext = &timelineInfo;
+            const static VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_TRANSFER_BIT};
+            submitInfo.pWaitDstStageMask = waitStages;
+            submitInfo.waitSemaphoreCount = 1;
+            submitInfo.pWaitSemaphores = &timelineSem;
+            submitInfo.signalSemaphoreCount = 1;
+            submitInfo.pSignalSemaphores = &timelineSem;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &cmdbuffer;
+            VK_CHECK_SUCCESS(vkQueueSubmit(vulkan.transfer.queue, 1, &submitInfo, VK_NULL_HANDLE));
+
+            Renderer::instance()->afterCurrentFrame([
+                atlas, allocator = vulkan.allocator, buffer, bufferAllocation, image,
+                cmdbuffer, semSignal, missing = std::move(missing)]() {
+
+                for (auto g : missing) {
+                    auto it = atlas->mGlyphs.find(g);
+                    if (it != atlas->mGlyphs.end()) {
+                        it->second.image = image;
+                    }
+                }
+
+                vmaDestroyBuffer(allocator, buffer, bufferAllocation);
+                Renderer::instance()->glyphsCreated(GlyphsCreated {
+                        cmdbuffer,
+                        image,
+                        semSignal
+                    });
             });
             msdfgen::destroyFont(font);
         }
     });
-    return timeline.value + 1;
+
+    timeline.value += 1;
 }
 
 void GlyphAtlas::destroy()
