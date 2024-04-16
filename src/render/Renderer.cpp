@@ -131,7 +131,7 @@ void RendererImpl::checkFences()
 void RendererImpl::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
 {
     (void)box;
-    (void)lines;
+    spdlog::info("Got text lines {}", lines.size());
 }
 
 } // namespace spurv

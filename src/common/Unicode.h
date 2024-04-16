@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <utility>
 #include <cstddef>
 
@@ -21,6 +22,21 @@ static inline bool isLineBreak(char32_t ch)
         break;
     }
     return false;
+}
+
+static inline std::u32string trimLineBreaks(std::u32string&& str)
+{
+    if (str.empty()) {
+        return str;
+    }
+    std::size_t end = str.size();
+    while (end > 0 && isLineBreak(str[end - 1])) {
+        --end;
+    }
+    if (end < str.size()) {
+        str.resize(end);
+    }
+    return str;
 }
 
 using Linebreak = std::pair<size_t, char32_t>;

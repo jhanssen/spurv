@@ -1,4 +1,5 @@
 #include "Editor.h"
+#include <Renderer.h>
 #include <MainEventLoop.h>
 #include <Logger.h>
 #include <fmt/core.h>
@@ -79,6 +80,21 @@ void Editor::load(const std::filesystem::path& path)
             assert(mCurrentDoc == nullptr);
             mDocuments.push_back(std::make_unique<Document>());
             mCurrentDoc = mDocuments.back().get();
+            mCurrentDoc->onReady().connect([doc = mCurrentDoc]() {
+                // send some lines to the renderer for now
+                std::size_t lineNo = 0;
+                auto renderer = Renderer::instance();
+                auto lineStrings = doc->lineRange(lineNo, lineNo + 100);
+                std::vector<TextLine> textLines;
+                textLines.resize(lineStrings.size());
+                std::transform(lineStrings.begin(), lineStrings.end(), textLines.begin(), [&lineNo](const std::u32string& str) -> TextLine {
+                    return TextLine {
+                        lineNo++,
+                        str
+                    };
+                });
+                renderer->addTextLines(0, std::move(textLines));
+            });
         }
         mDocuments.back()->load(path);
     });

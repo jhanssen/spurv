@@ -6,7 +6,7 @@
 namespace spurv {
 
 struct TextLine {
-    uint32_t lineNo;
+    std::size_t lineNo;
     std::u32string text;
 };
 

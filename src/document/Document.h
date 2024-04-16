@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <limits>
 #include <string>
+#include <vector>
 
 namespace spurv {
 
@@ -12,6 +13,7 @@ class Document
 {
 public:
     using Rope = proj::rope;
+    using RopeNode = proj::rope_node;
 
     Document();
     ~Document();
@@ -39,6 +41,10 @@ public:
     bool isReady() const;
     EventEmitter<void()>& onReady();
 
+    std::size_t numLines() const;
+    std::u32string lineAt(std::size_t line) const;
+    std::vector<std::u32string> lineRange(std::size_t start, std::size_t end);
+
 private:
     Document(Document&&) = delete;
     Document(const Document&) = delete;
@@ -52,7 +58,7 @@ private:
     void commit(Commit mode, std::size_t offset = std::numeric_limits<std::size_t>::max());
 
     void loadChunk(std::u32string&& data);
-    void loadFinalize();
+    void loadComplete();
 
 private:
     Rope mRope;
@@ -60,7 +66,8 @@ private:
     enum { ChunkSize = 1000 };
     std::u32string mChunk;
     std::size_t mChunkStart = 0, mChunkOffset = 0;
-    std::size_t mDocumentSize = 0;
+    std::size_t mDocumentSize = 0, mDocumentLines = 0;
+    std::vector<RopeNode::linebreak> mLineBreaks;
 
     bool mReady = true;
     EventEmitter<void()> mOnReady;
@@ -114,6 +121,11 @@ inline void Document::remove(Remove mode)
         --mDocumentSize;
         break;
     };
+}
+
+inline std::size_t Document::numLines() const
+{
+    return mDocumentLines;
 }
 
 inline bool Document::isReady() const
