@@ -1,0 +1,24 @@
+{
+    "compilerOptions": {
+        "target": "es2020",
+        "typeRoots": [ "./typings" ],
+        "noUncheckedIndexedAccess": true,
+        "strictBindCallApply": true,
+        "stripInternal": true,
+        "newLine": "LF",
+        "module": "amd",
+        "declaration": false,
+        "moduleResolution": "node",
+        "pretty": true,
+        "noImplicitAny": true,
+        "esModuleInterop": true,
+        "strictNullChecks": true,
+        "strictPropertyInitialization": true,
+        "downlevelIteration": true,
+        "strict": true,
+        "sourceMap": true,
+        "incremental": true,
+        "lib": ["es2021"],
+        "baseUrl": "."
+    }
+}

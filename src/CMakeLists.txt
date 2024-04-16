@@ -52,6 +52,7 @@ add_subdirectory(render)
 add_subdirectory(script)
 add_subdirectory(text)
 add_subdirectory(thread)
+add_subdirectory(typescript)
 add_subdirectory(window)
 
 add_executable(spurv ${SOURCES}

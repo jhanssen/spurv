@@ -8,7 +8,6 @@
 
 namespace spurv {
 namespace {
-#if 0
 JSValue log(JSContext *ctx, JSValueConst /*this_val*/, int argc, JSValueConst *argv)
 {
     if (argc < 2 || !JS_IsNumber(argv[0]) || !JS_IsString(argv[1])) {
@@ -28,7 +27,6 @@ JSValue log(JSContext *ctx, JSValueConst /*this_val*/, int argc, JSValueConst *a
     spdlog::log({}, static_cast<spdlog::level::level_enum>(level), "{}", ret);
     return { {}, JS_TAG_UNDEFINED };
 }
-#endif
 } // anonymous namespace
 
 ScriptEngine::ScriptEngine()
@@ -36,12 +34,15 @@ ScriptEngine::ScriptEngine()
 {
     mGlobal = JS_GetGlobalObject(mContext);
 
+    JS_SetPropertyStr(mContext, mGlobal, "log", JS_NewCFunction(mContext, log, "log", 2));
+
     assert(!tScriptEngine);
     tScriptEngine = this;
 }
 
 ScriptEngine::~ScriptEngine()
 {
+    JS_FreeValue(mContext, mGlobal);
     JS_FreeContext(mContext);
     JS_RunGC(mRuntime);
     JS_FreeRuntime(mRuntime);
