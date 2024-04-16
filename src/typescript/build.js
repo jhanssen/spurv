@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-const path = require("path");
-const fs = require("fs");
+const path = require("node:path");
+const fs = require("node:fs/promises");
 const child_process = require("node:child_process");
 
 const src_package_json = path.join(__dirname, "package.json");
@@ -31,15 +31,15 @@ function spawn(command, args) {
 
 async function removeBuildPackageJson() {
     try {
-        await fs.promises.unlink(build_package_json);
+        await fs.unlink(build_package_json);
     } catch (err) {
     }
 }
 
 async function npm_install() {
     try {
-        await fs.promises.copyFile(src_package_json, build_package_json);
-        await fs.promises.copyFile(src_package_json_lock, build_package_json_lock);
+        await fs.copyFile(src_package_json, build_package_json);
+        await fs.copyFile(src_package_json_lock, build_package_json_lock);
         await spawn("npm", ["install"], { stdio: "inherit" });
     } catch (err) {
         await removeBuildPackageJson();
@@ -49,9 +49,14 @@ async function npm_install() {
 
 async function copyTsConfig() {
     const tsconfigSrc = path.join(__dirname, "tsconfig.json");
+    const srcStat = stat(tsconfigSrc);
     const tsconfigBuild = path.join(process.cwd(), "tsconfig.json");
-    await fs.promises.copyFile(tsconfigSrc, tsconfigBuild);
-
+    const buildStat = stat(tsconfigBuild);
+    if (buildStat >= srcStat) {
+        return;
+    }
+    const contents = (await fs.readFile(tsconfigSrc, "utf8")).replaceAll("./src/", path.join(__dirname, "src"));
+    await fs.writeFile(tsconfigBuild, contents);
 }
 
 async function eslint() {
