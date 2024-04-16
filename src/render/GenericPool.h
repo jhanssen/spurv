@@ -165,9 +165,10 @@ void GenericPool<T, Num>::makeAvailable(T entry)
             } else {
                 makeIndexAvailable(n);
             }
-            break;
+            return;
         }
     }
+    mDeletor(entry);
 }
 
 template<typename T, std::size_t Num>
@@ -181,9 +182,10 @@ void GenericPool<T, Num>::makeAvailableNow(T entry)
                 mResetor(entry);
             }
             mAvailable.set(n);
-            break;
+            return;
         }
     }
+    mDeletor(entry);
 }
 
 template<typename T, std::size_t Num>
@@ -195,8 +197,8 @@ GenericPool<T, Num>::Handle::Handle(T entry, GenericPool* pool, std::size_t inde
 template<typename T, std::size_t Num>
 GenericPool<T, Num>::Handle::~Handle()
 {
-    if (mIndex < std::numeric_limits<std::size_t>::max()) {
-        if (mPool->mMode == AvailabilityMode::Automatic) {
+    if (mPool->mMode == AvailabilityMode::Automatic) {
+        if (mIndex < std::numeric_limits<std::size_t>::max()) {
             if (mPool->mResetor) {
                 mPool->runLater([pool = mPool, entry = std::move(mEntry), index = mIndex]() mutable {
                     pool->mResetor(entry);
@@ -205,11 +207,11 @@ GenericPool<T, Num>::Handle::~Handle()
             } else {
                 mPool->makeIndexAvailable(mIndex);
             }
+        } else {
+            mPool->runLater([pool = mPool, entry = std::move(mEntry)]() mutable {
+                pool->mDeletor(entry);
+            });
         }
-    } else {
-        mPool->runLater([pool = mPool, entry = std::move(mEntry)]() mutable {
-            pool->mDeletor(entry);
-        });
     }
 }
 
