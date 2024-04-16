@@ -1,11 +1,10 @@
 set(TS_DEPS
+    build.js
+    package.json
+    tsconfig.json
     src/format.ts
     src/spurv.ts
     src/log.ts)
 
-add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/spurv.js
-    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/
-    DEPENDS ${TS_DEPS}
-    COMMENT "Building typescript"
-    COMMAND npm run build -- --outFile ${CMAKE_CURRENT_BINARY_DIR}/spurv.js --module amd)
+add_custom_target(spurv_js ALL COMMAND node ${CMAKE_CURRENT_LIST_DIR}/build.js)
+
