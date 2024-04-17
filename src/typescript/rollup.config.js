@@ -2,12 +2,8 @@
 /* eslint-disable no-console */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/no-confusing-void-expression */
-import child_process from "child_process";
 import commonjs from "@rollup/plugin-commonjs";
-import fs from "fs";
-import replace from "@rollup/plugin-replace";
 import resolve from "@rollup/plugin-node-resolve";
-import strip from "@rollup/plugin-strip";
 import terser from "@rollup/plugin-terser";
 import typescript from "rollup-plugin-typescript2";
 
@@ -18,7 +14,7 @@ const plugins = [
     }),
     commonjs(),
     typescript({
-        tsconfig: `tsconfig.json`,
+        tsconfig: "./tsconfig.json",
         cacheRoot: ".cache",
     }),
     ...(minify

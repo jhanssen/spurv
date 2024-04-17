@@ -1,4 +1,4 @@
-import assert from "assert";
+// import { assert } from "./assert";
 
 export function format(...args: unknown[]): string {
     let ret = "";
@@ -21,8 +21,10 @@ export function format(...args: unknown[]): string {
                 try {
                     str = JSON.stringify(arg);
                 } catch (err: unknown) {
-                    assert(err instanceof Error);
-                    str = JSON.stringify({error: error.message});
+                    // ### not working for some reason
+                    // assert(err instanceof Error, "Must be error");
+                    // str = JSON.stringify({ error: err.message });
+                    str = "Won't stringify it won't";
                 }
                 break;
 

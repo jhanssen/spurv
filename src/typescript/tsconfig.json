@@ -1,12 +1,11 @@
 {
     "compilerOptions": {
         "target": "es2020",
-        "typeRoots": [ "./typings" ],
         "noUncheckedIndexedAccess": true,
         "strictBindCallApply": true,
         "stripInternal": true,
         "newLine": "LF",
-        "module": "amd",
+        "module": "es2022",
         "declaration": false,
         "moduleResolution": "node",
         "pretty": true,

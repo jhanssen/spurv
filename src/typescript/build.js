@@ -31,7 +31,7 @@ function spawn(command, args, options) {
                 resolve();
             } else {
                 await removeBuildPackageJson();
-                reject(new Error(`${command} ${args} failed with code ${code}`));
+                reject(new Error(`${command} ${args.join(" ")} failed with code ${code}`));
             }
         });
     });
@@ -75,7 +75,10 @@ async function copyRollupConfig() {
     if (buildStat >= srcStat) {
         return;
     }
-    const contents = (await fs.readFile(rollupConfigSrc, "utf8")).replaceAll("./", path.join(__dirname, "/"));
+    const contents = (await fs.readFile(rollupConfigSrc, "utf8")).
+          replaceAll("./dist/", path.join(process.cwd(), "dist", "/")).
+          replaceAll("./src/spurv.ts", path.join(__dirname, "src", "spurv.ts"));
+
     await fs.writeFile(rollupConfigBuild, contents);
 }
 
@@ -85,18 +88,15 @@ async function eslint() {
     const eslintConfigBuild = path.join(process.cwd(), ".eslintrc");
     await fs.copyFile(eslintConfigSrc, eslintConfigBuild);
     const srcDir = path.join(__dirname, "src");
-    await spawn(eslintPath, [ "--config", eslintConfigBuild, srcDir, "--format", "unix" ], {
-        env: {
-            NODE_PATH: path.join(process.cwd(), "node_modules")
-        }
-    });
+    const env = { ...process.env };
+    env.NODE_PATH = path.join(process.cwd(), "node_modules");
+    await spawn(eslintPath, [ "--config", eslintConfigBuild, srcDir, "--format", "unix" ], { env });
 }
 
 async function rollup() {
-    // const eslintPath = path.join(process.cwd(), "node_modules", ".bin", "rollup");
-    // const eslintConfig = path.join(__dirname, ".eslintrc");
-    // const srcDir = path.join(__dirname, "src");
-    // await spawn(eslintPath, [ "--config", eslintConfig, srcDir ], { NODE_PATH: path.join(process.cwd(), "node_modules") });
+    const rollupPath = path.join(process.cwd(), "node_modules", ".bin", "rollup");
+    const rollupConfig = path.join(process.cwd(), "rollup.config.js");
+    await spawn(rollupPath, [ "--config", rollupConfig ], { NODE_PATH: path.join(process.cwd(), "node_modules") });
 }
 
 (async function () {
