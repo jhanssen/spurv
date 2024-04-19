@@ -80,6 +80,7 @@ void Editor::load(const std::filesystem::path& path)
             assert(mCurrentDoc == nullptr);
             mDocuments.push_back(std::make_unique<Document>());
             mCurrentDoc = mDocuments.back().get();
+            mCurrentDoc->setFont(Font("Corsiva"));
             mCurrentDoc->onReady().connect([doc = mCurrentDoc]() {
                 // send some lines to the renderer for now
                 std::size_t lineNo = 0;

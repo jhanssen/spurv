@@ -80,6 +80,11 @@ namespace proj
     this->insert(i,rope(str));
   }
 
+  // Insert the given string into the rope, beginning at the specified index (i)
+  void rope::insert(size_t i, u32string&& str) {
+    this->insert(i,rope(std::move(str)));
+  }
+
   // Insert the given rope into the rope, beginning at the specified index (i)
   void rope::insert(size_t i, const rope& r) {
     if (this->length() < i) {
@@ -106,6 +111,12 @@ namespace proj
   // Append the argument to the existing rope
   void rope::append(const u32string& str) {
     rope tmp = rope(str);
+    this->root_ = make_unique<rope_node>(std::move(this->root_), std::move(tmp.root_));
+  }
+
+  // Append the argument to the existing rope
+  void rope::append(u32string&& str) {
+    rope tmp = rope(std::move(str));
     this->root_ = make_unique<rope_node>(std::move(this->root_), std::move(tmp.root_));
   }
 
@@ -271,11 +282,18 @@ namespace proj
     return !(*this == rhs);
   }
 
-  std::vector<rope_node::linebreak> rope::lineBreaks() const {
+  std::vector<rope_node::linebreak> rope::linebreaks() const {
     if (this->root_ == nullptr) {
       return {};
     }
-    return this->root_->lineBreaks();
+    return this->root_->linebreaks();
+  }
+
+  std::vector<rope_node::linebreak> rope::lastLinebreaks() const {
+    if (this->root_ == nullptr) {
+        return {};
+    }
+    return this->root_->lastLinebreaks();
   }
 
   // Compute the nth Fibonacci number, in O(n) time

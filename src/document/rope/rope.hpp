@@ -66,15 +66,18 @@ namespace proj
     // Balance the rope
     void balance(void);
 
-    std::vector<rope_node::linebreak> lineBreaks() const;
+    std::vector<rope_node::linebreak> linebreaks() const;
+    std::vector<rope_node::linebreak> lastLinebreaks() const;
 
     // MUTATORS
     // Insert the given string/rope/node into the rope, beginning at the specified index (i)
     void insert(size_t i, const u32string& str);
+    void insert(size_t i, u32string&& str);
     void insert(size_t i, const rope& r);
     void insert(size_t i, node_handle&& r);
     // Concatenate the existing string/rope/node with the argument
     void append(const u32string&);
+    void append(u32string&&);
     void append(const rope&);
     void append(node_handle&&);
     // Remove the substring of (len) characters beginning at index (start)

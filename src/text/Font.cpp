@@ -43,6 +43,10 @@ std::filesystem::path FontConfigHolder::fontFileForPattern(const std::string& na
 
 using namespace spurv;
 
+Font::Font()
+{
+}
+
 Font::Font(const std::string& name)
     : mFile(FontConfigHolder::fontFileForPattern(name))
 {

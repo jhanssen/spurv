@@ -105,7 +105,7 @@ namespace proj
           // get number of characters in left subtree
           size_t tmp =  w - start;
           u32string rResult = (this->right_ == nullptr) ? u32string {} : this->right_->getSubstring(w,len-tmp);
-          return lResult.append(rResult);
+          return lResult.append(std::move(rResult));
         } else {
           return lResult;
         }
@@ -123,10 +123,10 @@ namespace proj
     }
     u32string lResult = (this->left_ == nullptr) ? u32string {} : this->left_->treeToString();
     u32string rResult = (this->right_ == nullptr) ? u32string {} : this->right_->treeToString();
-    return lResult.append(rResult);
+    return lResult.append(std::move(rResult));
   }
 
-  std::vector<rope_node::linebreak> rope_node::lineBreaks() const {
+  std::vector<rope_node::linebreak> rope_node::linebreaks() const {
     std::vector<linebreak> breaks;
     bool hasEndCr = false;
     retrieveLineBreaks(0, breaks, hasEndCr);
@@ -146,12 +146,22 @@ namespace proj
     return breaks;
   }
 
+  std::vector<rope_node::linebreak> rope_node::lastLinebreaks() const {
+    if(this->isLeaf()) {
+      return this->linebreaks_;
+    }
+    if (this->right_ != nullptr) {
+      return this->right_->lastLinebreaks();
+    }
+    return {};
+  }
+
   size_t rope_node::retrieveLineBreaks(size_t adjust, std::vector<linebreak>& breaks, bool& hasEndCr) const {
     if(this->isLeaf()) {
-      if(!this->lineBreaks_.empty()) {
+      if(!this->linebreaks_.empty()) {
         const auto end = breaks.size();
-        breaks.resize(end + this->lineBreaks_.size());
-        std::transform(this->lineBreaks_.cbegin(), this->lineBreaks_.cend(), breaks.begin() + end, [adjust](auto b) {
+        breaks.resize(end + this->linebreaks_.size());
+        std::transform(this->linebreaks_.cbegin(), this->linebreaks_.cend(), breaks.begin() + end, [adjust](auto b) {
           return std::make_pair(b.first + adjust, b.second);
         });
         if (!hasEndCr && breaks.back().second == 0x000D) {
@@ -215,7 +225,7 @@ namespace proj
     size_t rResult = (this->right_ == nullptr) ? 0 : this->right_->getDepth();
     return std::max(++lResult,++rResult);
   }
-  
+
   // Store all leaves in the given vector
   void rope_node::getLeaves(std::vector<rope_node *>& v) {
     if(this->isLeaf()) {
@@ -229,7 +239,7 @@ namespace proj
   }
 
   void rope_node::rebuildLinebreaks() {
-    this->lineBreaks_.clear();
+    this->linebreaks_.clear();
     if (!this->isLeaf()) {
       return;
     }
@@ -239,18 +249,18 @@ namespace proj
       if (spurv::isLineBreak(ch)) {
         switch (ch) {
         case 0x000D:
-          this->lineBreaks_.push_back(std::make_pair(idx, ch));
+          this->linebreaks_.push_back(std::make_pair(idx, ch));
           lastCr = idx;
           break;
         case 0x000A:
           if (idx > 0 && idx - 1 == lastCr) {
-            this->lineBreaks_.back().first += 1;
+            this->linebreaks_.back().first += 1;
           } else {
-            this->lineBreaks_.push_back(std::make_pair(idx, ch));
+            this->linebreaks_.push_back(std::make_pair(idx, ch));
           }
           break;
         default:
-          this->lineBreaks_.push_back(std::make_pair(idx, ch));
+          this->linebreaks_.push_back(std::make_pair(idx, ch));
           break;
         }
       }

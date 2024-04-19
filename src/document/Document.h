@@ -1,6 +1,8 @@
 #pragma once
 
+#include "Layout.h"
 #include <EventEmitter.h>
+#include <Font.h>
 #include <rope.hpp>
 #include <filesystem>
 #include <limits>
@@ -21,6 +23,8 @@ public:
     void load(const std::filesystem::path& path);
     void load(const std::u32string& data);
     void load(std::u32string&& data);
+
+    void setFont(const Font& font);
 
     // navigate
     // enum class Navigate
@@ -61,6 +65,8 @@ private:
     void loadComplete();
 
 private:
+    Font mFont;
+    Layout mLayout;
     Rope mRope;
 
     enum { ChunkSize = 1000 };

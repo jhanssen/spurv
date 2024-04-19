@@ -8,6 +8,7 @@ namespace spurv {
 class Font
 {
 public:
+    Font();
     Font(const std::string& name);
     ~Font() = default;
 

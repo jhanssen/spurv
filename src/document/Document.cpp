@@ -19,6 +19,10 @@ Document::~Document()
 
 void Document::load(const std::filesystem::path& path)
 {
+    mLayout.reset(Layout::Mode::Chunked);
+    mLayout.onReady().connect([this]() {
+        mOnReady.emit();
+    });
     mRope = Rope();
     mDocumentSize = 0;
 
@@ -132,30 +136,39 @@ void Document::load(const std::u32string& data)
 {
     mDocumentSize = data.size();
     mRope = Rope(data);
+    mLayout.reset(Layout::Mode::Single);
+    mLayout.onReady().connect([this]() {
+        mOnReady.emit();
+    });
+    mLayout.calculate(mRope.toString(), mRope.linebreaks());
     initialize(0);
-    mOnReady.emit();
 }
 
 void Document::load(std::u32string&& data)
 {
     mDocumentSize = data.size();
     mRope = Rope(std::move(data));
+    mLayout.reset(Layout::Mode::Single);
+    mLayout.onReady().connect([this]() {
+        mOnReady.emit();
+    });
+    mLayout.calculate(mRope.toString(), mRope.linebreaks());
     initialize(0);
-    mOnReady.emit();
 }
 
 void Document::loadChunk(std::u32string&& data)
 {
     mDocumentSize += data.size();
-    mRope.append(std::move(data));
+    mRope.append(data);
+    mLayout.calculate(std::move(data), mRope.lastLinebreaks());
 }
 
 void Document::loadComplete()
 {
     spdlog::info("completed loading doc {}", mRope.length());
-    spdlog::info("- linebreaks {}", mRope.lineBreaks());
+    spdlog::info("- linebreaks {}", mRope.linebreaks());
+    mLayout.finalize();
     initialize(0);
-    mOnReady.emit();
 }
 
 void Document::initialize(std::size_t offset)
@@ -177,9 +190,6 @@ void Document::initialize(std::size_t offset)
         mChunk = {};
         mChunkStart = mChunkOffset = 0;
     }
-    mLineBreaks = mRope.lineBreaks();
-    // should check if the last character in the rope is a line break
-    mDocumentLines = mLineBreaks.size() + 1;
     spdlog::info("initialize doc {} {}", mChunkStart, mChunk.size());
 }
 
@@ -259,4 +269,9 @@ std::vector<std::u32string> Document::lineRange(std::size_t start, std::size_t e
         ++currentLine;
     }
     return lines;
+}
+
+void Document::setFont(const Font& font)
+{
+    mLayout.setFont(font);
 }

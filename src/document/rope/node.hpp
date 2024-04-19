@@ -47,7 +47,7 @@ namespace proj
     rope_node(u32string&& str);
     // Copy constructor
     rope_node(const rope_node&);
-    
+
     // ACCESSORS
     size_t getLength(void) const;
     char32_t getCharByIndex(size_t) const;
@@ -56,7 +56,8 @@ namespace proj
     // Get string contained in current node and its children
     u32string treeToString(void) const;
 
-    std::vector<linebreak> lineBreaks() const;
+    std::vector<linebreak> linebreaks() const;
+    std::vector<linebreak> lastLinebreaks() const;
 
     // MUTATORS
     // Split the represented string at the specified index
@@ -80,7 +81,7 @@ namespace proj
     handle left_;
     handle right_;
     u32string fragment_;
-    std::vector<linebreak> lineBreaks_;
+    std::vector<linebreak> linebreaks_;
     
   }; // class rope_node
   
