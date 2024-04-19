@@ -42,6 +42,7 @@ public:
     template<typename Func>
     ConnectKey connect(Func&&, ConnectMode mode = ConnectMode::Auto);
     bool disconnect(ConnectKey key);
+    void disconnectAll();
 
 private:
     EventEmitter(EventEmitter&&) = delete;
@@ -137,6 +138,13 @@ bool EventEmitter<T>::disconnect(ConnectKey key)
         ++it;
     }
     return false;
+}
+
+template<typename T>
+void EventEmitter<T>::disconnectAll()
+{
+    std::lock_guard lock(mMutex);
+    mFuncs.clear();
 }
 
 } // namespace spurv

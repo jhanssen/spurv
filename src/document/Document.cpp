@@ -141,6 +141,7 @@ void Document::load(const std::u32string& data)
         mOnReady.emit();
     });
     mLayout.calculate(mRope.toString(), mRope.linebreaks());
+    mLineBreaks = mRope.linebreaks();
     initialize(0);
 }
 
@@ -153,6 +154,7 @@ void Document::load(std::u32string&& data)
         mOnReady.emit();
     });
     mLayout.calculate(mRope.toString(), mRope.linebreaks());
+    mLineBreaks = mRope.linebreaks();
     initialize(0);
 }
 
@@ -168,6 +170,7 @@ void Document::loadComplete()
     spdlog::info("completed loading doc {}", mRope.length());
     spdlog::info("- linebreaks {}", mRope.linebreaks());
     mLayout.finalize();
+    mLineBreaks = mRope.linebreaks();
     initialize(0);
 }
 

@@ -46,6 +46,7 @@ private:
     hb_blob_t* mFontBlob = nullptr;
     hb_face_t* mFontFace = nullptr;
     hb_font_t* mFontFont = nullptr;
+    std::size_t mReceived = 0;
     bool mFinalized = false;
 
     struct LineInfo

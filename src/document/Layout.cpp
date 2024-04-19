@@ -19,7 +19,7 @@ public:
     std::mutex mutex;
     std::vector<LayoutChunk> chunks;
     std::vector<Linebreak> linebreaks;
-    std::size_t length = 0;
+    std::size_t length = 0, posted = 0;
     bool running = false;
     Layout* layout = nullptr;
 
@@ -42,6 +42,7 @@ void LayoutJob::runJob(std::shared_ptr<LayoutJob> job)
             {
                 std::lock_guard lock(job->mutex);
                 if (!buffers.empty()) {
+                    ++job->posted;
                     loop->post([buffers = std::move(buffers), layout = job->layout]() -> void {
                         layout->mLines.reserve(layout->mLines.size() + buffers.size());
                         layout->mLines.insert(layout->mLines.end(), buffers.begin(), buffers.end());
@@ -156,6 +157,8 @@ void Layout::reset(Mode mode)
     clearLines();
     mMode = mode;
     mFinalized = false;
+    mReceived = 0;
+    mOnReady.disconnectAll();
 }
 
 void Layout::calculate(std::u32string&& data, std::vector<Linebreak>&& linebreaks)
@@ -207,6 +210,7 @@ void Layout::calculate(std::u32string&& data, std::vector<Linebreak>&& linebreak
 
 void Layout::notifyLines()
 {
+    ++mReceived;
     if (mMode == Mode::Single || mFinalized) {
         mOnReady.emit();
     }
@@ -216,12 +220,13 @@ void Layout::finalize()
 {
     mFinalized = true;
     bool shouldEmit = false;
-    {
-        assert(mJob);
+    if (mJob) {
         std::lock_guard lock(mJob->mutex);
-        if (!mJob->running) {
+        if (!mJob->running && mJob->posted == mReceived) {
             shouldEmit = true;
         }
+    } else {
+        shouldEmit = true;
     }
     if (shouldEmit) {
         mOnReady.emit();
