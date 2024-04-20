@@ -39,7 +39,7 @@ int main(int argc, char** argv, char** envp)
         ::exit(1);
     }
 
-    Font font("Corsiva");
+    Font font("Corsiva", 20);
     spdlog::info("hello world {}", font.file().string());
 
     const Rect rect = {

@@ -1,6 +1,7 @@
 #include "Renderer.h"
 #include "GenericPool.h"
 #include "GlyphAtlas.h"
+#include "TextVBO.h"
 #include "SemaphorePool.h"
 #include <Logger.h>
 #include <VulkanCommon.h>
@@ -78,8 +79,13 @@ struct RendererImpl
     std::vector<std::pair<uint64_t, std::function<void()>>> afterTransfers = {};
     std::vector<std::function<void(VkCommandBuffer cmdbuffer)>> inFrameCallbacks = {};
 
+    // descriptor sets
+    VkDescriptorSetLayout textUniformDescriptorSetLayout = VK_NULL_HANDLE;
+    VkDescriptorPool textUniformDescriptorPool = VK_NULL_HANDLE;
+
     std::unordered_map<std::filesystem::path, GlyphAtlas> glyphAtlases = {};
     std::vector<std::vector<TextLine>> textLines = {};
+    std::vector<std::vector<TextVBO>> textVBOs = {};
 
     bool suboptimal = false;
 
@@ -87,6 +93,7 @@ struct RendererImpl
     void checkFences();
     void runFenceCallbacks(FenceInfo& info);
     void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
+    void generateVBOs(VkCommandBuffer cmdbuffer);
     GlyphAtlas& atlasFor(const Font& font);
 
     static void idleCallback(uv_idle_t* idle);
@@ -194,7 +201,7 @@ void RendererImpl::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
         currentAtlas = &atlas;
 
         uint32_t glyph_count;
-        hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(line.buffer, &glyph_count);
+        hb_glyph_info_t* glyph_info = hb_buffer_get_glyph_infos(line.buffer, &glyph_count);
 
         for (uint32_t i = 0; i < glyph_count; i++) {
             hb_codepoint_t glyphid = glyph_info[i].codepoint;
@@ -217,6 +224,63 @@ void RendererImpl::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
         textLines.resize(box + 1);
     }
     textLines[box] = std::move(lines);
+    textVBOs.clear();
+}
+
+void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
+{
+    for (std::size_t box = 0; box < textLines.size(); ++box) {
+        const auto& lines = textLines[box];
+        if (lines.empty()) {
+            continue;
+        }
+        if (box >= textVBOs.size()) {
+            textVBOs.resize(box + 1);
+        }
+        auto& vbos = textVBOs[box];
+        for (const auto& line : lines) {
+            vbos.push_back(TextVBO());
+            auto& vbo = vbos.back();
+            auto& atlas = atlasFor(line.font);
+
+            uint32_t glyph_count;
+            hb_position_t cursor_x = 0;
+            hb_position_t cursor_y = 0;
+            hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(line.buffer, &glyph_count);
+            hb_glyph_position_t* glyph_pos = hb_buffer_get_glyph_positions(line.buffer, &glyph_count);
+            std::unordered_map<hb_codepoint_t, hb_glyph_extents_t> extents;
+            for (uint32_t i = 0; i < glyph_count; i++) {
+                hb_codepoint_t glyphid = glyph_info[i].codepoint;
+                auto glyphInfo = atlas.glyphBox(glyphid);
+                if (glyphInfo == nullptr) {
+                    continue;
+                }
+                auto extent = extents.find(glyphid);
+                if (extent == extents.end()) {
+                    hb_glyph_extents_t glyph_extent;
+                    hb_font_get_glyph_extents(line.font.font(), glyphid, &glyph_extent);
+                    extent = extents.insert(std::make_pair(glyphid, glyph_extent)).first;
+                }
+                hb_position_t x_offset  = glyph_pos[i].x_offset;
+                hb_position_t y_offset  = glyph_pos[i].y_offset;
+                hb_position_t x_advance = glyph_pos[i].x_advance;
+                hb_position_t y_advance = glyph_pos[i].y_advance;
+
+                vbo.add(
+                    {
+                        (cursor_x + x_offset) / 64.0f,
+                        (cursor_y + y_offset) / 64.0f,
+                        extent->second.width / 64.0f,
+                        extent->second.height / 64.0f
+                    }, glyphInfo->box);
+
+                cursor_x += x_advance;
+                cursor_y += y_advance;
+            }
+
+            vbo.generate(allocator, cmdbuffer);
+        }
+    }
 }
 
 } // namespace spurv
@@ -463,6 +527,33 @@ void Renderer::thread_internal()
         vkResetCommandBuffer(cmdbuffer, 0);
     }, GenericPoolBase::AvailabilityMode::Manual);
 
+    // set up descriptor stuff
+    VkDescriptorSetLayoutBinding textUniformBinding = {};
+    textUniformBinding.binding = 0;
+    textUniformBinding.descriptorCount = 1;
+    textUniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    textUniformBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo textUniformInfo = {};
+    textUniformInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    textUniformInfo.bindingCount = 1;
+    textUniformInfo.pBindings = &textUniformBinding;
+
+    VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &textUniformInfo, nullptr, &mImpl->textUniformDescriptorSetLayout));
+
+    constexpr uint32_t TextUniformBufferCount = 1000;
+    std::array<VkDescriptorPoolSize, 1> sizes = {
+        { { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, TextUniformBufferCount } }
+    };
+
+    VkDescriptorPoolCreateInfo textUniformPoolInfo = {};
+    textUniformPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    textUniformPoolInfo.maxSets = TextUniformBufferCount;
+    textUniformPoolInfo.poolSizeCount = 1;
+    textUniformPoolInfo.pPoolSizes = sizes.data();
+
+    VK_CHECK_SUCCESS(vkCreateDescriptorPool(mImpl->device, &textUniformPoolInfo, nullptr, &mImpl->textUniformDescriptorPool));
+
     EventLoop::ConnectKey onResizeKey = {};
 
     // finalize the event loop
@@ -634,6 +725,10 @@ void Renderer::render()
     attachmentBarrier.subresourceRange.baseArrayLayer = 0;
     attachmentBarrier.subresourceRange.layerCount = 1;
     vkCmdPipelineBarrier(cmdbuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, {}, 0, nullptr, 0, nullptr, 1, &attachmentBarrier);
+
+    if (!mImpl->textLines.empty() && mImpl->textVBOs.empty()) {
+        mImpl->generateVBOs(cmdbuffer);
+    }
 
     // if (!mImpl->boxes.empty()) {
     //     // spdlog::info("render {}.", mImpl->boxes.size());

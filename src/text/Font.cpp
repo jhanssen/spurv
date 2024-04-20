@@ -47,7 +47,7 @@ Font::Font()
 {
 }
 
-Font::Font(const std::string& name)
+Font::Font(const std::string& name, uint32_t size)
     : mFile(FontConfigHolder::fontFileForPattern(name))
 {
     if (mFile.empty()) {
@@ -69,6 +69,7 @@ Font::Font(const std::string& name)
         hb_blob_destroy(mBlob);
         mBlob = nullptr;
     }
+    hb_font_set_scale(mFont, size * 64, size * 64);
 }
 
 Font::Font(const Font& other)

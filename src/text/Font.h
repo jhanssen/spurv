@@ -1,8 +1,9 @@
 #pragma once
 
+#include <hb.h>
 #include <filesystem>
 #include <string>
-#include <hb.h>
+#include <cstdint>
 
 namespace spurv {
 
@@ -10,7 +11,7 @@ class Font
 {
 public:
     Font();
-    Font(const std::string& name);
+    Font(const std::string& name, uint32_t size);
     Font(const Font& other);
     Font(Font&& other);
     ~Font();

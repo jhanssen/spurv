@@ -3,6 +3,7 @@ set(SOURCES
     GlyphAtlas.cpp
     SemaphorePool.cpp
     Renderer.cpp
+    TextVBO.cpp
     VmaImplementation.cpp
 )
 

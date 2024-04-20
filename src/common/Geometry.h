@@ -4,23 +4,35 @@
 
 namespace spurv {
 
-struct Pos
+template<typename T>
+struct PosT
 {
-    int32_t x, y;
+    T x, y;
 };
 
-struct Size
+template<typename T>
+struct SizeT
 {
-    uint32_t width, height;
+    T width, height;
 };
 
-struct Rect
+template<typename XY, typename WH>
+struct RectT
 {
-    int32_t x, y;
-    uint32_t width, height;
+    XY x, y;
+    WH width, height;
 
-    Pos pos() const { return { x, y }; }
-    Size size() const { return { width, height }; }
+    PosT<XY> pos() const { return { x, y }; }
+    SizeT<WH> size() const { return { width, height }; }
 };
+
+using Pos = PosT<int32_t>;
+using PosF = PosT<float>;
+
+using Size = SizeT<uint32_t>;
+using SizeF = SizeT<float>;
+
+using Rect = RectT<int32_t, uint32_t>;
+using RectF = RectT<float, float>;
 
 } // namespace spurv
