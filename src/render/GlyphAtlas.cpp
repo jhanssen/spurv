@@ -193,21 +193,15 @@ void GlyphAtlas::generate(msdf_atlas::Charset&& charset, GlyphTimeline& timeline
 
             Renderer::instance()->afterTransfer(semSignal, [
                 atlas, allocator = vulkan.allocator, buffer, bufferAllocation, image,
-                cmdbuffer, semSignal, charSet = std::move(charSet)]() {
+                cmdbuffer, semSignal, charSet = std::move(charSet)]() mutable {
                 spdlog::info("glyphatlas notifying");
-
-                for (auto g : charSet) {
-                    auto it = atlas->mGlyphs.find(g);
-                    if (it != atlas->mGlyphs.end()) {
-                        it->second.image = image;
-                    }
-                }
 
                 vmaDestroyBuffer(allocator, buffer, bufferAllocation);
                 Renderer::instance()->glyphsCreated(GlyphsCreated {
                         cmdbuffer,
                         image,
-                        semSignal
+                        atlas,
+                        std::move(charSet)
                     });
             });
             msdfgen::destroyFont(font);

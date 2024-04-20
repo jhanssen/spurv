@@ -13,6 +13,8 @@
 
 namespace spurv {
 
+class GlyphAtlas;
+
 struct GlyphInfo
 {
     msdf_atlas::GlyphBox box = {};
@@ -24,7 +26,8 @@ struct GlyphsCreated
 {
     VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
     VkImage image = VK_NULL_HANDLE;
-    uint64_t wait = 0;
+    GlyphAtlas* atlas = nullptr;
+    msdf_atlas::Charset charset = {};
 };
 
 struct GlyphTimeline
@@ -58,6 +61,7 @@ public:
     void generate(uint32_t from, uint32_t to, GlyphTimeline& timeline, VkCommandBuffer cmdbuf);
     void generate(const std::unordered_set<uint32_t>& glyphs, GlyphTimeline& timeline, VkCommandBuffer cmdbuf);
 
+    GlyphInfo* glyphBox(uint32_t unicode);
     const GlyphInfo* glyphBox(uint32_t unicode) const;
 
 private:
@@ -97,6 +101,15 @@ inline void GlyphAtlas::setVulkanInfo(const GlyphVulkanInfo& info)
 inline void GlyphAtlas::setFontFile(const std::filesystem::path& path)
 {
     mFontFile = path;
+}
+
+inline GlyphInfo* GlyphAtlas::glyphBox(uint32_t unicode)
+{
+    auto it = mGlyphs.find(unicode);
+    if (it == mGlyphs.end()) {
+        return nullptr;
+    }
+    return &it->second;
 }
 
 inline const GlyphInfo* GlyphAtlas::glyphBox(uint32_t unicode) const

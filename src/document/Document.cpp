@@ -210,11 +210,13 @@ TextLine Document::lineAt(std::size_t line) const
     if (line < mLayout.numLines()) {
         const auto& ll = mLayout.lineAt(line);
         return {
+            line,
             hb_buffer_reference(ll.buffer),
             ll.font
         };
     }
     return {
+        static_cast<std::size_t>(0),
         nullptr,
         Font {}
     };
@@ -233,6 +235,7 @@ std::vector<TextLine> Document::lineRange(std::size_t start, std::size_t end)
     for (std::size_t l = start; l < end; ++l) {
         const auto& ll = mLayout.lineAt(l);
         out.push_back({
+                l,
                 hb_buffer_reference(ll.buffer),
                 ll.font
             });

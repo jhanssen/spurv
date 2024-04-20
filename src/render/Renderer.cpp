@@ -65,6 +65,7 @@ struct RendererImpl
     std::vector<std::function<void(VkCommandBuffer cmdbuffer)>> inFrameCallbacks = {};
 
     std::unordered_map<std::filesystem::path, GlyphAtlas> glyphAtlases = {};
+    std::vector<std::vector<TextLine>> textLines = {};
 
     bool suboptimal = false;
 
@@ -197,6 +198,11 @@ void RendererImpl::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
         spdlog::info("generating glyphs {}", missing.size());
         currentAtlas->generate(std::move(missing), transferTimeline, *cmdbuffer);
     }
+
+    if (box >= textLines.size()) {
+        textLines.resize(box + 1);
+    }
+    textLines[box] = std::move(lines);
 }
 
 } // namespace spurv
@@ -745,4 +751,12 @@ void Renderer::glyphsCreated(GlyphsCreated&& created)
     VK_CHECK_SUCCESS(vkQueueSubmit(mImpl->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
 
     spdlog::info("glyphs created and submitted");
+    mImpl->afterFrameCallbacks.push_back([atlas = created.atlas, charset = std::move(created.charset), image = created.image]() -> void {
+        for (auto g : charset) {
+            auto box = atlas->glyphBox(g);
+            assert(box != nullptr);
+            box->image = image;
+        }
+        spdlog::info("glyphs ready for use");
+    });
 }
