@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <limits>
 #include <unordered_map>
+#include <unordered_set>
 #include <thread>
 #include <mutex>
 #include <cstdint>
@@ -54,9 +55,10 @@ public:
 
     void setVulkanInfo(const GlyphVulkanInfo& info);
     void setFontFile(const std::filesystem::path& path);
-    void generate(char32_t from, char32_t to, GlyphTimeline& timeline, VkCommandBuffer cmdbuf);
+    void generate(uint32_t from, uint32_t to, GlyphTimeline& timeline, VkCommandBuffer cmdbuf);
+    void generate(const std::unordered_set<uint32_t>& glyphs, GlyphTimeline& timeline, VkCommandBuffer cmdbuf);
 
-    const GlyphInfo* glyphBox(char32_t unicode) const;
+    const GlyphInfo* glyphBox(uint32_t unicode) const;
 
 private:
     struct PerThreadInfo
@@ -67,11 +69,12 @@ private:
     void destroy();
 
     PerThreadInfo* perThread();
+    void generate(msdf_atlas::Charset&& charset, GlyphTimeline& timeline, VkCommandBuffer cmdbuf);
 
 private:
     GlyphVulkanInfo mVulkanInfo = {};
     std::filesystem::path mFontFile;
-    std::unordered_map<char32_t, GlyphInfo> mGlyphs;
+    std::unordered_map<uint32_t, GlyphInfo> mGlyphs;
     std::mutex mMutex;
     std::unordered_map<std::thread::id, std::unique_ptr<PerThreadInfo>> mPerThread;
     static thread_local msdfgen::FreetypeHandle* tFreetype;
@@ -96,7 +99,7 @@ inline void GlyphAtlas::setFontFile(const std::filesystem::path& path)
     mFontFile = path;
 }
 
-inline const GlyphInfo* GlyphAtlas::glyphBox(char32_t unicode) const
+inline const GlyphInfo* GlyphAtlas::glyphBox(uint32_t unicode) const
 {
     auto it = mGlyphs.find(unicode);
     if (it == mGlyphs.end()) {

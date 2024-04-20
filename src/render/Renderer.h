@@ -3,6 +3,7 @@
 #include <EventEmitter.h>
 #include <EventLoop.h>
 #include <TextLine.h>
+#include "Box.h"
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -10,7 +11,7 @@
 #include <optional>
 #include <cstdint>
 #include <cassert>
-#include "Box.h"
+#include <vulkan/vulkan.h>
 
 namespace spurv {
 
@@ -39,6 +40,8 @@ public:
     void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
 
     void afterCurrentFrame(std::function<void()>&& func);
+    void afterTransfer(uint64_t value, std::function<void()>&& func);
+    void inNextFrame(std::function<void(VkCommandBuffer cmdbuffer)>&& func);
 
 private:
     Renderer();

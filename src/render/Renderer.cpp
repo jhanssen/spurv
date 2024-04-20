@@ -8,9 +8,10 @@
 #include <uv.h>
 #include <VkBootstrap.h>
 #include <fmt/core.h>
-#include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
+#include <unordered_set>
 #include <vector>
+#include <cassert>
 
 using namespace spurv;
 
@@ -54,11 +55,16 @@ struct RendererImpl
     uint32_t width = 0, height = 0;
 
     GenericPool<VkCommandBuffer, 5> freeGraphicsCommandBuffers = {};
-    GenericPool<VkCommandBuffer, 5> freeTransferCommandBuffers = {};
+    GenericPool<VkCommandBuffer, 32> freeTransferCommandBuffers = {};
 
     std::unordered_map<VkFence, FenceInfo> fenceInfos = {};
     GenericPool<VkFence, 5> freeFences = {};
-    std::vector<std::function<void()>> frameCallbacks = {};
+    std::vector<std::function<void()>> afterFrameCallbacks = {};
+    uint64_t highestAfterTransfer = 0;
+    std::vector<std::pair<uint64_t, std::function<void()>>> afterTransfers = {};
+    std::vector<std::function<void(VkCommandBuffer cmdbuffer)>> inFrameCallbacks = {};
+
+    std::unordered_map<std::filesystem::path, GlyphAtlas> glyphAtlases = {};
 
     bool suboptimal = false;
 
@@ -66,6 +72,7 @@ struct RendererImpl
     void checkFences();
     void runFenceCallbacks(FenceInfo& info);
     void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
+    GlyphAtlas& atlasFor(const Font& font);
 
     static void idleCallback(uv_idle_t* idle);
 };
@@ -128,10 +135,68 @@ void RendererImpl::checkFences()
     }
 }
 
+GlyphAtlas& RendererImpl::atlasFor(const Font& font)
+{
+    auto it = glyphAtlases.find(font.file());
+    if (it != glyphAtlases.end()) {
+        return it->second;
+    }
+    spdlog::info("creating glyph atlas for {}", font.file());
+    auto& atlas = glyphAtlases[font.file()];
+    atlas.setVulkanInfo({
+            device,
+            {
+                graphicsQueue,
+                graphicsFamily
+            },
+            {
+                transferQueue,
+                transferFamily
+            },
+            allocator
+        });
+    atlas.setFontFile(font.file());
+    return atlas;
+}
+
 void RendererImpl::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
 {
     (void)box;
     spdlog::info("Got text lines {}", lines.size());
+
+    GlyphAtlas* currentAtlas = nullptr;
+    std::unordered_set<hb_codepoint_t> missing = {};
+
+    for (const auto& line : lines) {
+        auto& atlas = atlasFor(line.font);
+        if ((!missing.empty() && currentAtlas != nullptr && currentAtlas != &atlas) || missing.size() >= 500) {
+            auto cmdbuffer = freeTransferCommandBuffers.get();
+
+            spdlog::info("generating glyphs {}", missing.size());
+            currentAtlas->generate(std::move(missing), transferTimeline, *cmdbuffer);
+            missing.clear();
+        }
+        currentAtlas = &atlas;
+
+        uint32_t glyph_count;
+        hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(line.buffer, &glyph_count);
+
+        for (uint32_t i = 0; i < glyph_count; i++) {
+            hb_codepoint_t glyphid = glyph_info[i].codepoint;
+
+            auto glyphInfo = atlas.glyphBox(glyphid);
+            if (glyphInfo == nullptr) {
+                missing.insert(glyphid);
+            }
+        }
+    }
+    if (!missing.empty()) {
+        assert(currentAtlas != nullptr);
+        auto cmdbuffer = freeTransferCommandBuffers.get();
+
+        spdlog::info("generating glyphs {}", missing.size());
+        currentAtlas->generate(std::move(missing), transferTimeline, *cmdbuffer);
+    }
 }
 
 } // namespace spurv
@@ -156,6 +221,7 @@ void Renderer::thread_internal()
     vkb::InstanceBuilder builder;
     auto maybeInstance = builder
         .set_app_name("spurv")
+        .require_api_version(1, 2, 0)
         .request_validation_layers()
         .use_default_debug_messenger()
         .build();
@@ -177,12 +243,16 @@ void Renderer::thread_internal()
         return;
     }
 
+    VkPhysicalDeviceVulkan12Features features12 = {};
+    features12.timelineSemaphore = VK_TRUE;
+
     vkb::PhysicalDeviceSelector selector { instance };
     auto maybePhysicalDevice = selector
-        .set_surface(surface)
         .set_minimum_version(1, 2)
+        .set_required_features_12(features12)
         .require_separate_transfer_queue()
         .require_present()
+        .set_surface(surface)
         .select();
     if (!maybePhysicalDevice) {
         spdlog::critical("Unable to select vulkan physical device: {}", maybePhysicalDevice.error().message());
@@ -464,10 +534,6 @@ void Renderer::render()
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     VK_CHECK_SUCCESS(vkBeginCommandBuffer(cmdbuffer, &beginInfo));
 
-    // if (!mImpl->boxes.empty()) {
-    //     // spdlog::info("render {}.", mImpl->boxes.size());
-    // }
-
     VkImageMemoryBarrier attachmentBarrier = {};
     attachmentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     attachmentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -483,6 +549,16 @@ void Renderer::render()
     attachmentBarrier.subresourceRange.baseArrayLayer = 0;
     attachmentBarrier.subresourceRange.layerCount = 1;
     vkCmdPipelineBarrier(cmdbuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, {}, 0, nullptr, 0, nullptr, 1, &attachmentBarrier);
+
+    // if (!mImpl->boxes.empty()) {
+    //     // spdlog::info("render {}.", mImpl->boxes.size());
+    // }
+    if (!mImpl->inFrameCallbacks.empty()) {
+        for (auto& cb : mImpl->inFrameCallbacks) {
+            cb(cmdbuffer);
+        }
+        mImpl->inFrameCallbacks.clear();
+    }
 
     VkImageMemoryBarrier presentBarrier = {};
     presentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -516,16 +592,32 @@ void Renderer::render()
     // wait for the graphics timeline semaphore
     uint64_t timelineSemValues[] = {
         0, // ignored
-        mImpl->graphicsTimeline.value
+        mImpl->graphicsTimeline.value,
+        0
     };
     VkSemaphore waitSems[] = {
         semCurrent,
-        mImpl->graphicsTimeline.semaphore
+        mImpl->graphicsTimeline.semaphore,
+        VK_NULL_HANDLE
     };
+
+    if (!mImpl->afterTransfers.empty()) {
+        timelineSemValues[2] = mImpl->highestAfterTransfer;
+        waitSems[2] = mImpl->transferTimeline.semaphore;
+
+        mImpl->highestAfterTransfer = 0;
+        // attach all callback to the current fence
+        const auto end = mImpl->afterFrameCallbacks.size();
+        mImpl->afterFrameCallbacks.resize(end + mImpl->afterTransfers.size());
+        std::transform(mImpl->afterTransfers.cbegin(), mImpl->afterTransfers.cend(), mImpl->afterFrameCallbacks.begin() + end, [](auto entry) {
+            return entry.second;
+        });
+        mImpl->afterTransfers.clear();
+    }
 
     VkTimelineSemaphoreSubmitInfo timelineInfo = {};
     timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-    timelineInfo.waitSemaphoreValueCount = 2;
+    timelineInfo.waitSemaphoreValueCount = waitSems[2] == VK_NULL_HANDLE ? 2 : 3;
     timelineInfo.pWaitSemaphoreValues = timelineSemValues;
     timelineInfo.signalSemaphoreValueCount = 0;
     timelineInfo.pSignalSemaphoreValues = nullptr;
@@ -535,7 +627,7 @@ void Renderer::render()
     submitInfo.pNext = &timelineInfo;
     const static VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.pWaitDstStageMask = waitStages;
-    submitInfo.waitSemaphoreCount = 2;
+    submitInfo.waitSemaphoreCount = waitSems[2] == VK_NULL_HANDLE ? 2 : 3;;
     submitInfo.pWaitSemaphores = waitSems;
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &semNext;
@@ -553,9 +645,9 @@ void Renderer::render()
 
     {
         std::unique_lock lock(mMutex);
-        fenceInfo.callbacks = std::move(mImpl->frameCallbacks);
+        fenceInfo.callbacks = std::move(mImpl->afterFrameCallbacks);
         fenceInfo.valid = true;
-        mImpl->frameCallbacks.clear();
+        mImpl->afterFrameCallbacks.clear();
     }
 
     // fmt::print("render\n");
@@ -576,7 +668,22 @@ void Renderer::render()
 void Renderer::afterCurrentFrame(std::function<void()>&& func)
 {
     std::unique_lock lock(mMutex);
-    mImpl->frameCallbacks.push_back(std::move(func));
+    mImpl->afterFrameCallbacks.push_back(std::move(func));
+}
+
+void Renderer::afterTransfer(uint64_t value, std::function<void()>&& func)
+{
+    std::unique_lock lock(mMutex);
+    mImpl->afterTransfers.push_back(std::make_pair(value, std::move(func)));
+    if (value > mImpl->highestAfterTransfer) {
+        mImpl->highestAfterTransfer = value;
+    }
+}
+
+void Renderer::inNextFrame(std::function<void(VkCommandBuffer cmdbuffer)>&& func)
+{
+    std::unique_lock lock(mMutex);
+    mImpl->inFrameCallbacks.push_back(std::move(func));
 }
 
 void Renderer::glyphsCreated(GlyphsCreated&& created)
@@ -605,12 +712,12 @@ void Renderer::glyphsCreated(GlyphsCreated&& created)
     imgMemBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     imgMemBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     imgMemBarrier.image = created.image;
-    imgMemBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    imgMemBarrier.srcAccessMask = 0;
     imgMemBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
     vkCmdPipelineBarrier(
         cmdbuffer,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         0,
         0, nullptr,
@@ -620,12 +727,9 @@ void Renderer::glyphsCreated(GlyphsCreated&& created)
     VK_CHECK_SUCCESS(vkEndCommandBuffer(cmdbuffer));
 
     // submit and signal the graphics timeline
-    uint64_t semWait = created.wait;
     uint64_t semSignal = ++mImpl->graphicsTimeline.value;
     VkTimelineSemaphoreSubmitInfo timelineInfo = {};
     timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-    timelineInfo.waitSemaphoreValueCount = 1;
-    timelineInfo.pWaitSemaphoreValues = &semWait;
     timelineInfo.signalSemaphoreValueCount = 1;
     timelineInfo.pSignalSemaphoreValues = &semSignal;
 
@@ -634,11 +738,11 @@ void Renderer::glyphsCreated(GlyphsCreated&& created)
     submitInfo.pNext = &timelineInfo;
     const static VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_TRANSFER_BIT};
     submitInfo.pWaitDstStageMask = waitStages;
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = &mImpl->transferTimeline.semaphore;
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &mImpl->graphicsTimeline.semaphore;
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &cmdbuffer;
     VK_CHECK_SUCCESS(vkQueueSubmit(mImpl->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
+
+    spdlog::info("glyphs created and submitted");
 }

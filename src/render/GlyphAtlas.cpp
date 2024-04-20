@@ -20,19 +20,8 @@ GlyphAtlas::PerThreadInfo* GlyphAtlas::perThread()
     return it->second.get();
 }
 
-void GlyphAtlas::generate(char32_t from, char32_t to, GlyphTimeline& timeline, VkCommandBuffer cmdbuffer)
+void GlyphAtlas::generate(msdf_atlas::Charset&& charset, GlyphTimeline& timeline, VkCommandBuffer cmdbuffer)
 {
-    std::vector<char32_t> missing;
-    missing.reserve(to - from);
-    // insert placeholders for missing glyphs
-    for (auto g = from; g < to; ++g) {
-        auto it = mGlyphs.find(g);
-        if (it == mGlyphs.end()) {
-            mGlyphs.insert(std::make_pair(g, GlyphInfo {}));
-            missing.push_back(g);
-        }
-    }
-
     if (tFreetype == nullptr) {
         tFreetype = msdfgen::initializeFreetype();
         if (tFreetype == nullptr) {
@@ -43,22 +32,19 @@ void GlyphAtlas::generate(char32_t from, char32_t to, GlyphTimeline& timeline, V
     auto atlas = this;
     pool->post([
         atlas, fontFile = mFontFile, ft = tFreetype, vulkan = mVulkanInfo, cmdbuffer,
-        missing = std::move(missing), sem = timeline.semaphore, semVal = timeline.value
+        charSet = std::move(charset), sem = timeline.semaphore, semVal = timeline.value
         ]() mutable {
         if (auto font = msdfgen::loadFont(ft, fontFile.c_str())) {
+            spdlog::info("glyphatlas generating");
             std::vector<msdf_atlas::GlyphGeometry> glyphs;
             msdf_atlas::FontGeometry fontGeometry(&glyphs);
-            msdf_atlas::Charset charSet;
-            for (auto g : missing) {
-                charSet.add(g);
-            }
-            fontGeometry.loadCharset(font, 1.0, charSet);
+            fontGeometry.loadGlyphset(font, 1.0, charSet);
             const double maxCornerAngle = 3.0;
             for (auto& glyph : glyphs) {
                 glyph.edgeColoring(&msdfgen::edgeColoringInkTrap, maxCornerAngle, 0);
             }
             msdf_atlas::TightAtlasPacker packer;
-            packer.setDimensionsConstraint(msdf_atlas::DimensionsConstraint::SQUARE);
+            packer.setDimensionsConstraint(msdf_atlas::DimensionsConstraint::POWER_OF_TWO_RECTANGLE);
             packer.setMinimumScale(24.0);
             packer.setPixelRange(2.0);
             packer.setMiterLimit(1.0);
@@ -67,20 +53,21 @@ void GlyphAtlas::generate(char32_t from, char32_t to, GlyphTimeline& timeline, V
             packer.getDimensions(width, height);
             msdf_atlas::ImmediateAtlasGenerator<
                 float, // pixel type of buffer for individual glyphs depends on generator function
-                3, // number of atlas color channels
-                &msdf_atlas::msdfGenerator, // function to generate bitmaps for individual glyphs
-                msdf_atlas::BitmapAtlasStorage<msdf_atlas::byte, 3> // class that stores the atlas bitmap
+                4, // number of atlas color channels
+                &msdf_atlas::mtsdfGenerator, // function to generate bitmaps for individual glyphs
+                msdf_atlas::BitmapAtlasStorage<msdf_atlas::byte, 4> // class that stores the atlas bitmap
                 > generator(width, height);
             msdf_atlas::GeneratorAttributes attributes;
             generator.setAttributes(attributes);
             generator.setThreadCount(1);
             generator.generate(glyphs.data(), glyphs.size());
-            auto bitmap = static_cast<msdfgen::BitmapConstRef<msdf_atlas::byte, 3>>(generator.atlasStorage());
+            spdlog::info("glyphsatlas generated {}x{}", width, height);
+            auto bitmap = static_cast<msdfgen::BitmapConstRef<msdf_atlas::byte, 4>>(generator.atlasStorage());
 
             // create a vulkan buffer
             VkBufferCreateInfo bufferInfo = {};
             bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            bufferInfo.size = bitmap.width * bitmap.height * 3;
+            bufferInfo.size = bitmap.width * bitmap.height * 4;
             bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
             VmaAllocationCreateInfo bufferAllocationInfo = {};
             bufferAllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
@@ -92,7 +79,7 @@ void GlyphAtlas::generate(char32_t from, char32_t to, GlyphTimeline& timeline, V
             // copy glyph atlas to buffer
             void* data;
             VK_CHECK_SUCCESS(vmaMapMemory(vulkan.allocator, bufferAllocation, &data));
-            ::memcpy(data, bitmap.pixels, bitmap.width * bitmap.height * 3);
+            ::memcpy(data, bitmap.pixels, bitmap.width * bitmap.height * 4);
             vmaUnmapMemory(vulkan.allocator, bufferAllocation);
 
             // create a vulkan image
@@ -104,7 +91,7 @@ void GlyphAtlas::generate(char32_t from, char32_t to, GlyphTimeline& timeline, V
             imageInfo.extent.depth = 1;
             imageInfo.mipLevels = 1;
             imageInfo.arrayLayers = 1;
-            imageInfo.format = VK_FORMAT_R8G8B8_UNORM;
+            imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
             imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
             imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -163,12 +150,12 @@ void GlyphAtlas::generate(char32_t from, char32_t to, GlyphTimeline& timeline, V
             imgMemBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             imgMemBarrier.image = image;
             imgMemBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            imgMemBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            imgMemBarrier.dstAccessMask = 0;
 
             vkCmdPipelineBarrier(
                 cmdbuffer,
                 VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                 0,
                 0, nullptr,
                 0, nullptr,
@@ -202,11 +189,14 @@ void GlyphAtlas::generate(char32_t from, char32_t to, GlyphTimeline& timeline, V
             submitInfo.pCommandBuffers = &cmdbuffer;
             VK_CHECK_SUCCESS(vkQueueSubmit(vulkan.transfer.queue, 1, &submitInfo, VK_NULL_HANDLE));
 
-            Renderer::instance()->afterCurrentFrame([
-                atlas, allocator = vulkan.allocator, buffer, bufferAllocation, image,
-                cmdbuffer, semSignal, missing = std::move(missing)]() {
+            spdlog::info("glyphatlas copied");
 
-                for (auto g : missing) {
+            Renderer::instance()->afterTransfer(semSignal, [
+                atlas, allocator = vulkan.allocator, buffer, bufferAllocation, image,
+                cmdbuffer, semSignal, charSet = std::move(charSet)]() {
+                spdlog::info("glyphatlas notifying");
+
+                for (auto g : charSet) {
                     auto it = atlas->mGlyphs.find(g);
                     if (it != atlas->mGlyphs.end()) {
                         it->second.image = image;
@@ -225,6 +215,37 @@ void GlyphAtlas::generate(char32_t from, char32_t to, GlyphTimeline& timeline, V
     });
 
     timeline.value += 1;
+}
+
+void GlyphAtlas::generate(uint32_t from, uint32_t to, GlyphTimeline& timeline, VkCommandBuffer cmdbuffer)
+{
+    msdf_atlas::Charset charSet;
+    // insert placeholders for missing glyphs
+    for (auto g = from; g < to; ++g) {
+        auto it = mGlyphs.find(g);
+        if (it == mGlyphs.end()) {
+            mGlyphs.insert(std::make_pair(g, GlyphInfo {}));
+            charSet.add(g);
+        }
+    }
+    if (!charSet.empty()) {
+        generate(std::move(charSet), timeline, cmdbuffer);
+    }
+}
+
+void GlyphAtlas::generate(const std::unordered_set<uint32_t>& glyphs, GlyphTimeline& timeline, VkCommandBuffer cmdbuffer)
+{
+    msdf_atlas::Charset charSet;
+    for (auto g : glyphs) {
+        auto it = mGlyphs.find(g);
+        if (it == mGlyphs.end()) {
+            mGlyphs.insert(std::make_pair(g, GlyphInfo {}));
+            charSet.add(g);
+        }
+    }
+    if (!charSet.empty()) {
+        generate(std::move(charSet), timeline, cmdbuffer);
+    }
 }
 
 void GlyphAtlas::destroy()
