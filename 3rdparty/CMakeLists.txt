@@ -12,6 +12,13 @@ set(LIBUV_BUILD_SHARED OFF CACHE BOOL "")
 set(MSDF_ATLAS_USE_VCPKG OFF CACHE BOOL "")
 set(MSDF_ATLAS_USE_SKIA OFF CACHE BOOL "")
 
+set(SKIP_SPIRV_TOOLS_INSTALL ON)
+
+set(SHADERC_SKIP_INSTALL ON)
+set(SHADERC_SKIP_TESTS ON)
+set(SHADERC_SKIP_EXAMPLES ON)
+set(SHADERC_SKIP_COPYRIGHT_CHECK ON)
+
 set(SIMDUTF_TESTS OFF CACHE BOOL "")
 set(SIMDUTF_BENCHMARKS OFF CACHE BOOL "")
 set(SIMDUTF_TOOLS OFF CACHE BOOL "")
@@ -29,6 +36,13 @@ add_subdirectory(harfbuzz)
 add_subdirectory(libqss)
 add_subdirectory(libuv)
 add_subdirectory(msdf-atlas-gen)
+
+# these have to be before shaderc
+add_subdirectory(SPIRV-Headers)
+add_subdirectory(SPIRV-Tools)
+add_subdirectory(glslang)
+
+add_subdirectory(shaderc)
 add_subdirectory(simdutf)
 add_subdirectory(spdlog)
 add_subdirectory(vk-bootstrap)
@@ -37,6 +51,7 @@ include(quickjs.cmake)
 
 add_library(glfw::glfw ALIAS glfw)
 add_library(harfbuzz::harfbuzz ALIAS harfbuzz)
+add_library(shaderc::shaderc ALIAS shaderc)
 
 # remove fmt as an interface library for spdlog, we don't want it appearing on our link line twice
 get_target_property(SPDLOG_IFACE_LINKED_LIBS spdlog INTERFACE_LINK_LIBRARIES)

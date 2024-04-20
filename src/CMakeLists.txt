@@ -17,6 +17,7 @@ set(LIBS
     harfbuzz::harfbuzz
     libuv::libuv
     msdf-atlas-gen::msdf-atlas-gen
+    shaderc::shaderc
     simdutf::simdutf
     spdlog::spdlog
     vk-bootstrap::vk-bootstrap
