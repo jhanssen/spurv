@@ -63,9 +63,9 @@ int main(int argc, char** argv, char** envp)
         spdlog::info("renderer ready");
 
         Editor::initialize();
-        Editor::instance()->load(std::filesystem::path(filename));
-        Editor::instance()->onReady().connect([]() {
+        Editor::instance()->onReady().connect([filename = std::move(filename)]() {
             spdlog::info("editor ready");
+            Editor::instance()->load(std::filesystem::path(filename));
         });
     });
     Renderer::instance()->setBoxes({ {
