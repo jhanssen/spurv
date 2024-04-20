@@ -54,7 +54,6 @@ endif()
 
 add_library(glfw::glfw ALIAS glfw)
 add_library(harfbuzz::harfbuzz ALIAS harfbuzz)
-add_library(shaderc::shaderc ALIAS shaderc)
 
 # remove fmt as an interface library for spdlog, we don't want it appearing on our link line twice
 get_target_property(SPDLOG_IFACE_LINKED_LIBS spdlog INTERFACE_LINK_LIBRARIES)
