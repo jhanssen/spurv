@@ -15,6 +15,20 @@
 
 using namespace spurv;
 
+#if defined(__APPLE__)
+// wonderful
+namespace std
+{
+    template<>
+    struct hash<std::filesystem::path> {
+        std::size_t operator()(const std::filesystem::path& v) const
+        {
+            return std::hash<std::string>()(v.string());
+        }
+    };
+};
+#endif
+
 namespace spurv {
 struct FenceInfo
 {

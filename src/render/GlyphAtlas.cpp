@@ -193,7 +193,7 @@ void GlyphAtlas::generate(msdf_atlas::Charset&& charset, GlyphTimeline& timeline
 
             Renderer::instance()->afterTransfer(semSignal, [
                 atlas, allocator = vulkan.allocator, buffer, bufferAllocation, image,
-                cmdbuffer, semSignal, charSet = std::move(charSet)]() mutable {
+                cmdbuffer, charSet = std::move(charSet)]() mutable {
                 spdlog::info("glyphatlas notifying");
 
                 vmaDestroyBuffer(allocator, buffer, bufferAllocation);
