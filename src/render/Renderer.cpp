@@ -235,6 +235,44 @@ Renderer::~Renderer()
     delete mImpl;
 }
 
+static inline vkb::Result<VkQueue> get_transfer_queue(vkb::Device& device, bool hasSeparateTransfer)
+{
+    if (hasSeparateTransfer) {
+        return device.get_queue(vkb::QueueType::transfer);
+    }
+    for (std::size_t idx = 0; idx < device.queue_families.size(); ++idx) {
+        auto& family = device.queue_families[idx];
+        assert(family.queueFlags & VK_QUEUE_GRAPHICS_BIT);
+        if (idx > 0 && (family.queueFlags & VK_QUEUE_TRANSFER_BIT)) {
+            VkQueue out = VK_NULL_HANDLE;
+            vkGetDeviceQueue(device.device, idx, 0, &out);
+            if (out != VK_NULL_HANDLE) {
+                return vkb::Result<VkQueue>(out);
+            }
+        }
+    }
+    return vkb::Result<VkQueue>(
+        vkb::make_error_code(vkb::QueueError::transfer_unavailable)
+        );
+}
+
+static inline vkb::Result<uint32_t> get_queue_index(vkb::Device& device, bool hasSeparateTransfer)
+{
+    if (hasSeparateTransfer) {
+        return device.get_queue_index(vkb::QueueType::transfer);
+    }
+    for (std::size_t idx = 0; idx < device.queue_families.size(); ++idx) {
+        auto& family = device.queue_families[idx];
+        assert(family.queueFlags & VK_QUEUE_GRAPHICS_BIT);
+        if (idx > 0 && (family.queueFlags & VK_QUEUE_TRANSFER_BIT)) {
+            return vkb::Result<uint32_t>(static_cast<uint32_t>(idx));
+        }
+    }
+    return vkb::Result<uint32_t>(
+        vkb::make_error_code(vkb::QueueError::transfer_unavailable)
+        );
+}
+
 void Renderer::thread_internal()
 {
     // initialize vulkan
@@ -266,6 +304,7 @@ void Renderer::thread_internal()
     VkPhysicalDeviceVulkan12Features features12 = {};
     features12.timelineSemaphore = VK_TRUE;
 
+    bool hasSeparateTransfer = true;
     vkb::PhysicalDeviceSelector selector { instance };
     auto maybePhysicalDevice = selector
         .set_minimum_version(1, 2)
@@ -275,8 +314,34 @@ void Renderer::thread_internal()
         .set_surface(surface)
         .select();
     if (!maybePhysicalDevice) {
-        spdlog::critical("Unable to select vulkan physical device: {}", maybePhysicalDevice.error().message());
-        return;
+        vkb::PhysicalDeviceSelector selector { instance };
+        maybePhysicalDevice = selector
+            .set_minimum_version(1, 2)
+            .set_required_features_12(features12)
+            .require_present()
+            .set_surface(surface)
+            .select();
+        if (maybePhysicalDevice) {
+            // verify that we have separate queues where one can do graphics and a separate queue can do transfer
+            auto families = maybePhysicalDevice.value().get_queue_families();
+            bool hasGraphics = false;
+            bool hasTransfer = false;
+            for (auto family : families) {
+                if (!hasGraphics && (family.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+                    hasGraphics = true;
+                } else if (!hasTransfer && (family.queueFlags & VK_QUEUE_TRANSFER_BIT)) {
+                    hasTransfer = true;
+                }
+            }
+            if (!hasGraphics || !hasTransfer) {
+                spdlog::critical("Unable to select vulkan physical device: no_suitable_device");
+                return;
+            }
+            hasSeparateTransfer = false;
+        } else {
+            spdlog::critical("Unable to select vulkan physical device: {}", maybePhysicalDevice.error().message());
+            return;
+        }
     }
 
     vkb::DeviceBuilder deviceBuilder { maybePhysicalDevice.value() };
@@ -300,12 +365,12 @@ void Renderer::thread_internal()
         return;
     }
 
-    auto maybeTransferQueue = mImpl->vkbDevice.get_queue(vkb::QueueType::transfer);
+    auto maybeTransferQueue = get_transfer_queue(mImpl->vkbDevice, hasSeparateTransfer);
     if (!maybeTransferQueue) {
         spdlog::critical("Unable to get vulkan transfer queue: {}", maybeTransferQueue.error().message());
         return;
     }
-    auto maybeTransferQueueIndex = mImpl->vkbDevice.get_queue_index(vkb::QueueType::transfer);
+    auto maybeTransferQueueIndex = get_queue_index(mImpl->vkbDevice, hasSeparateTransfer);
     if (!maybeTransferQueueIndex) {
         spdlog::critical("Unable to get vulkan transfer queue index: {}", maybeTransferQueueIndex.error().message());
         return;
