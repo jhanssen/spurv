@@ -82,18 +82,11 @@ void Editor::load(const std::filesystem::path& path)
             mCurrentDoc = mDocuments.back().get();
             mCurrentDoc->setFont(Font("Corsiva"));
             mCurrentDoc->onReady().connect([doc = mCurrentDoc]() {
+                spdlog::info("document ready");
                 // send some lines to the renderer for now
                 std::size_t lineNo = 0;
                 auto renderer = Renderer::instance();
-                auto lineStrings = doc->lineRange(lineNo, lineNo + 100);
-                std::vector<TextLine> textLines;
-                textLines.resize(lineStrings.size());
-                std::transform(lineStrings.begin(), lineStrings.end(), textLines.begin(), [&lineNo](const std::u32string& str) -> TextLine {
-                    return TextLine {
-                        lineNo++,
-                        str
-                    };
-                });
+                auto textLines = doc->lineRange(lineNo, lineNo + 100);
                 renderer->addTextLines(0, std::move(textLines));
             });
         }

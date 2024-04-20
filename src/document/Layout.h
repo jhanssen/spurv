@@ -26,10 +26,18 @@ public:
     void calculate(std::u32string&& data, std::vector<Linebreak>&& linebreaks);
     void finalize();
 
+    struct LineInfo
+    {
+        hb_buffer_t* buffer = nullptr;
+        std::size_t start = 0, end = 0;
+        Font font = {};
+    };
+    const LineInfo& lineAt(std::size_t idx) const;
+    std::size_t numLines() const;
+
     EventEmitter<void()>& onReady();
 
 private:
-    void clearFont();
     void clearLines();
     void notifyLines();
 
@@ -43,16 +51,10 @@ private:
     EventEmitter<void()> mOnReady;
 
     Mode mMode = Mode::Single;
-    hb_blob_t* mFontBlob = nullptr;
-    hb_face_t* mFontFace = nullptr;
-    hb_font_t* mFontFont = nullptr;
+    Font mFont = {};
     std::size_t mReceived = 0;
     bool mFinalized = false;
 
-    struct LineInfo
-    {
-        hb_buffer_t* buffer = nullptr;
-    };
     std::vector<LineInfo> mLines;
 
     std::shared_ptr<LayoutJob> mJob;
@@ -64,6 +66,16 @@ private:
 inline EventEmitter<void()>& Layout::onReady()
 {
     return mOnReady;
+}
+
+inline const Layout::LineInfo& Layout::lineAt(std::size_t idx) const
+{
+    return mLines[idx];
+}
+
+inline std::size_t Layout::numLines() const
+{
+    return mLines.size();
 }
 
 } // namespace spurv

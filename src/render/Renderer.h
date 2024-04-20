@@ -2,6 +2,7 @@
 
 #include <EventEmitter.h>
 #include <EventLoop.h>
+#include <TextLine.h>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -10,7 +11,6 @@
 #include <cstdint>
 #include <cassert>
 #include "Box.h"
-#include "TextLine.h"
 
 namespace spurv {
 

@@ -3,6 +3,7 @@
 #include "Layout.h"
 #include <EventEmitter.h>
 #include <Font.h>
+#include <TextLine.h>
 #include <rope.hpp>
 #include <filesystem>
 #include <limits>
@@ -46,8 +47,8 @@ public:
     EventEmitter<void()>& onReady();
 
     std::size_t numLines() const;
-    std::u32string lineAt(std::size_t line) const;
-    std::vector<std::u32string> lineRange(std::size_t start, std::size_t end);
+    TextLine lineAt(std::size_t line) const;
+    std::vector<TextLine> lineRange(std::size_t start, std::size_t end);
 
 private:
     Document(Document&&) = delete;
@@ -73,7 +74,6 @@ private:
     std::u32string mChunk;
     std::size_t mChunkStart = 0, mChunkOffset = 0;
     std::size_t mDocumentSize = 0, mDocumentLines = 0;
-    std::vector<RopeNode::linebreak> mLineBreaks;
 
     bool mReady = true;
     EventEmitter<void()> mOnReady;

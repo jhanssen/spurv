@@ -10,7 +10,7 @@ namespace spurv {
 struct LayoutChunk
 {
     std::u32string data;
-    hb_font_t* font = nullptr;
+    Font font;
 };
 
 class LayoutJob
@@ -54,10 +54,10 @@ void LayoutJob::runJob(std::shared_ptr<LayoutJob> job)
                     return;
                 }
                 // take this chunk
-                if (chunk.font != nullptr && chunk.font == job->chunks[currentChunk].font) {
+                if (chunk.font.isValid() && chunk.font == job->chunks[currentChunk].font) {
                     // this is bad, we have left over data but this new chunk
                     // has a different font. so discard the previous data
-                    hb_font_destroy(chunk.font);
+                    chunk.font.clear();
                     chunk.data.clear();
                 }
                 chunk.font = job->chunks[currentChunk].font;
@@ -93,14 +93,14 @@ void LayoutJob::runJob(std::shared_ptr<LayoutJob> job)
             // for each linebreak
             std::size_t prev = 0;
             for (const auto& lb : linebreaks) {
-                auto line = std::u32string_view(chunk.data.begin() + prev, chunk.data.begin() + (lb.first - processedStart));
+                const auto line = std::u32string_view(chunk.data.begin() + prev, chunk.data.begin() + (lb.first - processedStart));
 
                 hb_buffer_t* buf = hb_buffer_create();
                 hb_buffer_add_utf32(buf, reinterpret_cast<const uint32_t*>(line.data()),
                                     line.size(), 0, line.size());
                 hb_buffer_guess_segment_properties(buf);
-                hb_shape(chunk.font, buf, nullptr, 0);
-                buffers.push_back({ buf });
+                hb_shape(chunk.font.font(), buf, nullptr, 0);
+                buffers.push_back({ buf, processedStart, processedStart + line.size(), chunk.font });
                 prev = lb.first - processedStart;
             }
 
@@ -111,8 +111,7 @@ void LayoutJob::runJob(std::shared_ptr<LayoutJob> job)
                 chunk.data.resize(chunk.data.size() - (lbidx + 1));
             } else {
                 chunk.data.clear();
-                hb_font_destroy(chunk.font);
-                chunk.font = nullptr;
+                chunk.font.clear();
             }
         }
     });
@@ -128,28 +127,11 @@ Layout::Layout()
 Layout::~Layout()
 {
     clearLines();
-    clearFont();
 }
 
 void Layout::setFont(const Font& font)
 {
-    clearFont();
-    mFontBlob = hb_blob_create_from_file(font.file().c_str());
-    if (mFontBlob == nullptr) {
-        return;
-    }
-    mFontFace = hb_face_create(mFontBlob, 0);
-    if (mFontFace == nullptr) {
-        hb_blob_destroy(mFontBlob);
-        mFontBlob = nullptr;
-    }
-    mFontFont = hb_font_create(mFontFace);
-    if (mFontFont == nullptr) {
-        hb_face_destroy(mFontFace);
-        mFontFace = nullptr;
-        hb_blob_destroy(mFontBlob);
-        mFontBlob = nullptr;
-    }
+    mFont = font;
 }
 
 void Layout::reset(Mode mode)
@@ -163,6 +145,10 @@ void Layout::reset(Mode mode)
 
 void Layout::calculate(std::u32string&& data, std::vector<Linebreak>&& linebreaks)
 {
+    if (!mFont.isValid()) {
+        spdlog::error("Layout font is not valid");
+        return;
+    }
     bool createdJob = false;
     if (!mJob) {
         createdJob = true;
@@ -177,7 +163,7 @@ void Layout::calculate(std::u32string&& data, std::vector<Linebreak>&& linebreak
         LayoutJob::runJob(mJob);
     }
     const auto dataSize = data.size();
-    mJob->chunks.push_back({ std::move(data), hb_font_reference(mFontFont) });
+    mJob->chunks.push_back({ std::move(data), mFont });
     if (linebreaks.empty()) {
         return;
     }
@@ -230,22 +216,6 @@ void Layout::finalize()
     }
     if (shouldEmit) {
         mOnReady.emit();
-    }
-}
-
-void Layout::clearFont()
-{
-    if (mFontFont != nullptr) {
-        hb_font_destroy(mFontFont);
-        mFontFont = nullptr;
-    }
-    if (mFontFace != nullptr) {
-        hb_face_destroy(mFontFace);
-        mFontFace = nullptr;
-    }
-    if (mFontBlob != nullptr) {
-        hb_blob_destroy(mFontBlob);
-        mFontBlob = nullptr;
     }
 }
 

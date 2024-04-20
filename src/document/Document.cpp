@@ -141,7 +141,6 @@ void Document::load(const std::u32string& data)
         mOnReady.emit();
     });
     mLayout.calculate(mRope.toString(), mRope.linebreaks());
-    mLineBreaks = mRope.linebreaks();
     initialize(0);
 }
 
@@ -154,7 +153,6 @@ void Document::load(std::u32string&& data)
         mOnReady.emit();
     });
     mLayout.calculate(mRope.toString(), mRope.linebreaks());
-    mLineBreaks = mRope.linebreaks();
     initialize(0);
 }
 
@@ -170,7 +168,6 @@ void Document::loadComplete()
     spdlog::info("completed loading doc {}", mRope.length());
     spdlog::info("- linebreaks {}", mRope.linebreaks());
     mLayout.finalize();
-    mLineBreaks = mRope.linebreaks();
     initialize(0);
 }
 
@@ -208,70 +205,39 @@ void Document::commit(Commit mode, std::size_t offset)
     }
 }
 
-std::u32string Document::lineAt(std::size_t line) const
+TextLine Document::lineAt(std::size_t line) const
 {
-    if (line < mLineBreaks.size()) {
-        std::size_t start = 0;
-        if (line > 0) {
-            start = mLineBreaks[line - 1].first + 1;
-        }
-        const auto end = mLineBreaks[line].first - 1;
-        if (end > start) {
-            return trimLineBreaks(mRope.substring(start, end - start));
-        }
-    } else if (line == mLineBreaks.size()) {
-        // might want the last chunk
-        if (line > 0) {
-            const auto lastIdx = mLineBreaks[line - 1].first;
-            if (lastIdx + 1 < mRope.length()) {
-                return mRope.substring(lastIdx + 1, mRope.length() - (lastIdx + 1));
-            }
-        } else {
-            assert(mLineBreaks.empty());
-            return trimLineBreaks(mRope.toString());
-        }
+    if (line < mLayout.numLines()) {
+        const auto& ll = mLayout.lineAt(line);
+        return {
+            hb_buffer_reference(ll.buffer),
+            ll.font
+        };
     }
-    // nothing
-    return {};
-    }
+    return {
+        nullptr,
+        Font {}
+    };
+}
 
-std::vector<std::u32string> Document::lineRange(std::size_t start, std::size_t end)
+std::vector<TextLine> Document::lineRange(std::size_t start, std::size_t end)
 {
-    if (start > mLineBreaks.size() || end > mLineBreaks.size() || end < start) {
+    if (start >= mLayout.numLines() || end > mLayout.numLines() || start > end) {
         return {};
     }
     if (start == end) {
         return { lineAt(start) };
     }
-    std::vector<RopeNode::linebreak>::const_iterator currentLine;
-    std::vector<RopeNode::linebreak>::const_iterator endLine;
-    currentLine = mLineBreaks.begin() + std::min(start, mLineBreaks.size());
-    endLine = mLineBreaks.begin() + std::min(end, mLineBreaks.size());
-
-    auto position = [this](auto it) -> std::size_t {
-        if (it == mLineBreaks.begin()) {
-            return 0;
-        }
-        if ((it - 1) == mLineBreaks.end()) {
-            return mRope.length();
-        }
-        return (it - 1)->first;
-    };
-
-    std::vector<std::u32string> lines;
-    lines.reserve(end - start);
-    // currentLine
-    while (currentLine <= endLine) {
-        const auto lstart = position(currentLine);
-        const auto lend = position(currentLine + 1);
-        if (lend > lstart) {
-            lines.push_back(trimLineBreaks(mRope.substring(lstart, lend - lstart)));
-        } else {
-            lines.push_back(std::u32string {});
-        }
-        ++currentLine;
+    std::vector<TextLine> out;
+    out.reserve(end - start);
+    for (std::size_t l = start; l < end; ++l) {
+        const auto& ll = mLayout.lineAt(l);
+        out.push_back({
+                hb_buffer_reference(ll.buffer),
+                ll.font
+            });
     }
-    return lines;
+    return out;
 }
 
 void Document::setFont(const Font& font)
