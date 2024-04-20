@@ -27,7 +27,7 @@ struct GlyphsCreated
     VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
     VkImage image = VK_NULL_HANDLE;
     GlyphAtlas* atlas = nullptr;
-    msdf_atlas::Charset charset = {};
+    std::vector<msdf_atlas::GlyphGeometry> glyphs = {};
 };
 
 struct GlyphTimeline

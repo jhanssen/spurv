@@ -830,10 +830,11 @@ void Renderer::glyphsCreated(GlyphsCreated&& created)
     VK_CHECK_SUCCESS(vkQueueSubmit(mImpl->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
 
     spdlog::info("glyphs created and submitted");
-    mImpl->afterFrameCallbacks.push_back([atlas = created.atlas, charset = std::move(created.charset), image = created.image]() -> void {
-        for (auto g : charset) {
-            auto box = atlas->glyphBox(g);
+    mImpl->afterFrameCallbacks.push_back([atlas = created.atlas, glyphs = std::move(created.glyphs), image = created.image]() -> void {
+        for (auto g : glyphs) {
+            auto box = atlas->glyphBox(g.getIndex());
             assert(box != nullptr);
+            box->box = g;
             box->image = image;
         }
         spdlog::info("glyphs ready for use");
