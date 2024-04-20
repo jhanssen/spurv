@@ -256,7 +256,7 @@ static inline vkb::Result<VkQueue> get_transfer_queue(vkb::Device& device, bool 
         );
 }
 
-static inline vkb::Result<uint32_t> get_queue_index(vkb::Device& device, bool hasSeparateTransfer)
+static inline vkb::Result<uint32_t> get_transfer_queue_index(vkb::Device& device, bool hasSeparateTransfer)
 {
     if (hasSeparateTransfer) {
         return device.get_queue_index(vkb::QueueType::transfer);
@@ -370,7 +370,7 @@ void Renderer::thread_internal()
         spdlog::critical("Unable to get vulkan transfer queue: {}", maybeTransferQueue.error().message());
         return;
     }
-    auto maybeTransferQueueIndex = get_queue_index(mImpl->vkbDevice, hasSeparateTransfer);
+    auto maybeTransferQueueIndex = get_transfer_queue_index(mImpl->vkbDevice, hasSeparateTransfer);
     if (!maybeTransferQueueIndex) {
         spdlog::critical("Unable to get vulkan transfer queue index: {}", maybeTransferQueueIndex.error().message());
         return;
