@@ -48,6 +48,9 @@ add_subdirectory(spdlog)
 add_subdirectory(vk-bootstrap)
 
 include(quickjs.cmake)
+if (APPLE)
+    include(MoltenVK.cmake)
+endif()
 
 add_library(glfw::glfw ALIAS glfw)
 add_library(harfbuzz::harfbuzz ALIAS harfbuzz)
