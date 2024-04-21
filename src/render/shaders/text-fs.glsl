@@ -4,10 +4,10 @@ layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 fragColor;
 
 layout(set = 1, binding = 0) uniform FragmentBufferObject {
-layout(set = 2, binding = 0) uniform sampler u_smp0;
-layout(set = 2, binding = 1) uniform texture2D u_tex0;
     vec4 color;
 } ubo;
+layout(set = 2, binding = 0) uniform sampler u_smp0;
+layout(set = 2, binding = 1) uniform texture2D u_tex0;
 
 float median(float r, float g, float b) {
     return max(min(r, g), min(max(r, g), b));
