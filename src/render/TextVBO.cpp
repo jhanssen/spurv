@@ -166,6 +166,7 @@ void TextVBO::generate(VmaAllocator allocator, VkCommandBuffer cmdbuffer)
     mAllocation = vertexBufferAllocation;
     mAllocator = allocator;
     mMemory.clear();
+    mSize = mOffset / 4;
     mOffset = 0;
 
     Renderer::instance()->afterCurrentFrame([allocator, stagingBuffer, stagingBufferAllocation]() -> void {

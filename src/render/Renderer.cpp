@@ -1000,12 +1000,31 @@ void Renderer::render()
             { mImpl->width, mImpl->height }
         };
         vkCmdBeginRenderPass(cmdbuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->textPipeline);
 
         for (const auto& lines : mImpl->textVBOs) {
+            VkViewport viewport = {};
+            viewport.x = 0.f;
+            viewport.y = 0.f;
+            viewport.width = static_cast<float>(mImpl->width);
+            viewport.height = static_cast<float>(mImpl->height);
+            viewport.minDepth = 0.0f;
+            viewport.maxDepth = 1.0f;
+            vkCmdSetViewport(cmdbuffer, 0, 1, &viewport);
+
+            VkRect2D scissor = {};
+            scissor.offset = { 0, 0 };
+            scissor.extent = { mImpl->width, mImpl->height };
+            vkCmdSetScissor(cmdbuffer, 0, 1, &scissor);
+
             for (const auto& line : lines) {
                 if (line.view() == VK_NULL_HANDLE) {
                     continue;
                 }
+
+                VkBuffer vtxbuf = line.buffer();
+                VkDeviceSize vtxoff = 0;
+                vkCmdBindVertexBuffers(cmdbuffer, 0, 1, &vtxbuf, &vtxoff);
 
                 std::array<VkDescriptorBufferInfo, 2> bufferDescriptorInfos = {};
                 std::array<VkDescriptorImageInfo, 2> imageDescriptorInfos = {};
@@ -1058,6 +1077,8 @@ void Renderer::render()
                 writeDescriptorSets[3].pImageInfo = &imageDescriptorInfos[1];
 
                 spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->textPipelineLayout, 0, 4, writeDescriptorSets.data());
+
+                vkCmdDraw(cmdbuffer, line.size(), 1, 0, 0);
             }
         }
 

@@ -23,6 +23,7 @@ public:
 
     VkImageView view() const;
     VkBuffer buffer() const;
+    uint32_t size() const;
 
 private:
     TextVBO(const TextVBO&) = delete;
@@ -30,7 +31,7 @@ private:
 
 private:
     std::vector<float> mMemory = {};
-    std::size_t mOffset = 0;
+    std::size_t mOffset = 0, mSize = 0;
     VmaAllocator mAllocator = VK_NULL_HANDLE;
     VmaAllocation mAllocation = VK_NULL_HANDLE;
     VkBuffer mBuffer = VK_NULL_HANDLE;
@@ -45,6 +46,11 @@ inline void TextVBO::setView(VkImageView view)
 inline VkBuffer TextVBO::buffer() const
 {
     return mBuffer;
+}
+
+inline uint32_t TextVBO::size() const
+{
+    return mSize;
 }
 
 inline VkImageView TextVBO::view() const
