@@ -16,7 +16,8 @@
 
 using namespace spurv;
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(_LIBCPP_VERSION)
+# if _LIBCPP_VERSION < 170006
 // wonderful
 namespace std
 {
@@ -28,6 +29,7 @@ namespace std
         }
     };
 };
+# endif
 #endif
 
 namespace spurv_vk {
