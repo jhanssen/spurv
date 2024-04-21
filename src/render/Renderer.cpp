@@ -622,7 +622,7 @@ void Renderer::thread_internal()
         // create a vulkan staging buffers
         VkBufferCreateInfo bufferInfo = {};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = 2 * sizeof(float);
+        bufferInfo.size = 4 * sizeof(float);
         bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
         VmaAllocationCreateInfo bufferAllocationInfo = {};
@@ -636,10 +636,11 @@ void Renderer::thread_internal()
         void* data;
         VK_CHECK_SUCCESS(vmaMapMemory(impl->allocator, geomStagingBufferAllocation, &data));
         const float geomData[] = {
+            0.f, 0.f,
             static_cast<float>(impl->width),
             static_cast<float>(impl->height)
         };
-        ::memcpy(data, geomData, 2 * sizeof(float));
+        ::memcpy(data, geomData, 4 * sizeof(float));
         vmaUnmapMemory(impl->allocator, geomStagingBufferAllocation);
 
         // create the geom ubo
@@ -650,7 +651,7 @@ void Renderer::thread_internal()
 
         // copy staging buffer to ubo
         VkBufferCopy bufferCopy = {};
-        bufferCopy.size = 2 * sizeof(float);
+        bufferCopy.size = 4 * sizeof(float);
         vkCmdCopyBuffer(cmdbuffer, geomStagingBuffer, impl->geomUniformBuffer, 1, &bufferCopy);
 
         // insert a memory barrier to ensure that the buffer copy has completed before it's used as a uniform buffer
