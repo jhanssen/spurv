@@ -59,6 +59,9 @@ add_subdirectory(simdutf)
 add_subdirectory(spdlog)
 add_subdirectory(vk-bootstrap)
 
+# hack to make freetype pick up harfbuzz
+target_link_libraries(freetype PRIVATE harfbuzz)
+
 include(quickjs.cmake)
 #if (APPLE)
 #    include(MoltenVK.cmake)
