@@ -94,9 +94,7 @@ struct RendererImpl
     VkBuffer colorUniformBuffer = VK_NULL_HANDLE;
     VmaAllocation colorUniformBufferAllocation = VK_NULL_HANDLE;
 
-    VkDescriptorSetLayout textUniformVertexLayout = VK_NULL_HANDLE;
-    VkDescriptorSetLayout textUniformFragmentLayout = VK_NULL_HANDLE;
-    VkDescriptorSetLayout textImageLayout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout textUniformLayout = VK_NULL_HANDLE;
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 
     bool suboptimal = false;
@@ -572,59 +570,30 @@ void Renderer::thread_internal()
     textSamplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
     VK_CHECK_SUCCESS(vkCreateSampler(mImpl->device, &textSamplerInfo, nullptr, &mImpl->textSampler));
 
-    VkAttachmentReference colorAttachmentReference = {};
-    colorAttachmentReference.attachment = 0;
-    colorAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription renderPassSubpass = {};
-    renderPassSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    renderPassSubpass.colorAttachmentCount = 1;
-    renderPassSubpass.pColorAttachments = &colorAttachmentReference;
-
-    VkAttachmentDescription colorAttachment = {};
-    colorAttachment.format = VK_FORMAT_R8G8B8A8_UNORM;
-    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkRenderPassCreateInfo renderPassInfo = {};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = 1;
-    renderPassInfo.pAttachments = &colorAttachment;
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &renderPassSubpass;
-    VK_CHECK_SUCCESS(vkCreateRenderPass(mImpl->device, &renderPassInfo, nullptr, &mImpl->swapchainRenderPass));
-
-    VkDescriptorSetLayoutBinding textUniformVertexBinding[] = {
+    VkDescriptorSetLayoutBinding textUniformBinding[] = {
         {
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             .pImmutableSamplers = nullptr
-        }
-    };
-    VkDescriptorSetLayoutBinding textUniformFragmentBinding[] = {
+        },
         {
-            .binding = 0,
+            .binding = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
             .pImmutableSamplers = nullptr
-        }
-    };
-    VkDescriptorSetLayoutBinding textImageBinding[] = {
+        },
         {
-            .binding = 0,
+            .binding = 2,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
             .pImmutableSamplers = nullptr
         },
         {
-            .binding = 1,
+            .binding = 3,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -632,37 +601,17 @@ void Renderer::thread_internal()
         }
     };
 
-    VkDescriptorSetLayoutCreateInfo textUniformVertexLayoutInfo = {};
-    textUniformVertexLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    textUniformVertexLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
-    textUniformVertexLayoutInfo.bindingCount = 1;
-    textUniformVertexLayoutInfo.pBindings = textUniformVertexBinding;
-    VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &textUniformVertexLayoutInfo, nullptr, &mImpl->textUniformVertexLayout));
-
-    VkDescriptorSetLayoutCreateInfo textUniformFragmentLayoutInfo = {};
-    textUniformFragmentLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    textUniformFragmentLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
-    textUniformFragmentLayoutInfo.bindingCount = 1;
-    textUniformFragmentLayoutInfo.pBindings = textUniformFragmentBinding;
-    VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &textUniformFragmentLayoutInfo, nullptr, &mImpl->textUniformFragmentLayout));
-
-    VkDescriptorSetLayoutCreateInfo textImageLayoutInfo = {};
-    textImageLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    textImageLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
-    textImageLayoutInfo.bindingCount = 1;
-    textImageLayoutInfo.pBindings = textImageBinding;
-    VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &textImageLayoutInfo, nullptr, &mImpl->textImageLayout));
-
-    std::array<VkDescriptorSetLayout, 3> descriptorLayouts = {
-        mImpl->textUniformVertexLayout,
-        mImpl->textUniformFragmentLayout,
-        mImpl->textImageLayout
-    };
+    VkDescriptorSetLayoutCreateInfo textUniformLayoutInfo = {};
+    textUniformLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    textUniformLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+    textUniformLayoutInfo.bindingCount = 4;
+    textUniformLayoutInfo.pBindings = textUniformBinding;
+    VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &textUniformLayoutInfo, nullptr, &mImpl->textUniformLayout));
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 3;
-    pipelineLayoutInfo.pSetLayouts = descriptorLayouts.data();
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &mImpl->textUniformLayout;
     VK_CHECK_SUCCESS(vkCreatePipelineLayout(mImpl->device, &pipelineLayoutInfo, nullptr, &mImpl->pipelineLayout));
 
     mImpl->inFrameCallbacks.push_back([impl = mImpl](VkCommandBuffer cmdbuffer) -> void {
@@ -834,6 +783,10 @@ bool Renderer::recreateSwapchain()
     for (auto framebuffer : mImpl->swapchainFramebuffers) {
         vkDestroyFramebuffer(mImpl->device, framebuffer, nullptr);
     }
+    if (mImpl->swapchainRenderPass != VK_NULL_HANDLE) {
+        vkDestroyRenderPass(mImpl->device, mImpl->swapchainRenderPass, nullptr);
+        mImpl->swapchainRenderPass = VK_NULL_HANDLE;
+    }
     mImpl->vkbSwapchain.destroy_image_views(mImpl->imageViews);
     vkb::destroy_swapchain(mImpl->vkbSwapchain);
     mImpl->vkbSwapchain = maybeSwapchain.value();
@@ -849,7 +802,32 @@ bool Renderer::recreateSwapchain()
         return false;
     }
     mImpl->imageViews = maybeImageViews.value();
-    mImpl->semaphores.resize(mImpl->imageViews.size());
+
+    VkAttachmentReference colorAttachmentReference = {};
+    colorAttachmentReference.attachment = 0;
+    colorAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription renderPassSubpass = {};
+    renderPassSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    renderPassSubpass.colorAttachmentCount = 1;
+    renderPassSubpass.pColorAttachments = &colorAttachmentReference;
+
+    VkAttachmentDescription colorAttachment = {};
+    colorAttachment.format = mImpl->vkbSwapchain.image_format;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkRenderPassCreateInfo renderPassInfo = {};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &renderPassSubpass;
+    VK_CHECK_SUCCESS(vkCreateRenderPass(mImpl->device, &renderPassInfo, nullptr, &mImpl->swapchainRenderPass));
+
     mImpl->swapchainFramebuffers.resize(mImpl->imageViews.size());
     for (std::size_t viewIdx = 0; viewIdx < mImpl->imageViews.size(); ++viewIdx) {
         VkFramebufferCreateInfo framebufferInfo = {};
@@ -862,6 +840,8 @@ bool Renderer::recreateSwapchain()
         framebufferInfo.layers = 1;
         VK_CHECK_SUCCESS(vkCreateFramebuffer(mImpl->device, &framebufferInfo, nullptr, &mImpl->swapchainFramebuffers[viewIdx]));
     }
+
+    mImpl->semaphores.resize(mImpl->imageViews.size());
     for (auto& sem : mImpl->semaphores) {
         sem.setDevice(mImpl->device);
     }
@@ -984,6 +964,10 @@ void Renderer::render()
 
         for (const auto& lines : mImpl->textVBOs) {
             for (const auto& line : lines) {
+                if (line.view() == VK_NULL_HANDLE) {
+                    continue;
+                }
+
                 std::array<VkDescriptorBufferInfo, 2> bufferDescriptorInfos = {};
                 std::array<VkDescriptorImageInfo, 2> imageDescriptorInfos = {};
                 std::array<VkWriteDescriptorSet, 4> writeDescriptorSets = {};
@@ -999,22 +983,6 @@ void Renderer::render()
                     .range = VK_WHOLE_SIZE
                 };
 
-                writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                writeDescriptorSets[0].dstBinding = 0;
-                writeDescriptorSets[0].descriptorCount = 1;
-                writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                writeDescriptorSets[0].pBufferInfo = &bufferDescriptorInfos[0];
-
-                spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 0, 1, writeDescriptorSets.data() + 0);
-
-                writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                writeDescriptorSets[1].dstBinding = 0;
-                writeDescriptorSets[1].descriptorCount = 1;
-                writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                writeDescriptorSets[1].pBufferInfo = &bufferDescriptorInfos[1];
-
-                spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 1, 1, writeDescriptorSets.data() + 1);
-
                 imageDescriptorInfos[0] = {
                     .sampler = mImpl->textSampler,
                     .imageView = VK_NULL_HANDLE,
@@ -1026,43 +994,52 @@ void Renderer::render()
                     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                 };
 
+                writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writeDescriptorSets[0].dstBinding = 0;
+                writeDescriptorSets[0].descriptorCount = 1;
+                writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                writeDescriptorSets[0].pBufferInfo = &bufferDescriptorInfos[0];
+
+                writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writeDescriptorSets[1].dstBinding = 1;
+                writeDescriptorSets[1].descriptorCount = 1;
+                writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                writeDescriptorSets[1].pBufferInfo = &bufferDescriptorInfos[1];
+
                 writeDescriptorSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                writeDescriptorSets[2].dstBinding = 0;
+                writeDescriptorSets[2].dstBinding = 2;
                 writeDescriptorSets[2].descriptorCount = 1;
                 writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-                writeDescriptorSets[2].pImageInfo = &imageDescriptorInfos[2];
+                writeDescriptorSets[2].pImageInfo = &imageDescriptorInfos[0];
+
                 writeDescriptorSets[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                writeDescriptorSets[3].dstBinding = 0;
+                writeDescriptorSets[3].dstBinding = 3;
                 writeDescriptorSets[3].descriptorCount = 1;
                 writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-                writeDescriptorSets[3].pImageInfo = &imageDescriptorInfos[3];
+                writeDescriptorSets[3].pImageInfo = &imageDescriptorInfos[1];
 
-                spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 2, 2, writeDescriptorSets.data() + 2);
+                spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 0, 4, writeDescriptorSets.data());
             }
         }
 
         vkCmdEndRenderPass(cmdbuffer);
+    } else {
+        VkImageMemoryBarrier presentBarrier = {};
+        presentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        presentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        presentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        presentBarrier.image = swapImage;
+        presentBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        presentBarrier.dstAccessMask = VK_ACCESS_NONE;
+        presentBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        presentBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        presentBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        presentBarrier.subresourceRange.baseMipLevel = 0;
+        presentBarrier.subresourceRange.levelCount = 1;
+        presentBarrier.subresourceRange.baseArrayLayer = 0;
+        presentBarrier.subresourceRange.layerCount = 1;
+        vkCmdPipelineBarrier(cmdbuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, {}, 0, nullptr, 0, nullptr, 1, &presentBarrier);
     }
-
-    // if (!mImpl->boxes.empty()) {
-    //     // spdlog::info("render {}.", mImpl->boxes.size());
-    // }
-
-    VkImageMemoryBarrier presentBarrier = {};
-    presentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    presentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    presentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    presentBarrier.image = swapImage;
-    presentBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    presentBarrier.dstAccessMask = VK_ACCESS_NONE;
-    presentBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    presentBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    presentBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    presentBarrier.subresourceRange.baseMipLevel = 0;
-    presentBarrier.subresourceRange.levelCount = 1;
-    presentBarrier.subresourceRange.baseArrayLayer = 0;
-    presentBarrier.subresourceRange.layerCount = 1;
-    vkCmdPipelineBarrier(cmdbuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, {}, 0, nullptr, 0, nullptr, 1, &presentBarrier);
 
     VK_CHECK_SUCCESS(vkEndCommandBuffer(cmdbuffer));
 
