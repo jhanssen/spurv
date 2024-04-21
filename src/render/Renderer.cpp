@@ -963,6 +963,16 @@ void Renderer::render()
     }
     if (!mImpl->textVBOs.empty() && mImpl->geomUniformBuffer != VK_NULL_HANDLE && mImpl->colorUniformBuffer != VK_NULL_HANDLE) {
         // draw some text
+        VkRenderPassBeginInfo renderPassInfo = {};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = mImpl->swapchainRenderPass;
+        renderPassInfo.framebuffer = mImpl->swapchainFramebuffers[mImpl->currentSwapchainImage];
+        renderPassInfo.renderArea = {
+            { 0, 0 },
+            { mImpl->width, mImpl->height }
+        };
+        vkCmdBeginRenderPass(cmdbuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
         for (const auto& lines : mImpl->textVBOs) {
             for (const auto& line : lines) {
                 std::array<VkDescriptorBufferInfo, 2> bufferDescriptorInfos = {};
@@ -1021,6 +1031,8 @@ void Renderer::render()
                 vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 2, 2, writeDescriptorSets.data() + 2);
             }
         }
+
+        vkCmdEndRenderPass(cmdbuffer);
     }
 
     // if (!mImpl->boxes.empty()) {
