@@ -1195,19 +1195,21 @@ void Renderer::render()
         VK_NULL_HANDLE
     };
 
-    if (!mImpl->afterTransfers.empty()) {
-        timelineSemValues[2] = mImpl->highestAfterTransfer;
-        waitSems[2] = mImpl->transferTimeline.semaphore;
-
-        mImpl->highestAfterTransfer = 0;
-        // attach all callback to the current fence
+    {
         std::unique_lock lock(mMutex);
-        const auto end = mImpl->afterFrameCallbacks.size();
-        mImpl->afterFrameCallbacks.resize(end + mImpl->afterTransfers.size());
-        std::transform(mImpl->afterTransfers.cbegin(), mImpl->afterTransfers.cend(), mImpl->afterFrameCallbacks.begin() + end, [](auto entry) {
-            return entry.second;
-        });
-        mImpl->afterTransfers.clear();
+        if (!mImpl->afterTransfers.empty()) {
+            timelineSemValues[2] = mImpl->highestAfterTransfer;
+            waitSems[2] = mImpl->transferTimeline.semaphore;
+
+            mImpl->highestAfterTransfer = 0;
+            // attach all callback to the current fence
+            const auto end = mImpl->afterFrameCallbacks.size();
+            mImpl->afterFrameCallbacks.resize(end + mImpl->afterTransfers.size());
+            std::transform(mImpl->afterTransfers.cbegin(), mImpl->afterTransfers.cend(), mImpl->afterFrameCallbacks.begin() + end, [](auto entry) {
+                return entry.second;
+            });
+            mImpl->afterTransfers.clear();
+        }
     }
 
     VkTimelineSemaphoreSubmitInfo timelineInfo = {};
