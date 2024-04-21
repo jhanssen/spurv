@@ -47,6 +47,8 @@ struct RendererImpl
 
     vkb::Device vkbDevice = {};
     vkb::Swapchain vkbSwapchain = {};
+    std::vector<VkFramebuffer> swapchainFramebuffers = {};
+    VkRenderPass swapchainRenderPass = VK_NULL_HANDLE;
 
     VkDevice device = VK_NULL_HANDLE;
     VkCommandPool graphicsCommandPool = VK_NULL_HANDLE;
@@ -561,6 +563,31 @@ void Renderer::thread_internal()
     textSamplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
     VK_CHECK_SUCCESS(vkCreateSampler(mImpl->device, &textSamplerInfo, nullptr, &mImpl->textSampler));
 
+    VkAttachmentReference colorAttachmentReference = {};
+    colorAttachmentReference.attachment = 0;
+    colorAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription renderPassSubpass = {};
+    renderPassSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    renderPassSubpass.colorAttachmentCount = 1;
+    renderPassSubpass.pColorAttachments = &colorAttachmentReference;
+
+    VkAttachmentDescription colorAttachment = {};
+    colorAttachment.format = VK_FORMAT_R8G8B8A8_UNORM;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkRenderPassCreateInfo renderPassInfo = {};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &renderPassSubpass;
+    VK_CHECK_SUCCESS(vkCreateRenderPass(mImpl->device, &renderPassInfo, nullptr, &mImpl->swapchainRenderPass));
+
     VkDescriptorSetLayoutBinding textUniformVertexBinding[] = {
         {
             .binding = 0,
@@ -795,6 +822,9 @@ bool Renderer::recreateSwapchain()
         mImpl->vkbSwapchain.swapchain = VK_NULL_HANDLE;
         return false;
     }
+    for (auto framebuffer : mImpl->swapchainFramebuffers) {
+        vkDestroyFramebuffer(mImpl->device, framebuffer, nullptr);
+    }
     mImpl->vkbSwapchain.destroy_image_views(mImpl->imageViews);
     vkb::destroy_swapchain(mImpl->vkbSwapchain);
     mImpl->vkbSwapchain = maybeSwapchain.value();
@@ -811,6 +841,18 @@ bool Renderer::recreateSwapchain()
     }
     mImpl->imageViews = maybeImageViews.value();
     mImpl->semaphores.resize(mImpl->imageViews.size());
+    mImpl->swapchainFramebuffers.resize(mImpl->imageViews.size());
+    for (std::size_t viewIdx = 0; viewIdx < mImpl->imageViews.size(); ++viewIdx) {
+        VkFramebufferCreateInfo framebufferInfo = {};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass = mImpl->swapchainRenderPass;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = &mImpl->imageViews[viewIdx];
+        framebufferInfo.width = mImpl->width;
+        framebufferInfo.height = mImpl->height;
+        framebufferInfo.layers = 1;
+        VK_CHECK_SUCCESS(vkCreateFramebuffer(mImpl->device, &framebufferInfo, nullptr, &mImpl->swapchainFramebuffers[viewIdx]));
+    }
     for (auto& sem : mImpl->semaphores) {
         sem.setDevice(mImpl->device);
     }
