@@ -253,6 +253,10 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
         if (box >= textVBOs.size()) {
             textVBOs.resize(box + 1);
         }
+
+        const hb_position_t lineHeight = 25 * 64;
+        hb_position_t linePos = 0;
+
         auto& vbos = textVBOs[box];
         for (const auto& line : lines) {
             vbos.push_back(TextVBO());
@@ -262,7 +266,7 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
             VkImageView view = VK_NULL_HANDLE;
             uint32_t glyph_count;
             hb_position_t cursor_x = 0;
-            hb_position_t cursor_y = 0;
+            hb_position_t cursor_y = linePos;
             hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(line.buffer, &glyph_count);
             hb_glyph_position_t* glyph_pos = hb_buffer_get_glyph_positions(line.buffer, &glyph_count);
             std::unordered_map<hb_codepoint_t, hb_glyph_extents_t> extents;
@@ -291,8 +295,8 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
 
                 vbo.add(
                     {
-                        (cursor_x + x_offset) / 64.0f,
-                        (cursor_y + y_offset) / 64.0f,
+                        ((cursor_x + x_offset) / 64.0f) + 100.f,
+                        ((cursor_y + y_offset) / 64.0f) + 100.f,
                         extent->second.width / 64.0f,
                         extent->second.height / 64.0f
                     }, glyphInfo->box);
@@ -304,6 +308,8 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
             }
 
             vbo.generate(allocator, cmdbuffer);
+
+            linePos += lineHeight;
         }
     }
 
