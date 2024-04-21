@@ -7,12 +7,13 @@ using namespace spurv;
 
 TextVBO::TextVBO(TextVBO&& other) noexcept
     : mMemory(std::move(other.mMemory)), mOffset(other.mOffset),
-      mAllocator(other.mAllocator), mBuffer(other.mBuffer),
-      mAllocation(other.mAllocation)
+      mAllocator(other.mAllocator), mAllocation(other.mAllocation),
+      mBuffer(other.mBuffer), mView(other.mView)
 {
     other.mAllocator = VK_NULL_HANDLE;
-    other.mBuffer = VK_NULL_HANDLE;
     other.mAllocation = VK_NULL_HANDLE;
+    other.mBuffer = VK_NULL_HANDLE;
+    other.mView = VK_NULL_HANDLE;
 }
 
 TextVBO::~TextVBO()
@@ -38,29 +39,59 @@ TextVBO& TextVBO::operator=(TextVBO&& other) noexcept
     mMemory = std::move(other.mMemory);
     mOffset = other.mOffset;
     mAllocator = other.mAllocator;
+    mAllocation = other.mAllocation;
     mBuffer = other.mBuffer;
-    mAllocator = other.mAllocator;
+    mView = other.mView;
     other.mAllocator = VK_NULL_HANDLE;
-    other.mBuffer = VK_NULL_HANDLE;
     other.mAllocation = VK_NULL_HANDLE;
+    other.mBuffer = VK_NULL_HANDLE;
+    other.mView = VK_NULL_HANDLE;
     return *this;
 }
 
 void TextVBO::add(const RectF& rect, const msdf_atlas::GlyphBox& glyph)
 {
-    if (mOffset + 8 >= mMemory.size()) {
-        mMemory.resize(std::min<std::size_t>(std::max<std::size_t>(mMemory.size() * 2, 64), 1024));
+    if (mAllocator != VK_NULL_HANDLE) {
+        // already generated, can't add more
+        return;
     }
-    assert(mOffset + 8 < mMemory.size());
-    mMemory[mOffset + 0] = rect.x;
-    mMemory[mOffset + 1] = rect.y;
-    mMemory[mOffset + 2] = rect.width;
-    mMemory[mOffset + 3] = rect.height;
-    mMemory[mOffset + 4] = static_cast<float>(glyph.rect.x);
-    mMemory[mOffset + 5] = static_cast<float>(glyph.rect.y);
-    mMemory[mOffset + 6] = static_cast<float>(glyph.rect.w);
-    mMemory[mOffset + 7] = static_cast<float>(glyph.rect.h);
-    mOffset += 8;
+
+    if (mOffset + 24 >= mMemory.size()) {
+        mMemory.resize(mMemory.size() + std::min<std::size_t>(std::max<std::size_t>(mMemory.size() * 2, 64), 1024));
+    }
+    assert(mOffset + 24 < mMemory.size());
+
+    mMemory[mOffset + 0]  = rect.x;
+    mMemory[mOffset + 1]  = rect.y;
+    mMemory[mOffset + 2]  = static_cast<float>(glyph.rect.x);
+    mMemory[mOffset + 3]  = static_cast<float>(glyph.rect.y);
+
+    mMemory[mOffset + 4]  = rect.x;
+    mMemory[mOffset + 5]  = rect.y + rect.height;
+    mMemory[mOffset + 6]  = static_cast<float>(glyph.rect.x);
+    mMemory[mOffset + 7]  = static_cast<float>(glyph.rect.y + glyph.rect.h);
+
+    mMemory[mOffset + 8]  = rect.x + rect.width;
+    mMemory[mOffset + 9]  = rect.y + rect.height;
+    mMemory[mOffset + 10] = static_cast<float>(glyph.rect.x + glyph.rect.w);
+    mMemory[mOffset + 11] = static_cast<float>(glyph.rect.y + glyph.rect.h);
+
+    mMemory[mOffset + 12] = rect.x;
+    mMemory[mOffset + 13] = rect.y;
+    mMemory[mOffset + 14] = static_cast<float>(glyph.rect.x);
+    mMemory[mOffset + 15] = static_cast<float>(glyph.rect.y);
+
+    mMemory[mOffset + 16] = rect.x + rect.width;
+    mMemory[mOffset + 17] = rect.y + rect.height;
+    mMemory[mOffset + 18] = static_cast<float>(glyph.rect.x + glyph.rect.w);
+    mMemory[mOffset + 19] = static_cast<float>(glyph.rect.y + glyph.rect.h);
+
+    mMemory[mOffset + 20] = rect.x + rect.width;
+    mMemory[mOffset + 21] = rect.y;
+    mMemory[mOffset + 22] = static_cast<float>(glyph.rect.x + glyph.rect.w);
+    mMemory[mOffset + 23] = static_cast<float>(glyph.rect.y);
+
+    mOffset += 24;
 }
 
 void TextVBO::generate(VmaAllocator allocator, VkCommandBuffer cmdbuffer)
@@ -71,6 +102,14 @@ void TextVBO::generate(VmaAllocator allocator, VkCommandBuffer cmdbuffer)
         Renderer::instance()->afterCurrentFrame([allocator = mAllocator, buffer = mBuffer, allocation = mAllocation]() -> void {
             vmaDestroyBuffer(allocator, buffer, allocation);
         });
+    }
+
+    if (mOffset == 0) {
+        mAllocator = VK_NULL_HANDLE;
+        mAllocation = VK_NULL_HANDLE;
+        mBuffer = VK_NULL_HANDLE;
+        mView = VK_NULL_HANDLE;
+        return;
     }
 
     // create a vulkan staging buffer
@@ -127,6 +166,7 @@ void TextVBO::generate(VmaAllocator allocator, VkCommandBuffer cmdbuffer)
     mAllocation = vertexBufferAllocation;
     mAllocator = allocator;
     mMemory.clear();
+    mOffset = 0;
 
     Renderer::instance()->afterCurrentFrame([allocator, stagingBuffer, stagingBufferAllocation]() -> void {
         vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAllocation);

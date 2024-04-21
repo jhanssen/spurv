@@ -41,7 +41,6 @@ public:
 
     void afterCurrentFrame(std::function<void()>&& func);
     void afterTransfer(uint64_t value, std::function<void()>&& func);
-    void inNextFrame(std::function<void(VkCommandBuffer cmdbuffer)>&& func);
 
 private:
     Renderer();

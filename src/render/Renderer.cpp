@@ -79,13 +79,19 @@ struct RendererImpl
     std::vector<std::pair<uint64_t, std::function<void()>>> afterTransfers = {};
     std::vector<std::function<void(VkCommandBuffer cmdbuffer)>> inFrameCallbacks = {};
 
-    // descriptor sets
-    VkDescriptorSetLayout textUniformDescriptorSetLayout = VK_NULL_HANDLE;
-    VkDescriptorPool textUniformDescriptorPool = VK_NULL_HANDLE;
-
     std::unordered_map<std::filesystem::path, GlyphAtlas> glyphAtlases = {};
     std::vector<std::vector<TextLine>> textLines = {};
     std::vector<std::vector<TextVBO>> textVBOs = {};
+    VkSampler textSampler = VK_NULL_HANDLE;
+    VkBuffer geomUniformBuffer = VK_NULL_HANDLE;
+    VmaAllocation geomUniformBufferAllocation = VK_NULL_HANDLE;
+    VkBuffer colorUniformBuffer = VK_NULL_HANDLE;
+    VmaAllocation colorUniformBufferAllocation = VK_NULL_HANDLE;
+
+    VkDescriptorSetLayout textUniformVertexLayout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout textUniformFragmentLayout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout textImageLayout = VK_NULL_HANDLE;
+    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 
     bool suboptimal = false;
 
@@ -229,6 +235,8 @@ void RendererImpl::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
 
 void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
 {
+    uint32_t missing = 0, generated = 0;
+
     for (std::size_t box = 0; box < textLines.size(); ++box) {
         const auto& lines = textLines[box];
         if (lines.empty()) {
@@ -243,6 +251,7 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
             auto& vbo = vbos.back();
             auto& atlas = atlasFor(line.font);
 
+            VkImageView view = VK_NULL_HANDLE;
             uint32_t glyph_count;
             hb_position_t cursor_x = 0;
             hb_position_t cursor_y = 0;
@@ -252,9 +261,15 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
             for (uint32_t i = 0; i < glyph_count; i++) {
                 hb_codepoint_t glyphid = glyph_info[i].codepoint;
                 auto glyphInfo = atlas.glyphBox(glyphid);
-                if (glyphInfo == nullptr) {
+                if (glyphInfo == nullptr || glyphInfo->image == VK_NULL_HANDLE) {
+                    ++missing;
                     continue;
                 }
+                if (view == VK_NULL_HANDLE) {
+                    view = glyphInfo->view;
+                    vbo.setView(view);
+                }
+                assert(view == glyphInfo->view);
                 auto extent = extents.find(glyphid);
                 if (extent == extents.end()) {
                     hb_glyph_extents_t glyph_extent;
@@ -276,11 +291,15 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
 
                 cursor_x += x_advance;
                 cursor_y += y_advance;
+
+                ++generated;
             }
 
             vbo.generate(allocator, cmdbuffer);
         }
     }
+
+    spdlog::info("textvbos {} {}", generated, missing);
 }
 
 } // namespace spurv
@@ -344,6 +363,7 @@ void Renderer::thread_internal()
     auto maybeInstance = builder
         .set_app_name("spurv")
         .require_api_version(1, 2, 0)
+        .enable_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)
         .request_validation_layers()
         .use_default_debug_messenger()
         .build();
@@ -373,6 +393,7 @@ void Renderer::thread_internal()
     auto maybePhysicalDevice = selector
         .set_minimum_version(1, 2)
         .set_required_features_12(features12)
+        .add_required_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME)
         .require_separate_transfer_queue()
         .require_present()
         .set_surface(surface)
@@ -382,6 +403,7 @@ void Renderer::thread_internal()
         maybePhysicalDevice = selector
             .set_minimum_version(1, 2)
             .set_required_features_12(features12)
+            .add_required_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME)
             .require_present()
             .set_surface(surface)
             .select();
@@ -527,32 +549,193 @@ void Renderer::thread_internal()
         vkResetCommandBuffer(cmdbuffer, 0);
     }, GenericPoolBase::AvailabilityMode::Manual);
 
-    // set up descriptor stuff
-    VkDescriptorSetLayoutBinding textUniformBinding = {};
-    textUniformBinding.binding = 0;
-    textUniformBinding.descriptorCount = 1;
-    textUniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    textUniformBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    VkSamplerCreateInfo textSamplerInfo = {};
+    textSamplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    textSamplerInfo.minFilter = VK_FILTER_LINEAR;
+    textSamplerInfo.magFilter = VK_FILTER_LINEAR;
+    textSamplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    textSamplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    textSamplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    textSamplerInfo.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
+    textSamplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    textSamplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    VK_CHECK_SUCCESS(vkCreateSampler(mImpl->device, &textSamplerInfo, nullptr, &mImpl->textSampler));
 
-    VkDescriptorSetLayoutCreateInfo textUniformInfo = {};
-    textUniformInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    textUniformInfo.bindingCount = 1;
-    textUniformInfo.pBindings = &textUniformBinding;
-
-    VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &textUniformInfo, nullptr, &mImpl->textUniformDescriptorSetLayout));
-
-    constexpr uint32_t TextUniformBufferCount = 1000;
-    std::array<VkDescriptorPoolSize, 1> sizes = {
-        { { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, TextUniformBufferCount } }
+    VkDescriptorSetLayoutBinding textUniformVertexBinding[] = {
+        {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .pImmutableSamplers = nullptr
+        }
+    };
+    VkDescriptorSetLayoutBinding textUniformFragmentBinding[] = {
+        {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .pImmutableSamplers = nullptr
+        }
+    };
+    VkDescriptorSetLayoutBinding textImageBinding[] = {
+        {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .pImmutableSamplers = nullptr
+        },
+        {
+            .binding = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .pImmutableSamplers = nullptr
+        }
     };
 
-    VkDescriptorPoolCreateInfo textUniformPoolInfo = {};
-    textUniformPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    textUniformPoolInfo.maxSets = TextUniformBufferCount;
-    textUniformPoolInfo.poolSizeCount = 1;
-    textUniformPoolInfo.pPoolSizes = sizes.data();
+    VkDescriptorSetLayoutCreateInfo textUniformVertexLayoutInfo = {};
+    textUniformVertexLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    textUniformVertexLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+    textUniformVertexLayoutInfo.bindingCount = 1;
+    textUniformVertexLayoutInfo.pBindings = textUniformVertexBinding;
+    VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &textUniformVertexLayoutInfo, nullptr, &mImpl->textUniformVertexLayout));
 
-    VK_CHECK_SUCCESS(vkCreateDescriptorPool(mImpl->device, &textUniformPoolInfo, nullptr, &mImpl->textUniformDescriptorPool));
+    VkDescriptorSetLayoutCreateInfo textUniformFragmentLayoutInfo = {};
+    textUniformFragmentLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    textUniformFragmentLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+    textUniformFragmentLayoutInfo.bindingCount = 1;
+    textUniformFragmentLayoutInfo.pBindings = textUniformFragmentBinding;
+    VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &textUniformFragmentLayoutInfo, nullptr, &mImpl->textUniformFragmentLayout));
+
+    VkDescriptorSetLayoutCreateInfo textImageLayoutInfo = {};
+    textImageLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    textImageLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+    textImageLayoutInfo.bindingCount = 1;
+    textImageLayoutInfo.pBindings = textImageBinding;
+    VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &textImageLayoutInfo, nullptr, &mImpl->textImageLayout));
+
+    std::array<VkDescriptorSetLayout, 3> descriptorLayouts = {
+        mImpl->textUniformVertexLayout,
+        mImpl->textUniformFragmentLayout,
+        mImpl->textImageLayout
+    };
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 3;
+    pipelineLayoutInfo.pSetLayouts = descriptorLayouts.data();
+    VK_CHECK_SUCCESS(vkCreatePipelineLayout(mImpl->device, &pipelineLayoutInfo, nullptr, &mImpl->pipelineLayout));
+
+    mImpl->inFrameCallbacks.push_back([impl = mImpl](VkCommandBuffer cmdbuffer) -> void {
+        // create uniform buffers for geometry and color
+
+        // create a vulkan staging buffers
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = 2 * sizeof(float);
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+        VmaAllocationCreateInfo bufferAllocationInfo = {};
+        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+        VkBuffer geomStagingBuffer = VK_NULL_HANDLE;
+        VmaAllocation geomStagingBufferAllocation = VK_NULL_HANDLE;
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &geomStagingBuffer, &geomStagingBufferAllocation, nullptr));
+
+        // copy data to buffer
+        void* data;
+        VK_CHECK_SUCCESS(vmaMapMemory(impl->allocator, geomStagingBufferAllocation, &data));
+        const float geomData[] = {
+            static_cast<float>(impl->width),
+            static_cast<float>(impl->height)
+        };
+        ::memcpy(data, geomData, 2 * sizeof(float));
+        vmaUnmapMemory(impl->allocator, geomStagingBufferAllocation);
+
+        // create the geom ubo
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->geomUniformBuffer, &impl->geomUniformBufferAllocation, nullptr));
+
+        // copy staging buffer to ubo
+        VkBufferCopy bufferCopy = {};
+        bufferCopy.size = 2 * sizeof(float);
+        vkCmdCopyBuffer(cmdbuffer, geomStagingBuffer, impl->geomUniformBuffer, 1, &bufferCopy);
+
+        // insert a memory barrier to ensure that the buffer copy has completed before it's used as a uniform buffer
+        VkBufferMemoryBarrier memoryBarrier = {};
+        memoryBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        memoryBarrier.size = VK_WHOLE_SIZE;
+        memoryBarrier.buffer = impl->geomUniformBuffer;
+        memoryBarrier.offset = 0;
+        memoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        memoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+        vkCmdPipelineBarrier(cmdbuffer,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                             0,
+                             0, nullptr,
+                             1, &memoryBarrier,
+                             0, nullptr);
+
+        bufferInfo.size = 4 * sizeof(float);
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+        VkBuffer colorStagingBuffer = VK_NULL_HANDLE;
+        VmaAllocation colorStagingBufferAllocation = VK_NULL_HANDLE;
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &colorStagingBuffer, &colorStagingBufferAllocation, nullptr));
+
+        // copy data to buffer
+        VK_CHECK_SUCCESS(vmaMapMemory(impl->allocator, colorStagingBufferAllocation, &data));
+        const float colorData[] = {
+            1.0f,
+            1.0f,
+            1.0f,
+            1.0f
+        };
+        ::memcpy(data, colorData, 4 * sizeof(float));
+        vmaUnmapMemory(impl->allocator, colorStagingBufferAllocation);
+
+        // create the color ubo
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->colorUniformBuffer, &impl->colorUniformBufferAllocation, nullptr));
+
+        // copy staging buffer to ubo
+        bufferCopy.size = 4 * sizeof(float);
+        vkCmdCopyBuffer(cmdbuffer, colorStagingBuffer, impl->colorUniformBuffer, 1, &bufferCopy);
+
+        // insert a memory barrier to ensure that the buffer copy has completed before it's used as a uniform buffer
+        memoryBarrier.buffer = impl->colorUniformBuffer;
+        vkCmdPipelineBarrier(cmdbuffer,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                             0,
+                             0, nullptr,
+                             1, &memoryBarrier,
+                             0, nullptr);
+
+        Renderer::instance()->afterCurrentFrame([
+            allocator = impl->allocator,
+            geomStagingBuffer, geomStagingBufferAllocation,
+            colorStagingBuffer, colorStagingBufferAllocation
+            ]() -> void {
+            vmaDestroyBuffer(allocator, geomStagingBuffer, geomStagingBufferAllocation);
+            vmaDestroyBuffer(allocator, colorStagingBuffer, colorStagingBufferAllocation);
+
+            spdlog::info("Destroyed uniform staging buffers");
+        });
+
+        spdlog::info("Created uniform buffers");
+    });
 
     EventLoop::ConnectKey onResizeKey = {};
 
@@ -726,19 +909,81 @@ void Renderer::render()
     attachmentBarrier.subresourceRange.layerCount = 1;
     vkCmdPipelineBarrier(cmdbuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, {}, 0, nullptr, 0, nullptr, 1, &attachmentBarrier);
 
-    if (!mImpl->textLines.empty() && mImpl->textVBOs.empty()) {
-        mImpl->generateVBOs(cmdbuffer);
-    }
-
-    // if (!mImpl->boxes.empty()) {
-    //     // spdlog::info("render {}.", mImpl->boxes.size());
-    // }
     if (!mImpl->inFrameCallbacks.empty()) {
         for (auto& cb : mImpl->inFrameCallbacks) {
             cb(cmdbuffer);
         }
         mImpl->inFrameCallbacks.clear();
     }
+
+    if (!mImpl->textLines.empty() && mImpl->textVBOs.empty()) {
+        mImpl->generateVBOs(cmdbuffer);
+    }
+    if (!mImpl->textVBOs.empty() && mImpl->geomUniformBuffer != VK_NULL_HANDLE && mImpl->colorUniformBuffer != VK_NULL_HANDLE) {
+        // draw some text
+        for (const auto& lines : mImpl->textVBOs) {
+            for (const auto& line : lines) {
+                std::array<VkDescriptorBufferInfo, 2> bufferDescriptorInfos = {};
+                std::array<VkDescriptorImageInfo, 2> imageDescriptorInfos = {};
+                std::array<VkWriteDescriptorSet, 4> writeDescriptorSets = {};
+
+                bufferDescriptorInfos[0] = {
+                    .buffer = mImpl->geomUniformBuffer,
+                    .offset = 0,
+                    .range = VK_WHOLE_SIZE
+                };
+                bufferDescriptorInfos[1] = {
+                    .buffer = mImpl->colorUniformBuffer,
+                    .offset = 0,
+                    .range = VK_WHOLE_SIZE
+                };
+
+                writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writeDescriptorSets[0].dstBinding = 0;
+                writeDescriptorSets[0].descriptorCount = 1;
+                writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                writeDescriptorSets[0].pBufferInfo = &bufferDescriptorInfos[0];
+
+                vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 0, 1, writeDescriptorSets.data() + 0);
+
+                writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writeDescriptorSets[1].dstBinding = 0;
+                writeDescriptorSets[1].descriptorCount = 1;
+                writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                writeDescriptorSets[1].pBufferInfo = &bufferDescriptorInfos[1];
+
+                vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 1, 1, writeDescriptorSets.data() + 1);
+
+                imageDescriptorInfos[0] = {
+                    .sampler = mImpl->textSampler,
+                    .imageView = VK_NULL_HANDLE,
+                    .imageLayout = VK_IMAGE_LAYOUT_UNDEFINED
+                };
+                imageDescriptorInfos[1] = {
+                    .sampler = VK_NULL_HANDLE,
+                    .imageView = line.view(),
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                };
+
+                writeDescriptorSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writeDescriptorSets[2].dstBinding = 0;
+                writeDescriptorSets[2].descriptorCount = 1;
+                writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+                writeDescriptorSets[2].pImageInfo = &imageDescriptorInfos[2];
+                writeDescriptorSets[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writeDescriptorSets[3].dstBinding = 0;
+                writeDescriptorSets[3].descriptorCount = 1;
+                writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+                writeDescriptorSets[3].pImageInfo = &imageDescriptorInfos[3];
+
+                vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 2, 2, writeDescriptorSets.data() + 2);
+            }
+        }
+    }
+
+    // if (!mImpl->boxes.empty()) {
+    //     // spdlog::info("render {}.", mImpl->boxes.size());
+    // }
 
     VkImageMemoryBarrier presentBarrier = {};
     presentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -860,12 +1105,6 @@ void Renderer::afterTransfer(uint64_t value, std::function<void()>&& func)
     }
 }
 
-void Renderer::inNextFrame(std::function<void(VkCommandBuffer cmdbuffer)>&& func)
-{
-    std::unique_lock lock(mMutex);
-    mImpl->inFrameCallbacks.push_back(std::move(func));
-}
-
 void Renderer::glyphsCreated(GlyphsCreated&& created)
 {
     // free transfer command buffer
@@ -925,13 +1164,36 @@ void Renderer::glyphsCreated(GlyphsCreated&& created)
     VK_CHECK_SUCCESS(vkQueueSubmit(mImpl->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
 
     spdlog::info("glyphs created and submitted");
-    mImpl->afterFrameCallbacks.push_back([atlas = created.atlas, glyphs = std::move(created.glyphs), image = created.image]() -> void {
+    mImpl->afterFrameCallbacks.push_back([impl = mImpl, atlas = created.atlas, glyphs = std::move(created.glyphs), image = created.image]() -> void {
+        VkImageViewCreateInfo viewInfo = {};
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image = image;
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        viewInfo.components = {
+            .r = VK_COMPONENT_SWIZZLE_R,
+            .g = VK_COMPONENT_SWIZZLE_G,
+            .b = VK_COMPONENT_SWIZZLE_B,
+            .a = VK_COMPONENT_SWIZZLE_A
+        };
+        viewInfo.subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        };
+        VkImageView view = VK_NULL_HANDLE;
+        VK_CHECK_SUCCESS(vkCreateImageView(impl->device, &viewInfo, nullptr, &view));
+
         for (auto g : glyphs) {
             auto box = atlas->glyphBox(g.getIndex());
             assert(box != nullptr);
             box->box = g;
             box->image = image;
+            box->view = view;
         }
+        impl->textVBOs.clear();
         spdlog::info("glyphs ready for use");
     });
 }
