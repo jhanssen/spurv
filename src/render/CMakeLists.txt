@@ -1,6 +1,7 @@
 set(SOURCES
     GenericPool.cpp
     GlyphAtlas.cpp
+    GraphicsPipeline.cpp
     SemaphorePool.cpp
     Renderer.cpp
     TextVBO.cpp

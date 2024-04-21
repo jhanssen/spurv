@@ -1,6 +1,7 @@
 #include "Renderer.h"
 #include "GenericPool.h"
 #include "GlyphAtlas.h"
+#include "GraphicsPipeline.h"
 #include "TextVBO.h"
 #include "SemaphorePool.h"
 #include <Logger.h>
@@ -97,7 +98,8 @@ struct RendererImpl
     VmaAllocation colorUniformBufferAllocation = VK_NULL_HANDLE;
 
     VkDescriptorSetLayout textUniformLayout = VK_NULL_HANDLE;
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+    VkPipelineLayout textPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline textPipeline = VK_NULL_HANDLE;
 
     bool suboptimal = false;
 
@@ -610,11 +612,11 @@ void Renderer::thread_internal()
     textUniformLayoutInfo.pBindings = textUniformBinding;
     VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &textUniformLayoutInfo, nullptr, &mImpl->textUniformLayout));
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &mImpl->textUniformLayout;
-    VK_CHECK_SUCCESS(vkCreatePipelineLayout(mImpl->device, &pipelineLayoutInfo, nullptr, &mImpl->pipelineLayout));
+    VkPipelineLayoutCreateInfo textPipelineLayoutInfo = {};
+    textPipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    textPipelineLayoutInfo.setLayoutCount = 1;
+    textPipelineLayoutInfo.pSetLayouts = &mImpl->textUniformLayout;
+    VK_CHECK_SUCCESS(vkCreatePipelineLayout(mImpl->device, &textPipelineLayoutInfo, nullptr, &mImpl->textPipelineLayout));
 
     mImpl->inFrameCallbacks.push_back([impl = mImpl](VkCommandBuffer cmdbuffer) -> void {
         // create uniform buffers for geometry and color
@@ -790,6 +792,9 @@ bool Renderer::recreateSwapchain()
         vkDestroyRenderPass(mImpl->device, mImpl->swapchainRenderPass, nullptr);
         mImpl->swapchainRenderPass = VK_NULL_HANDLE;
     }
+    if (mImpl->textPipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(mImpl->device, mImpl->textPipeline, nullptr);
+    }
     mImpl->vkbSwapchain.destroy_image_views(mImpl->imageViews);
     vkb::destroy_swapchain(mImpl->vkbSwapchain);
     mImpl->vkbSwapchain = maybeSwapchain.value();
@@ -830,6 +835,37 @@ bool Renderer::recreateSwapchain()
     renderPassInfo.subpassCount = 1;
     renderPassInfo.pSubpasses = &renderPassSubpass;
     VK_CHECK_SUCCESS(vkCreateRenderPass(mImpl->device, &renderPassInfo, nullptr, &mImpl->swapchainRenderPass));
+
+    VkVertexInputBindingDescription vertexBindingDescription = {};
+    vertexBindingDescription.binding = 0;
+    vertexBindingDescription.stride = 4 * sizeof(float);
+    vertexBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    std::array<VkVertexInputAttributeDescription, 2> vertexAttributeDescriptions = {};
+    vertexAttributeDescriptions[0].binding = 0;
+    vertexAttributeDescriptions[0].location = 0;
+    vertexAttributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+    vertexAttributeDescriptions[0].offset = 0;
+    vertexAttributeDescriptions[1].binding = 0;
+    vertexAttributeDescriptions[1].location = 1;
+    vertexAttributeDescriptions[1].format = VK_FORMAT_R32G32_SFLOAT;
+    vertexAttributeDescriptions[1].offset = 2 * sizeof(float);
+
+    GraphicsPipelineCreateInfo textPipelineInfo = {};
+    textPipelineInfo.vertexShader = "bin/shaders/text-vs.spv";
+    textPipelineInfo.fragmentShader = "bin/shaders/text-fs.spv";
+    textPipelineInfo.renderPass = mImpl->swapchainRenderPass;
+    textPipelineInfo.layout = mImpl->textPipelineLayout;
+    textPipelineInfo.vertexBindingDescriptionCount = 1;
+    textPipelineInfo.pVertexBindingDescriptions = &vertexBindingDescription;
+    textPipelineInfo.vertexAttributeDescriptionCount = 2;
+    textPipelineInfo.pVertexAttributeDescriptions = vertexAttributeDescriptions.data();
+    auto maybeTextPipeline = createGraphicsPipeline(mImpl->device, textPipelineInfo);
+    if (maybeTextPipeline.hasError()) {
+        spdlog::critical("Failed to create graphics pipeline: {}", std::get<Error>(maybeTextPipeline.data).message);
+        abort();
+    }
+    mImpl->textPipeline = std::get<VkPipeline>(maybeTextPipeline.data);
 
     mImpl->swapchainFramebuffers.resize(mImpl->imageViews.size());
     for (std::size_t viewIdx = 0; viewIdx < mImpl->imageViews.size(); ++viewIdx) {
@@ -1021,7 +1057,7 @@ void Renderer::render()
                 writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
                 writeDescriptorSets[3].pImageInfo = &imageDescriptorInfos[1];
 
-                spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 0, 4, writeDescriptorSets.data());
+                spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->textPipelineLayout, 0, 4, writeDescriptorSets.data());
             }
         }
 
