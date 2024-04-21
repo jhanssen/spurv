@@ -52,3 +52,6 @@
 [submodule "3rdparty/MoltenVK"]
 	path = 3rdparty/MoltenVK
 	url = https://github.com/KhronosGroup/MoltenVK.git
+[submodule "3rdparty/freetype"]
+	path = 3rdparty/freetype
+	url = https://github.com/freetype/freetype.git

@@ -2,6 +2,12 @@ cmake_policy(SET CMP0077 NEW)
 
 set(FMT_INSTALL OFF CACHE BOOL "")
 
+set(FT_DISABLE_ZLIB ON CACHE BOOL "")
+set(FT_DISABLE_PNG ON CACHE BOOL "")
+set(FT_DISABLE_BZIP2 ON CACHE BOOL "")
+set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "")
+set(FT_DISABLE_BROTLI ON CACHE BOOL "")
+
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "")
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "")
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "")
@@ -32,10 +38,15 @@ set(VK_BOOTSTRAP_VULKAN_HEADER_DIR ${CMAKE_CURRENT_LIST_DIR}/Vulkan-Headers/incl
 add_subdirectory(FunctionTraits)
 add_subdirectory(VulkanMemoryAllocator)
 add_subdirectory(fmt)
+add_subdirectory(freetype)
 add_subdirectory(glfw)
 add_subdirectory(harfbuzz)
 add_subdirectory(libqss)
 add_subdirectory(libuv)
+
+# hack to make msdfgen pick up freetype
+add_library(Freetype::Freetype ALIAS freetype-interface)
+
 add_subdirectory(msdf-atlas-gen)
 
 # these have to be before shaderc
