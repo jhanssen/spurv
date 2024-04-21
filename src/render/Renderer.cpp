@@ -30,6 +30,10 @@ namespace std
 };
 #endif
 
+namespace spurv_vk {
+PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
+}
+
 namespace spurv {
 struct FenceInfo
 {
@@ -441,6 +445,11 @@ void Renderer::thread_internal()
 
     mImpl->vkbDevice = maybeDevice.value();
     mImpl->device = mImpl->vkbDevice.device;
+
+    spurv_vk::vkCmdPushDescriptorSetKHR = reinterpret_cast<PFN_vkCmdPushDescriptorSetKHR>(vkGetDeviceProcAddr(mImpl->device, "vkCmdPushDescriptorSetKHR"));
+    if (spurv_vk::vkCmdPushDescriptorSetKHR == nullptr) {
+        spdlog::critical("No vkCmdPushDescriptorSetKHR function");
+    }
 
     auto maybeGraphicsQueue = mImpl->vkbDevice.get_queue(vkb::QueueType::graphics);
     if (!maybeGraphicsQueue) {
@@ -996,7 +1005,7 @@ void Renderer::render()
                 writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
                 writeDescriptorSets[0].pBufferInfo = &bufferDescriptorInfos[0];
 
-                vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 0, 1, writeDescriptorSets.data() + 0);
+                spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 0, 1, writeDescriptorSets.data() + 0);
 
                 writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 writeDescriptorSets[1].dstBinding = 0;
@@ -1004,7 +1013,7 @@ void Renderer::render()
                 writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
                 writeDescriptorSets[1].pBufferInfo = &bufferDescriptorInfos[1];
 
-                vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 1, 1, writeDescriptorSets.data() + 1);
+                spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 1, 1, writeDescriptorSets.data() + 1);
 
                 imageDescriptorInfos[0] = {
                     .sampler = mImpl->textSampler,
@@ -1028,7 +1037,7 @@ void Renderer::render()
                 writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
                 writeDescriptorSets[3].pImageInfo = &imageDescriptorInfos[3];
 
-                vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 2, 2, writeDescriptorSets.data() + 2);
+                spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->pipelineLayout, 2, 2, writeDescriptorSets.data() + 2);
             }
         }
 
