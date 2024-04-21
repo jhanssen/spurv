@@ -108,6 +108,7 @@ struct RendererImpl
     void runFenceCallbacks(FenceInfo& info);
     void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
     void generateVBOs(VkCommandBuffer cmdbuffer);
+    void recreateUniformBuffers();
     GlyphAtlas& atlasFor(const Font& font);
 
     static void idleCallback(uv_idle_t* idle);
@@ -316,9 +317,168 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
     spdlog::info("textvbos {} {}", generated, missing);
 }
 
+void RendererImpl::recreateUniformBuffers()
+{
+    // delete old buffers if they exist
+    if (geomUniformBuffer != VK_NULL_HANDLE || colorUniformBuffer != VK_NULL_HANDLE) {
+        Renderer::instance()->afterCurrentFrame([
+            impl = this,
+            geomBuffer = geomUniformBuffer,
+            geomAlloc = geomUniformBufferAllocation,
+            colorBuffer = colorUniformBuffer,
+            colorAlloc = colorUniformBufferAllocation
+            ]() -> void {
+            if (geomBuffer != VK_NULL_HANDLE) {
+                assert(geomAlloc != VK_NULL_HANDLE);
+                vmaDestroyBuffer(impl->allocator, geomBuffer, geomAlloc);
+            }
+            if (colorBuffer != VK_NULL_HANDLE) {
+                assert(colorAlloc != VK_NULL_HANDLE);
+                vmaDestroyBuffer(impl->allocator, colorBuffer, colorAlloc);
+            }
+        });
+    }
+
+    inFrameCallbacks.push_back([impl = this](VkCommandBuffer cmdbuffer) -> void {
+        // create uniform buffers for geometry and color
+
+        // create a vulkan staging buffers
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = 4 * sizeof(float);
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+        VmaAllocationCreateInfo bufferAllocationInfo = {};
+        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+        VkBuffer geomStagingBuffer = VK_NULL_HANDLE;
+        VmaAllocation geomStagingBufferAllocation = VK_NULL_HANDLE;
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &geomStagingBuffer, &geomStagingBufferAllocation, nullptr));
+
+        // copy data to buffer
+        void* data;
+        VK_CHECK_SUCCESS(vmaMapMemory(impl->allocator, geomStagingBufferAllocation, &data));
+        const float geomData[] = {
+            0.f, 0.f,
+            static_cast<float>(impl->width),
+            static_cast<float>(impl->height)
+        };
+        ::memcpy(data, geomData, 4 * sizeof(float));
+        vmaUnmapMemory(impl->allocator, geomStagingBufferAllocation);
+
+        // create the geom ubo
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->geomUniformBuffer, &impl->geomUniformBufferAllocation, nullptr));
+
+        // copy staging buffer to ubo
+        VkBufferCopy bufferCopy = {};
+        bufferCopy.size = 4 * sizeof(float);
+        vkCmdCopyBuffer(cmdbuffer, geomStagingBuffer, impl->geomUniformBuffer, 1, &bufferCopy);
+
+        // insert a memory barrier to ensure that the buffer copy has completed before it's used as a uniform buffer
+        VkBufferMemoryBarrier memoryBarrier = {};
+        memoryBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        memoryBarrier.size = VK_WHOLE_SIZE;
+        memoryBarrier.buffer = impl->geomUniformBuffer;
+        memoryBarrier.offset = 0;
+        memoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        memoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+        vkCmdPipelineBarrier(cmdbuffer,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                             0,
+                             0, nullptr,
+                             1, &memoryBarrier,
+                             0, nullptr);
+
+        bufferInfo.size = 4 * sizeof(float);
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+        VkBuffer colorStagingBuffer = VK_NULL_HANDLE;
+        VmaAllocation colorStagingBufferAllocation = VK_NULL_HANDLE;
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &colorStagingBuffer, &colorStagingBufferAllocation, nullptr));
+
+        // copy data to buffer
+        VK_CHECK_SUCCESS(vmaMapMemory(impl->allocator, colorStagingBufferAllocation, &data));
+        const float colorData[] = {
+            1.0f,
+            1.0f,
+            1.0f,
+            1.0f
+        };
+        ::memcpy(data, colorData, 4 * sizeof(float));
+        vmaUnmapMemory(impl->allocator, colorStagingBufferAllocation);
+
+        // create the color ubo
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->colorUniformBuffer, &impl->colorUniformBufferAllocation, nullptr));
+
+        // copy staging buffer to ubo
+        bufferCopy.size = 4 * sizeof(float);
+        vkCmdCopyBuffer(cmdbuffer, colorStagingBuffer, impl->colorUniformBuffer, 1, &bufferCopy);
+
+        // insert a memory barrier to ensure that the buffer copy has completed before it's used as a uniform buffer
+        memoryBarrier.buffer = impl->colorUniformBuffer;
+        vkCmdPipelineBarrier(cmdbuffer,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                             0,
+                             0, nullptr,
+                             1, &memoryBarrier,
+                             0, nullptr);
+
+        Renderer::instance()->afterCurrentFrame([
+            allocator = impl->allocator,
+            geomStagingBuffer, geomStagingBufferAllocation,
+            colorStagingBuffer, colorStagingBufferAllocation
+            ]() -> void {
+            vmaDestroyBuffer(allocator, geomStagingBuffer, geomStagingBufferAllocation);
+            vmaDestroyBuffer(allocator, colorStagingBuffer, colorStagingBufferAllocation);
+
+            spdlog::info("Destroyed uniform staging buffers");
+        });
+
+        spdlog::info("Created uniform buffers");
+    });
+}
+
 } // namespace spurv
 
 std::unique_ptr<Renderer> Renderer::sInstance = {};
+
+inline VkBool32 VKAPI_CALL vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                               VkDebugUtilsMessageTypeFlagsEXT messageType,
+                                               const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                               void*) {
+    auto ms = vkb::to_string_message_severity(messageSeverity);
+    auto mt = vkb::to_string_message_type(messageType);
+    switch (messageSeverity) {
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+        spdlog::debug("[{}: {}\n{}", ms, mt, pCallbackData->pMessage);
+        break;
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+        spdlog::error("[{}: {}\n{}", ms, mt, pCallbackData->pMessage);
+        break;
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+        spdlog::warn("[{}: {}\n{}", ms, mt, pCallbackData->pMessage);
+        break;
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+        spdlog::info("[{}: {}\n{}", ms, mt, pCallbackData->pMessage);
+        break;
+    default:
+        // should never happen
+        abort();
+    }
+
+    return VK_FALSE; // Applications must return false here
+}
 
 Renderer::Renderer()
     : mEventLoop(new EventLoop())
@@ -379,7 +539,7 @@ void Renderer::thread_internal()
         .require_api_version(1, 2, 0)
         .enable_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)
         .request_validation_layers()
-        .use_default_debug_messenger()
+        .set_debug_callback(vulkanDebugCallback)
         .build();
     if (!maybeInstance) {
         spdlog::critical("Unable to create vulkan instance: {}", maybeInstance.error().message());
@@ -624,115 +784,6 @@ void Renderer::thread_internal()
     textPipelineLayoutInfo.pSetLayouts = &mImpl->textUniformLayout;
     VK_CHECK_SUCCESS(vkCreatePipelineLayout(mImpl->device, &textPipelineLayoutInfo, nullptr, &mImpl->textPipelineLayout));
 
-    mImpl->inFrameCallbacks.push_back([impl = mImpl](VkCommandBuffer cmdbuffer) -> void {
-        // create uniform buffers for geometry and color
-
-        // create a vulkan staging buffers
-        VkBufferCreateInfo bufferInfo = {};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = 4 * sizeof(float);
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-
-        VmaAllocationCreateInfo bufferAllocationInfo = {};
-        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-
-        VkBuffer geomStagingBuffer = VK_NULL_HANDLE;
-        VmaAllocation geomStagingBufferAllocation = VK_NULL_HANDLE;
-        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &geomStagingBuffer, &geomStagingBufferAllocation, nullptr));
-
-        // copy data to buffer
-        void* data;
-        VK_CHECK_SUCCESS(vmaMapMemory(impl->allocator, geomStagingBufferAllocation, &data));
-        const float geomData[] = {
-            0.f, 0.f,
-            static_cast<float>(impl->width),
-            static_cast<float>(impl->height)
-        };
-        ::memcpy(data, geomData, 4 * sizeof(float));
-        vmaUnmapMemory(impl->allocator, geomStagingBufferAllocation);
-
-        // create the geom ubo
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-
-        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->geomUniformBuffer, &impl->geomUniformBufferAllocation, nullptr));
-
-        // copy staging buffer to ubo
-        VkBufferCopy bufferCopy = {};
-        bufferCopy.size = 4 * sizeof(float);
-        vkCmdCopyBuffer(cmdbuffer, geomStagingBuffer, impl->geomUniformBuffer, 1, &bufferCopy);
-
-        // insert a memory barrier to ensure that the buffer copy has completed before it's used as a uniform buffer
-        VkBufferMemoryBarrier memoryBarrier = {};
-        memoryBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        memoryBarrier.size = VK_WHOLE_SIZE;
-        memoryBarrier.buffer = impl->geomUniformBuffer;
-        memoryBarrier.offset = 0;
-        memoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        memoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        memoryBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
-        vkCmdPipelineBarrier(cmdbuffer,
-                             VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-                             0,
-                             0, nullptr,
-                             1, &memoryBarrier,
-                             0, nullptr);
-
-        bufferInfo.size = 4 * sizeof(float);
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-
-        VkBuffer colorStagingBuffer = VK_NULL_HANDLE;
-        VmaAllocation colorStagingBufferAllocation = VK_NULL_HANDLE;
-        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &colorStagingBuffer, &colorStagingBufferAllocation, nullptr));
-
-        // copy data to buffer
-        VK_CHECK_SUCCESS(vmaMapMemory(impl->allocator, colorStagingBufferAllocation, &data));
-        const float colorData[] = {
-            1.0f,
-            1.0f,
-            1.0f,
-            1.0f
-        };
-        ::memcpy(data, colorData, 4 * sizeof(float));
-        vmaUnmapMemory(impl->allocator, colorStagingBufferAllocation);
-
-        // create the color ubo
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-
-        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->colorUniformBuffer, &impl->colorUniformBufferAllocation, nullptr));
-
-        // copy staging buffer to ubo
-        bufferCopy.size = 4 * sizeof(float);
-        vkCmdCopyBuffer(cmdbuffer, colorStagingBuffer, impl->colorUniformBuffer, 1, &bufferCopy);
-
-        // insert a memory barrier to ensure that the buffer copy has completed before it's used as a uniform buffer
-        memoryBarrier.buffer = impl->colorUniformBuffer;
-        vkCmdPipelineBarrier(cmdbuffer,
-                             VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                             0,
-                             0, nullptr,
-                             1, &memoryBarrier,
-                             0, nullptr);
-
-        Renderer::instance()->afterCurrentFrame([
-            allocator = impl->allocator,
-            geomStagingBuffer, geomStagingBufferAllocation,
-            colorStagingBuffer, colorStagingBufferAllocation
-            ]() -> void {
-            vmaDestroyBuffer(allocator, geomStagingBuffer, geomStagingBufferAllocation);
-            vmaDestroyBuffer(allocator, colorStagingBuffer, colorStagingBufferAllocation);
-
-            spdlog::info("Destroyed uniform staging buffers");
-        });
-
-        spdlog::info("Created uniform buffers");
-    });
-
     EventLoop::ConnectKey onResizeKey = {};
 
     // finalize the event loop
@@ -791,18 +842,27 @@ bool Renderer::recreateSwapchain()
         mImpl->vkbSwapchain.swapchain = VK_NULL_HANDLE;
         return false;
     }
-    for (auto framebuffer : mImpl->swapchainFramebuffers) {
-        vkDestroyFramebuffer(mImpl->device, framebuffer, nullptr);
-    }
-    if (mImpl->swapchainRenderPass != VK_NULL_HANDLE) {
-        vkDestroyRenderPass(mImpl->device, mImpl->swapchainRenderPass, nullptr);
-        mImpl->swapchainRenderPass = VK_NULL_HANDLE;
-    }
-    if (mImpl->textPipeline != VK_NULL_HANDLE) {
-        vkDestroyPipeline(mImpl->device, mImpl->textPipeline, nullptr);
-    }
-    mImpl->vkbSwapchain.destroy_image_views(mImpl->imageViews);
-    vkb::destroy_swapchain(mImpl->vkbSwapchain);
+    afterCurrentFrame([
+        impl = mImpl,
+        fbos = std::move(mImpl->swapchainFramebuffers),
+        imageViews = std::move(mImpl->imageViews),
+        pass = mImpl->swapchainRenderPass,
+        textPipeline = mImpl->textPipeline,
+        swapchain = std::move(mImpl->vkbSwapchain)
+        ]() mutable -> void {
+        for (auto framebuffer : fbos) {
+            vkDestroyFramebuffer(impl->device, framebuffer, nullptr);
+        }
+        if (pass != VK_NULL_HANDLE) {
+            vkDestroyRenderPass(impl->device, pass, nullptr);
+        }
+        if (textPipeline != VK_NULL_HANDLE) {
+            vkDestroyPipeline(impl->device, textPipeline, nullptr);
+        }
+        swapchain.destroy_image_views(imageViews);
+        vkb::destroy_swapchain(swapchain);
+    });
+    mImpl->swapchainFramebuffers.clear();
     mImpl->vkbSwapchain = maybeSwapchain.value();
     auto maybeImages = mImpl->vkbSwapchain.get_images();
     if (!maybeImages) {
@@ -890,6 +950,9 @@ bool Renderer::recreateSwapchain()
     for (auto& sem : mImpl->semaphores) {
         sem.setDevice(mImpl->device);
     }
+
+    mImpl->recreateUniformBuffers();
+
     return true;
 }
 
@@ -1138,6 +1201,7 @@ void Renderer::render()
 
         mImpl->highestAfterTransfer = 0;
         // attach all callback to the current fence
+        std::unique_lock lock(mMutex);
         const auto end = mImpl->afterFrameCallbacks.size();
         mImpl->afterFrameCallbacks.resize(end + mImpl->afterTransfers.size());
         std::transform(mImpl->afterTransfers.cbegin(), mImpl->afterTransfers.cend(), mImpl->afterFrameCallbacks.begin() + end, [](auto entry) {
@@ -1270,7 +1334,7 @@ void Renderer::glyphsCreated(GlyphsCreated&& created)
     VK_CHECK_SUCCESS(vkQueueSubmit(mImpl->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
 
     spdlog::info("glyphs created and submitted");
-    mImpl->afterFrameCallbacks.push_back([impl = mImpl, atlas = created.atlas, glyphs = std::move(created.glyphs), image = created.image]() -> void {
+    afterCurrentFrame([impl = mImpl, atlas = created.atlas, glyphs = std::move(created.glyphs), image = created.image]() -> void {
         VkImageViewCreateInfo viewInfo = {};
         viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         viewInfo.image = image;
