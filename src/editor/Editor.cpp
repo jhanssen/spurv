@@ -80,7 +80,7 @@ void Editor::load(const std::filesystem::path& path)
             assert(mCurrentDoc == nullptr);
             mDocuments.push_back(std::make_unique<Document>());
             mCurrentDoc = mDocuments.back().get();
-            mCurrentDoc->setFont(Font("Corsiva", 20));
+            mCurrentDoc->setFont(Font("Inconsolata", 25));
             mCurrentDoc->onReady().connect([doc = mCurrentDoc]() {
                 spdlog::info("document ready");
                 // send some lines to the renderer for now

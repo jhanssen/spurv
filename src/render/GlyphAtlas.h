@@ -64,6 +64,9 @@ public:
     GlyphInfo* glyphBox(uint32_t unicode);
     const GlyphInfo* glyphBox(uint32_t unicode) const;
 
+    uint32_t maxWidth() const;
+    uint32_t maxHeight() const;
+
 private:
     struct PerThreadInfo
     {
@@ -79,6 +82,7 @@ private:
     GlyphVulkanInfo mVulkanInfo = {};
     std::filesystem::path mFontFile;
     std::unordered_map<uint32_t, GlyphInfo> mGlyphs;
+    uint32_t mMaxWidth = 0, mMaxHeight = 0;
     std::mutex mMutex;
     std::unordered_map<std::thread::id, std::unique_ptr<PerThreadInfo>> mPerThread;
     static thread_local msdfgen::FreetypeHandle* tFreetype;
@@ -119,6 +123,16 @@ inline const GlyphInfo* GlyphAtlas::glyphBox(uint32_t unicode) const
         return nullptr;
     }
     return &it->second;
+}
+
+inline uint32_t GlyphAtlas::maxWidth() const
+{
+    return mMaxWidth;
+}
+
+inline uint32_t GlyphAtlas::maxHeight() const
+{
+    return mMaxHeight;
 }
 
 } // namespace spurv

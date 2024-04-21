@@ -246,6 +246,8 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
 {
     uint32_t missing = 0, generated = 0;
 
+    spdlog::info("generating...");
+
     for (std::size_t box = 0; box < textLines.size(); ++box) {
         const auto& lines = textLines[box];
         if (lines.empty()) {
@@ -255,22 +257,24 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
             textVBOs.resize(box + 1);
         }
 
-        const hb_position_t lineHeight = 25 * 64;
-        hb_position_t linePos = 0;
-
+        float linePos = 0;
         auto& vbos = textVBOs[box];
         for (const auto& line : lines) {
             vbos.push_back(TextVBO());
             auto& vbo = vbos.back();
             auto& atlas = atlasFor(line.font);
+            const auto fontSize = line.font.size();
+
+            hb_font_extents_t fontExtents;
+            hb_font_get_h_extents(line.font.font(), &fontExtents);
+            const float lineHeight = ceilf(((fontExtents.ascender + fontExtents.descender + fontExtents.line_gap) / 64.f) + (fontSize / 4.f));
+            const float baseLine = ceilf(fontExtents.ascender / 64.f);
+            const float x_tracking = floorf(fontSize / 10.f);
 
             VkImageView view = VK_NULL_HANDLE;
             uint32_t glyph_count;
-            hb_position_t cursor_x = 0;
-            hb_position_t cursor_y = linePos;
+            float cursor_x = 0.f;
             hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(line.buffer, &glyph_count);
-            hb_glyph_position_t* glyph_pos = hb_buffer_get_glyph_positions(line.buffer, &glyph_count);
-            std::unordered_map<hb_codepoint_t, hb_glyph_extents_t> extents;
             for (uint32_t i = 0; i < glyph_count; i++) {
                 hb_codepoint_t glyphid = glyph_info[i].codepoint;
                 auto glyphInfo = atlas.glyphBox(glyphid);
@@ -283,33 +287,29 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
                     vbo.setView(view);
                 }
                 assert(view == glyphInfo->view);
-                auto extent = extents.find(glyphid);
-                if (extent == extents.end()) {
-                    hb_glyph_extents_t glyph_extent;
-                    hb_font_get_glyph_extents(line.font.font(), glyphid, &glyph_extent);
-                    extent = extents.insert(std::make_pair(glyphid, glyph_extent)).first;
-                }
-                hb_position_t x_offset  = glyph_pos[i].x_offset;
-                hb_position_t y_offset  = glyph_pos[i].y_offset;
-                hb_position_t x_advance = glyph_pos[i].x_advance;
-                hb_position_t y_advance = glyph_pos[i].y_advance;
+
+                const float x_left = glyphInfo->box.bounds.l * fontSize;
+                const float x_right = glyphInfo->box.bounds.r * fontSize;
+                const float x_advance = glyphInfo->box.advance * fontSize;
+                const float y_bottom = glyphInfo->box.bounds.b * fontSize;
+                const float y_top = glyphInfo->box.bounds.t * fontSize;
 
                 vbo.add(
                     {
-                        ((cursor_x + x_offset) / 64.0f) + 100.f,
-                        ((cursor_y + y_offset) / 64.0f) + 100.f,
-                        extent->second.width / 64.0f,
-                        extent->second.height / 64.0f
+                        floorf(cursor_x) + ceilf(x_left),
+                        floorf(-y_bottom) + baseLine + linePos,
+                        ceilf(x_right - x_left + 1.f),
+                        floorf(y_bottom) - floorf(y_top) - 1.f
                     }, glyphInfo->box);
 
-                cursor_x += x_advance;
-                cursor_y += y_advance;
+                cursor_x += x_advance + x_tracking;
 
                 ++generated;
             }
 
             vbo.generate(allocator, cmdbuffer);
 
+            spdlog::info("generated so far {} {}", generated, vbo.size());
             linePos += lineHeight;
         }
     }
@@ -395,7 +395,7 @@ void RendererImpl::recreateUniformBuffers()
                              1, &memoryBarrier,
                              0, nullptr);
 
-        bufferInfo.size = 4 * sizeof(float);
+        bufferInfo.size = 5 * sizeof(float);
         bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
         bufferAllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 
@@ -409,9 +409,10 @@ void RendererImpl::recreateUniformBuffers()
             1.0f,
             1.0f,
             1.0f,
-            1.0f
+            1.0f,
+            4.0f
         };
-        ::memcpy(data, colorData, 4 * sizeof(float));
+        ::memcpy(data, colorData, 5 * sizeof(float));
         vmaUnmapMemory(impl->allocator, colorStagingBufferAllocation);
 
         // create the color ubo
@@ -421,7 +422,7 @@ void RendererImpl::recreateUniformBuffers()
         VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->colorUniformBuffer, &impl->colorUniformBufferAllocation, nullptr));
 
         // copy staging buffer to ubo
-        bufferCopy.size = 4 * sizeof(float);
+        bufferCopy.size = 5 * sizeof(float);
         vkCmdCopyBuffer(cmdbuffer, colorStagingBuffer, impl->colorUniformBuffer, 1, &bufferCopy);
 
         // insert a memory barrier to ensure that the buffer copy has completed before it's used as a uniform buffer
@@ -889,7 +890,7 @@ bool Renderer::recreateSwapchain()
     VkAttachmentDescription colorAttachment = {};
     colorAttachment.format = mImpl->vkbSwapchain.image_format;
     colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -1068,6 +1069,9 @@ void Renderer::render()
             { 0, 0 },
             { mImpl->width, mImpl->height }
         };
+        const VkClearValue clear0 = {};
+        renderPassInfo.clearValueCount = 1;
+        renderPassInfo.pClearValues = &clear0;
         vkCmdBeginRenderPass(cmdbuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->textPipeline);
 
@@ -1224,7 +1228,7 @@ void Renderer::render()
     submitInfo.pNext = &timelineInfo;
     const static VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.pWaitDstStageMask = waitStages;
-    submitInfo.waitSemaphoreCount = waitSems[2] == VK_NULL_HANDLE ? 2 : 3;;
+    submitInfo.waitSemaphoreCount = waitSems[2] == VK_NULL_HANDLE ? 2 : 3;
     submitInfo.pWaitSemaphores = waitSems;
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &semNext;

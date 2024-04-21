@@ -48,7 +48,7 @@ Font::Font()
 }
 
 Font::Font(const std::string& name, uint32_t size)
-    : mFile(FontConfigHolder::fontFileForPattern(name))
+    : mFile(FontConfigHolder::fontFileForPattern(name)), mSize(size)
 {
     if (mFile.empty()) {
         return;
@@ -73,7 +73,7 @@ Font::Font(const std::string& name, uint32_t size)
 }
 
 Font::Font(const Font& other)
-    : mFile(other.mFile)
+    : mFile(other.mFile), mSize(other.mSize)
 {
     if (other.mBlob) {
         mBlob = hb_blob_reference(other.mBlob);
@@ -87,7 +87,8 @@ Font::Font(const Font& other)
 }
 
 Font::Font(Font&& other)
-    : mFile(std::move(other.mFile)), mBlob(other.mBlob), mFace(other.mFace), mFont(other.mFont)
+    : mFile(std::move(other.mFile)), mSize(other.mSize),
+      mBlob(other.mBlob), mFace(other.mFace), mFont(other.mFont)
 {
     other.mBlob = nullptr;
     other.mFace = nullptr;
@@ -104,6 +105,7 @@ Font& Font::operator=(const Font& other)
     clear();
 
     mFile = other.mFile;
+    mSize = other.mSize;
     if (other.mBlob) {
         mBlob = hb_blob_reference(other.mBlob);
     }
@@ -121,6 +123,7 @@ Font& Font::operator=(Font&& other)
     clear();
 
     mFile = std::move(other.mFile);
+    mSize = other.mSize;
     mBlob = other.mBlob;
     other.mBlob = nullptr;
     mFace = other.mFace;

@@ -101,7 +101,7 @@ void LayoutJob::runJob(std::shared_ptr<LayoutJob> job)
                 hb_buffer_guess_segment_properties(buf);
                 hb_shape(chunk.font.font(), buf, nullptr, 0);
                 buffers.push_back({ buf, processedStart, processedStart + line.size(), chunk.font });
-                prev = lb.first - processedStart;
+                prev = lb.first - processedStart + 1;
             }
 
             // memmove the remaining chunk data if any

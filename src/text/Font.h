@@ -20,6 +20,7 @@ public:
     Font& operator=(Font&& other);
     bool operator==(const Font& other) const;
 
+    uint32_t size() const;
     bool isValid() const { return mFont != nullptr; }
     const std::filesystem::path& file() const { return mFile; }
     hb_font_t* font() const { return mFont; }
@@ -28,6 +29,7 @@ public:
 
 private:
     std::filesystem::path mFile = {};
+    std::size_t mSize = 0;
     hb_blob_t* mBlob = nullptr;
     hb_face_t* mFace = nullptr;
     hb_font_t* mFont = nullptr;
@@ -37,6 +39,11 @@ inline bool Font::operator==(const Font& other) const
 {
     // ### should this consider mFile instead?
     return mFont == other.mFont;
+}
+
+inline uint32_t Font::size() const
+{
+    return mSize;
 }
 
 }

@@ -44,9 +44,10 @@ void GlyphAtlas::generate(msdf_atlas::Charset&& charset, GlyphTimeline& timeline
                 glyph.edgeColoring(&msdfgen::edgeColoringInkTrap, maxCornerAngle, 0);
             }
             msdf_atlas::TightAtlasPacker packer;
-            packer.setDimensionsConstraint(msdf_atlas::DimensionsConstraint::POWER_OF_TWO_RECTANGLE);
+            packer.setDimensionsConstraint(msdf_atlas::DimensionsConstraint::POWER_OF_TWO_SQUARE);
             packer.setMinimumScale(24.0);
-            packer.setPixelRange(2.0);
+            packer.setPixelRange(4.0);
+            packer.setSpacing(1);
             packer.setMiterLimit(1.0);
             packer.pack(glyphs.data(), glyphs.size());
             int width = 0, height = 0;
@@ -63,6 +64,17 @@ void GlyphAtlas::generate(msdf_atlas::Charset&& charset, GlyphTimeline& timeline
             generator.generate(glyphs.data(), glyphs.size());
             spdlog::info("glyphsatlas generated {}x{}", width, height);
             auto bitmap = static_cast<msdfgen::BitmapConstRef<msdf_atlas::byte, 4>>(generator.atlasStorage());
+            // find the max layout
+            int maxW = 0, maxH = 0;
+            const auto& layout = generator.getLayout();
+            for (const auto& box : layout) {
+                if (box.rect.w > maxW) {
+                    maxW = box.rect.w;
+                }
+                if (box.rect.h > maxH) {
+                    maxH = box.rect.h;
+                }
+            }
 
             // create a vulkan buffer
             VkBufferCreateInfo bufferInfo = {};
@@ -193,9 +205,11 @@ void GlyphAtlas::generate(msdf_atlas::Charset&& charset, GlyphTimeline& timeline
 
             Renderer::instance()->afterTransfer(semSignal, [
                 atlas, allocator = vulkan.allocator, buffer, bufferAllocation, image,
-                cmdbuffer, glyphs = std::move(glyphs)]() mutable {
+                cmdbuffer, glyphs = std::move(glyphs), maxW, maxH]() mutable {
                 spdlog::info("glyphatlas notifying");
 
+                atlas->mMaxWidth = maxW;
+                atlas->mMaxHeight = maxH;
                 vmaDestroyBuffer(allocator, buffer, bufferAllocation);
                 Renderer::instance()->glyphsCreated(GlyphsCreated {
                         cmdbuffer,
