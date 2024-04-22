@@ -900,6 +900,7 @@ bool Renderer::recreateSwapchain()
     vkb::SwapchainBuilder swapchainBuilder { mImpl->vkbDevice };
     auto maybeSwapchain = swapchainBuilder
         .set_old_swapchain(mImpl->vkbSwapchain)
+        .set_desired_extent(mImpl->scaledWidth, mImpl->scaledHeight)
         .set_desired_present_mode(VK_PRESENT_MODE_FIFO_RELAXED_KHR)
         .add_fallback_present_mode(VK_PRESENT_MODE_FIFO_KHR)
         .build();
@@ -942,6 +943,16 @@ bool Renderer::recreateSwapchain()
         return false;
     }
     mImpl->imageViews = maybeImageViews.value();
+    spdlog::info("created swapchain, wanted {}x{}, got {}x{}",
+                 mImpl->scaledWidth, mImpl->scaledHeight,
+                 mImpl->vkbSwapchain.extent.width, mImpl->vkbSwapchain.extent.height);
+    if (mImpl->vkbSwapchain.extent.width != mImpl->scaledWidth
+        || mImpl->vkbSwapchain.extent.height != mImpl->scaledHeight) {
+        mImpl->scaledWidth = mImpl->vkbSwapchain.extent.width;
+        mImpl->scaledHeight = mImpl->vkbSwapchain.extent.height;
+        mImpl->width = static_cast<uint32_t>(mImpl->scaledWidth / mImpl->contentScale.width);
+        mImpl->height = static_cast<uint32_t>(mImpl->scaledHeight / mImpl->contentScale.height);
+    }
 
     VkAttachmentReference colorAttachmentReference = {};
     colorAttachmentReference.attachment = 0;
