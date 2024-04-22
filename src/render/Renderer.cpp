@@ -1264,9 +1264,9 @@ void Renderer::render()
         VK_NULL_HANDLE
     };
     const static VkPipelineStageFlags waitStages[] = {
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // swapchain image
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, // potential image transfer/upload
+        VK_PIPELINE_STAGE_TRANSFER_BIT // potential transfer operation
     };
 
     {
