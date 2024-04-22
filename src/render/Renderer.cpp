@@ -72,7 +72,7 @@ struct RendererImpl
     GlyphTimeline transferTimeline = {};
     GlyphTimeline graphicsTimeline = {};
 
-    std::vector<SemaphorePool> semaphores = {};
+    std::vector<SemaphorePool> swapSemaphores = {};
     uint32_t currentSwapchain = 0;
     uint32_t currentSwapchainImage = 0;
 
@@ -1023,8 +1023,9 @@ bool Renderer::recreateSwapchain()
         VK_CHECK_SUCCESS(vkCreateFramebuffer(mImpl->device, &framebufferInfo, nullptr, &mImpl->swapchainFramebuffers[viewIdx]));
     }
 
-    mImpl->semaphores.resize(mImpl->imageViews.size());
-    for (auto& sem : mImpl->semaphores) {
+    mImpl->swapSemaphores.resize(mImpl->imageViews.size());
+    for (auto& sem : mImpl->swapSemaphores) {
+        sem.recreate();
         sem.setDevice(mImpl->device);
     }
 
@@ -1070,12 +1071,12 @@ void Renderer::render()
         return;
     }
 
-    auto& semaphores = mImpl->semaphores;
+    auto& swapSemaphores = mImpl->swapSemaphores;
     const auto currentSemaphore = mImpl->currentSwapchain;
-    auto semaphore = semaphores[currentSemaphore].next();
-    if (VkFence fence = semaphores[currentSemaphore].fence()) {
+    auto semaphore = swapSemaphores[currentSemaphore].next();
+    if (VkFence fence = swapSemaphores[currentSemaphore].fence()) {
         mImpl->checkFence(fence);
-        assert(semaphores[currentSemaphore].fence() == VK_NULL_HANDLE);
+        assert(swapSemaphores[currentSemaphore].fence() == VK_NULL_HANDLE);
     }
     VkResult acquired = vkAcquireNextImageKHR(mImpl->device, mImpl->vkbSwapchain.swapchain, UINT64_MAX, semaphore, VK_NULL_HANDLE, &mImpl->currentSwapchainImage);
     switch (acquired) {
@@ -1257,11 +1258,11 @@ void Renderer::render()
     auto fence = *fenceHandle;
     auto& fenceInfo = mImpl->fenceInfos[fence];
 
-    semaphores[currentSemaphore].setFence(fence);
-    fenceInfo.semaphore = &semaphores[currentSemaphore];
+    swapSemaphores[currentSemaphore].setFence(fence);
+    fenceInfo.semaphore = &swapSemaphores[currentSemaphore];
 
-    VkSemaphore semCurrent = semaphores[currentSemaphore].current();
-    VkSemaphore semNext = semaphores[currentSemaphore].next();
+    VkSemaphore semCurrent = swapSemaphores[currentSemaphore].current();
+    VkSemaphore semNext = swapSemaphores[currentSemaphore].next();
 
     // wait for the graphics timeline semaphore
     uint64_t timelineSemValues[] = {
@@ -1341,8 +1342,8 @@ void Renderer::render()
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &mImpl->vkbSwapchain.swapchain;
     vkQueuePresentKHR(mImpl->presentQueue, &presentInfo);
-    semaphores[currentSemaphore].reset();
-    mImpl->currentSwapchain = (currentSemaphore + 1) % semaphores.size();
+    swapSemaphores[currentSemaphore].reset();
+    mImpl->currentSwapchain = (currentSemaphore + 1) % swapSemaphores.size();
     mImpl->currentSwapchainImage = UINT_MAX;
 }
 

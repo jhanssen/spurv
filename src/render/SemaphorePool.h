@@ -24,6 +24,8 @@ public:
 
     void reset();
 
+    void recreate();
+
 private:
     SemaphorePool(const SemaphorePool&) = delete;
     SemaphorePool& operator=(const SemaphorePool&&) = delete;
