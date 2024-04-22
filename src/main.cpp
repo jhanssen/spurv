@@ -39,9 +39,6 @@ int main(int argc, char** argv, char** envp)
         ::exit(1);
     }
 
-    Font font("Corsiva", 20);
-    spdlog::info("hello world {}", font.file().string());
-
     const Rect rect = {
         .x = args.value<int32_t>("x", 0),
         .y = args.value<int32_t>("y", 0),
