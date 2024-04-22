@@ -309,7 +309,7 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
 
             vbo.generate(allocator, cmdbuffer);
 
-            spdlog::info("generated so far {} {}", generated, vbo.size());
+            // spdlog::info("generated so far {} {}", generated, vbo.size());
             linePos += lineHeight;
         }
     }
