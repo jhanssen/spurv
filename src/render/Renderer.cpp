@@ -1,4 +1,5 @@
 #include "Renderer.h"
+#include "GPU.h"
 #include "GenericPool.h"
 #include "GlyphAtlas.h"
 #include "GraphicsPipeline.h"
@@ -38,6 +39,41 @@ PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
 }
 
 namespace spurv {
+
+// keep these in sync with the ubos in the shaders
+struct TextVert
+{
+    Vec<4> geom;
+};
+
+struct TextFrag
+{
+    Vec<4> color;
+    float pixelRange;
+};
+
+struct BoxVert
+{
+    Vec<4> geom;
+};
+
+struct BoxFrag
+{
+    Vec<4> colorBg;
+    Vec<4> colorRect;
+    Vec<4> colorBorder;
+    Vec<4> colorShadow;
+    Vec<4> cornerRadiuses;
+    Vec<2> resolution;
+    Vec<2> rectSize;
+    Vec<2> rectCenter;
+    Vec<2> shadowOffset;
+    float edgeOffset;
+    float borderThickness;
+    float borderSoftness;
+    float shadowSoftness;
+};
+
 struct FenceInfo
 {
     std::vector<std::function<void()>> callbacks;
@@ -100,15 +136,26 @@ struct RendererImpl
     std::unordered_map<std::filesystem::path, GlyphAtlas> glyphAtlases = {};
     std::vector<std::vector<TextLine>> textLines = {};
     std::vector<std::vector<TextVBO>> textVBOs = {};
+
     VkSampler textSampler = VK_NULL_HANDLE;
-    VkBuffer geomUniformBuffer = VK_NULL_HANDLE;
-    VmaAllocation geomUniformBufferAllocation = VK_NULL_HANDLE;
-    VkBuffer colorUniformBuffer = VK_NULL_HANDLE;
-    VmaAllocation colorUniformBufferAllocation = VK_NULL_HANDLE;
+
+    VkBuffer textVertUniformBuffer = VK_NULL_HANDLE;
+    VmaAllocation textVertUniformBufferAllocation = VK_NULL_HANDLE;
+    VkBuffer textFragUniformBuffer = VK_NULL_HANDLE;
+    VmaAllocation textFragUniformBufferAllocation = VK_NULL_HANDLE;
 
     VkDescriptorSetLayout textUniformLayout = VK_NULL_HANDLE;
     VkPipelineLayout textPipelineLayout = VK_NULL_HANDLE;
     VkPipeline textPipeline = VK_NULL_HANDLE;
+
+    VkBuffer boxVertUniformBuffer = VK_NULL_HANDLE;
+    VmaAllocation boxVertUniformBufferAllocation = VK_NULL_HANDLE;
+    VkBuffer boxFragUniformBuffer = VK_NULL_HANDLE;
+    VmaAllocation boxFragUniformBufferAllocation = VK_NULL_HANDLE;
+
+    VkDescriptorSetLayout boxUniformLayout = VK_NULL_HANDLE;
+    VkPipelineLayout boxPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline boxPipeline = VK_NULL_HANDLE;
 
     SizeF contentScale = { 1.f, 1.f };
 
@@ -334,63 +381,136 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
 void RendererImpl::recreateUniformBuffers()
 {
     // delete old buffers if they exist
-    if (geomUniformBuffer != VK_NULL_HANDLE || colorUniformBuffer != VK_NULL_HANDLE) {
+    if (textVertUniformBuffer != VK_NULL_HANDLE || textFragUniformBuffer != VK_NULL_HANDLE
+        || boxVertUniformBuffer != VK_NULL_HANDLE || boxFragUniformBuffer != VK_NULL_HANDLE) {
         Renderer::instance()->afterCurrentFrame([
             impl = this,
-            geomBuffer = geomUniformBuffer,
-            geomAlloc = geomUniformBufferAllocation,
-            colorBuffer = colorUniformBuffer,
-            colorAlloc = colorUniformBufferAllocation
+            textVertBuffer = textVertUniformBuffer,
+            textVertAlloc = textVertUniformBufferAllocation,
+            textFragBuffer = textFragUniformBuffer,
+            textFragAlloc = textFragUniformBufferAllocation,
+            boxVertBuffer = boxVertUniformBuffer,
+            boxVertAlloc = boxVertUniformBufferAllocation,
+            boxFragBuffer = boxFragUniformBuffer,
+            boxFragAlloc = boxFragUniformBufferAllocation
             ]() -> void {
-            if (geomBuffer != VK_NULL_HANDLE) {
-                assert(geomAlloc != VK_NULL_HANDLE);
-                vmaDestroyBuffer(impl->allocator, geomBuffer, geomAlloc);
+            if (textVertBuffer != VK_NULL_HANDLE) {
+                assert(textVertAlloc != VK_NULL_HANDLE);
+                vmaDestroyBuffer(impl->allocator, textVertBuffer, textVertAlloc);
             }
-            if (colorBuffer != VK_NULL_HANDLE) {
-                assert(colorAlloc != VK_NULL_HANDLE);
-                vmaDestroyBuffer(impl->allocator, colorBuffer, colorAlloc);
+            if (textFragBuffer != VK_NULL_HANDLE) {
+                assert(textFragAlloc != VK_NULL_HANDLE);
+                vmaDestroyBuffer(impl->allocator, textFragBuffer, textFragAlloc);
+            }
+            if (boxVertBuffer != VK_NULL_HANDLE) {
+                assert(boxVertAlloc != VK_NULL_HANDLE);
+                vmaDestroyBuffer(impl->allocator, boxVertBuffer, boxVertAlloc);
+            }
+            if (boxFragBuffer != VK_NULL_HANDLE) {
+                assert(boxFragAlloc != VK_NULL_HANDLE);
+                vmaDestroyBuffer(impl->allocator, boxFragBuffer, boxFragAlloc);
             }
         });
-        geomUniformBuffer = VK_NULL_HANDLE;
-        geomUniformBufferAllocation = VK_NULL_HANDLE;
-        colorUniformBuffer = VK_NULL_HANDLE;
-        colorUniformBufferAllocation = VK_NULL_HANDLE;
+        textVertUniformBuffer = VK_NULL_HANDLE;
+        textVertUniformBufferAllocation = VK_NULL_HANDLE;
+        textFragUniformBuffer = VK_NULL_HANDLE;
+        textFragUniformBufferAllocation = VK_NULL_HANDLE;
+        boxVertUniformBuffer = VK_NULL_HANDLE;
+        boxVertUniformBufferAllocation = VK_NULL_HANDLE;
+        boxFragUniformBuffer = VK_NULL_HANDLE;
+        boxFragUniformBufferAllocation = VK_NULL_HANDLE;
     }
 
     inFrameCallbacks.push_back([impl = this](VkCommandBuffer cmdbuffer) -> void {
-        // create uniform buffers for geometry and color
+        // create uniform buffers
 
-        // create the geom ubo
+        // create the text vert ubo
         VkBufferCreateInfo bufferInfo = {};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = 4 * sizeof(float);
+        bufferInfo.size = sizeof(TextVert);
         bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 
         VmaAllocationCreateInfo bufferAllocationInfo = {};
         bufferAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->geomUniformBuffer, &impl->geomUniformBufferAllocation, nullptr));
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->textVertUniformBuffer, &impl->textVertUniformBufferAllocation, nullptr));
 
-        const float geomData[] = {
-            0.f, 0.f,
-            static_cast<float>(impl->width),
-            static_cast<float>(impl->height)
+        const TextVert textVertData = {
+            // geometry
+            { 15.f, 15.f,
+              static_cast<float>(impl->width) - 30.f,
+              static_cast<float>(impl->height) - 30.f
+            }
         };
+        impl->writeUniformBuffer(cmdbuffer, impl->textVertUniformBuffer, &textVertData, sizeof(TextVert), 0);
 
-        impl->writeUniformBuffer(cmdbuffer, impl->geomUniformBuffer, geomData, 4 * sizeof(float), 0);
+        // create the text frag ubo
+        bufferInfo.size = sizeof(TextFrag);
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->textFragUniformBuffer, &impl->textFragUniformBufferAllocation, nullptr));
 
-        // create the color ubo
-        bufferInfo.size = 5 * sizeof(float);
-        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->colorUniformBuffer, &impl->colorUniformBufferAllocation, nullptr));
-
-        const float colorData[] = {
-            1.0f,
-            1.0f,
-            1.0f,
-            1.0f,
-            4.0f
+        const TextFrag textFragData = {
+            // color
+            { 1.f, 1.f, 1.f, 1.f },
+            // pixel range used when generating the atlas
+            4.f
         };
-        impl->writeUniformBuffer(cmdbuffer, impl->colorUniformBuffer, colorData, 5 * sizeof(float), 0);
+        impl->writeUniformBuffer(cmdbuffer, impl->textFragUniformBuffer, &textFragData, sizeof(TextFrag), 0);
+
+        // create the box vert ubo
+        bufferInfo.size = sizeof(BoxVert);
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->boxVertUniformBuffer, &impl->boxVertUniformBufferAllocation, nullptr));
+
+        const BoxVert boxVertData = {
+            // geometry
+            { 0.f, 0.f,
+              static_cast<float>(impl->width),
+              static_cast<float>(impl->height)
+            }
+        };
+        impl->writeUniformBuffer(cmdbuffer, impl->boxVertUniformBuffer, &boxVertData, sizeof(BoxVert), 0);
+
+        // create the box frag ubo
+        bufferInfo.size = sizeof(BoxFrag);
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->boxFragUniformBuffer, &impl->boxFragUniformBufferAllocation, nullptr));
+
+        const BoxFrag boxFragData = {
+            // background color
+            { 0.3f, 0.3f, 0.3f, 0.3f },
+            // rect color
+            { 0.02f, 0.21f, 0.26f, 1.f },
+            // border color
+            { 0.1f, 0.1f, 0.5f, 0.5f },
+            // shadow color
+            { 0.1f, 0.1f, 0.1f, 0.1f },
+            // corner radius
+            { 10.f, 10.f, 10.f, 10.f },
+            // viewport
+            {
+              static_cast<float>(impl->width),
+              static_cast<float>(impl->height)
+            },
+            // rect size
+            {
+                static_cast<float>(impl->width) - 10.f,
+                static_cast<float>(impl->height) - 10.f
+            },
+            // rect center
+            {
+                static_cast<float>(impl->width) / 2.f,
+                static_cast<float>(impl->height) / 2.f
+            },
+            // shadow offset
+            { 0.f, 10.f },
+            // edge softness
+            2.f,
+            // border thickness
+            5.f,
+            // border softness
+            2.f,
+            // shadow softness
+            30.f
+        };
+        impl->writeUniformBuffer(cmdbuffer, impl->boxFragUniformBuffer, &boxFragData, sizeof(BoxFrag), 0);
 
         spdlog::info("Created uniform buffers");
     });
@@ -857,6 +977,36 @@ void Renderer::thread_internal()
     textPipelineLayoutInfo.pSetLayouts = &mImpl->textUniformLayout;
     VK_CHECK_SUCCESS(vkCreatePipelineLayout(mImpl->device, &textPipelineLayoutInfo, nullptr, &mImpl->textPipelineLayout));
 
+    VkDescriptorSetLayoutBinding boxUniformBinding[] = {
+        {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .pImmutableSamplers = nullptr
+        },
+        {
+            .binding = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .pImmutableSamplers = nullptr
+        }
+    };
+
+    VkDescriptorSetLayoutCreateInfo boxUniformLayoutInfo = {};
+    boxUniformLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    boxUniformLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+    boxUniformLayoutInfo.bindingCount = 4;
+    boxUniformLayoutInfo.pBindings = boxUniformBinding;
+    VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &boxUniformLayoutInfo, nullptr, &mImpl->boxUniformLayout));
+
+    VkPipelineLayoutCreateInfo boxPipelineLayoutInfo = {};
+    boxPipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    boxPipelineLayoutInfo.setLayoutCount = 1;
+    boxPipelineLayoutInfo.pSetLayouts = &mImpl->boxUniformLayout;
+    VK_CHECK_SUCCESS(vkCreatePipelineLayout(mImpl->device, &boxPipelineLayoutInfo, nullptr, &mImpl->boxPipelineLayout));
+
     EventLoop::ConnectKey onResizeKey = {};
 
     // finalize the event loop
@@ -924,6 +1074,7 @@ bool Renderer::recreateSwapchain()
         fbos = std::move(mImpl->swapchainFramebuffers),
         imageViews = std::move(mImpl->imageViews),
         pass = mImpl->swapchainRenderPass,
+        boxPipeline = mImpl->boxPipeline,
         textPipeline = mImpl->textPipeline,
         swapchain = std::move(mImpl->vkbSwapchain)
         ]() mutable -> void {
@@ -932,6 +1083,9 @@ bool Renderer::recreateSwapchain()
         }
         if (pass != VK_NULL_HANDLE) {
             vkDestroyRenderPass(impl->device, pass, nullptr);
+        }
+        if (boxPipeline != VK_NULL_HANDLE) {
+            vkDestroyPipeline(impl->device, boxPipeline, nullptr);
         }
         if (textPipeline != VK_NULL_HANDLE) {
             vkDestroyPipeline(impl->device, textPipeline, nullptr);
@@ -989,36 +1143,50 @@ bool Renderer::recreateSwapchain()
     renderPassInfo.pSubpasses = &renderPassSubpass;
     VK_CHECK_SUCCESS(vkCreateRenderPass(mImpl->device, &renderPassInfo, nullptr, &mImpl->swapchainRenderPass));
 
-    VkVertexInputBindingDescription vertexBindingDescription = {};
-    vertexBindingDescription.binding = 0;
-    vertexBindingDescription.stride = 4 * sizeof(float);
-    vertexBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    VkVertexInputBindingDescription textVertexBindingDescription = {};
+    textVertexBindingDescription.binding = 0;
+    textVertexBindingDescription.stride = 4 * sizeof(float);
+    textVertexBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    std::array<VkVertexInputAttributeDescription, 2> vertexAttributeDescriptions = {};
-    vertexAttributeDescriptions[0].binding = 0;
-    vertexAttributeDescriptions[0].location = 0;
-    vertexAttributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexAttributeDescriptions[0].offset = 0;
-    vertexAttributeDescriptions[1].binding = 0;
-    vertexAttributeDescriptions[1].location = 1;
-    vertexAttributeDescriptions[1].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexAttributeDescriptions[1].offset = 2 * sizeof(float);
+    std::array<VkVertexInputAttributeDescription, 2> textVertexAttributeDescriptions = {};
+    textVertexAttributeDescriptions[0].binding = 0;
+    textVertexAttributeDescriptions[0].location = 0;
+    textVertexAttributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+    textVertexAttributeDescriptions[0].offset = 0;
+    textVertexAttributeDescriptions[1].binding = 0;
+    textVertexAttributeDescriptions[1].location = 1;
+    textVertexAttributeDescriptions[1].format = VK_FORMAT_R32G32_SFLOAT;
+    textVertexAttributeDescriptions[1].offset = 2 * sizeof(float);
 
     GraphicsPipelineCreateInfo textPipelineInfo = {};
     textPipelineInfo.vertexShader = "bin/shaders/text-vs.spv";
     textPipelineInfo.fragmentShader = "bin/shaders/text-fs.spv";
     textPipelineInfo.renderPass = mImpl->swapchainRenderPass;
     textPipelineInfo.layout = mImpl->textPipelineLayout;
+    textPipelineInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     textPipelineInfo.vertexBindingDescriptionCount = 1;
-    textPipelineInfo.pVertexBindingDescriptions = &vertexBindingDescription;
+    textPipelineInfo.pVertexBindingDescriptions = &textVertexBindingDescription;
     textPipelineInfo.vertexAttributeDescriptionCount = 2;
-    textPipelineInfo.pVertexAttributeDescriptions = vertexAttributeDescriptions.data();
+    textPipelineInfo.pVertexAttributeDescriptions = textVertexAttributeDescriptions.data();
     auto maybeTextPipeline = createGraphicsPipeline(mImpl->device, textPipelineInfo);
     if (maybeTextPipeline.hasError()) {
         spdlog::critical("Failed to create graphics pipeline: {}", std::get<Error>(maybeTextPipeline.data).message);
         abort();
     }
     mImpl->textPipeline = std::get<VkPipeline>(maybeTextPipeline.data);
+
+    GraphicsPipelineCreateInfo boxPipelineInfo = {};
+    boxPipelineInfo.vertexShader = "bin/shaders/box-vs.spv";
+    boxPipelineInfo.fragmentShader = "bin/shaders/box-fs.spv";
+    boxPipelineInfo.renderPass = mImpl->swapchainRenderPass;
+    boxPipelineInfo.layout = mImpl->boxPipelineLayout;
+    boxPipelineInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    auto maybeBoxPipeline = createGraphicsPipeline(mImpl->device, boxPipelineInfo);
+    if (maybeBoxPipeline.hasError()) {
+        spdlog::critical("Failed to create graphics pipeline: {}", std::get<Error>(maybeBoxPipeline.data).message);
+        abort();
+    }
+    mImpl->boxPipeline = std::get<VkPipeline>(maybeBoxPipeline.data);
 
     mImpl->swapchainFramebuffers.resize(mImpl->imageViews.size());
     for (std::size_t viewIdx = 0; viewIdx < mImpl->imageViews.size(); ++viewIdx) {
@@ -1146,7 +1314,7 @@ void Renderer::render()
     if (!mImpl->textLines.empty() && mImpl->textVBOs.empty()) {
         mImpl->generateVBOs(cmdbuffer);
     }
-    if (!mImpl->textVBOs.empty() && mImpl->geomUniformBuffer != VK_NULL_HANDLE && mImpl->colorUniformBuffer != VK_NULL_HANDLE) {
+    if (!mImpl->textVBOs.empty() && mImpl->textVertUniformBuffer != VK_NULL_HANDLE && mImpl->textFragUniformBuffer != VK_NULL_HANDLE) {
         // draw some text
         VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1160,23 +1328,57 @@ void Renderer::render()
         renderPassInfo.clearValueCount = 1;
         renderPassInfo.pClearValues = &clear0;
         vkCmdBeginRenderPass(cmdbuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        VkViewport viewport = {};
+        viewport.x = 0.f;
+        viewport.y = 0.f;
+        viewport.width = static_cast<float>(mImpl->scaledWidth);
+        viewport.height = static_cast<float>(mImpl->scaledHeight);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(cmdbuffer, 0, 1, &viewport);
+
+        VkRect2D scissor = {};
+        scissor.offset = { 0, 0 };
+        scissor.extent = { mImpl->scaledWidth, mImpl->scaledHeight };
+        vkCmdSetScissor(cmdbuffer, 0, 1, &scissor);
+
+        std::array<VkDescriptorBufferInfo, 2> bufferDescriptorInfos = {};
+        std::array<VkDescriptorImageInfo, 2> imageDescriptorInfos = {};
+        std::array<VkWriteDescriptorSet, 4> writeDescriptorSets = {};
+
+        vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->boxPipeline);
+
+        bufferDescriptorInfos[0] = {
+            .buffer = mImpl->boxVertUniformBuffer,
+            .offset = 0,
+            .range = VK_WHOLE_SIZE
+        };
+        bufferDescriptorInfos[1] = {
+            .buffer = mImpl->boxFragUniformBuffer,
+            .offset = 0,
+            .range = VK_WHOLE_SIZE
+        };
+
+        writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeDescriptorSets[0].dstBinding = 0;
+        writeDescriptorSets[0].descriptorCount = 1;
+        writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeDescriptorSets[0].pBufferInfo = &bufferDescriptorInfos[0];
+
+        writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeDescriptorSets[1].dstBinding = 1;
+        writeDescriptorSets[1].descriptorCount = 1;
+        writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeDescriptorSets[1].pBufferInfo = &bufferDescriptorInfos[1];
+
+        spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->boxPipelineLayout, 0, 2, writeDescriptorSets.data());
+
+        vkCmdDraw(cmdbuffer, 4, 1, 0, 0);
+
         vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->textPipeline);
 
         for (const auto& lines : mImpl->textVBOs) {
-            VkViewport viewport = {};
-            viewport.x = 0.f;
-            viewport.y = 0.f;
-            viewport.width = static_cast<float>(mImpl->scaledWidth);
-            viewport.height = static_cast<float>(mImpl->scaledHeight);
-            viewport.minDepth = 0.0f;
-            viewport.maxDepth = 1.0f;
-            vkCmdSetViewport(cmdbuffer, 0, 1, &viewport);
-
-            VkRect2D scissor = {};
-            scissor.offset = { 0, 0 };
-            scissor.extent = { mImpl->scaledWidth, mImpl->scaledHeight };
-            vkCmdSetScissor(cmdbuffer, 0, 1, &scissor);
-
             for (const auto& line : lines) {
                 if (line.view() == VK_NULL_HANDLE) {
                     continue;
@@ -1186,17 +1388,13 @@ void Renderer::render()
                 VkDeviceSize vtxoff = 0;
                 vkCmdBindVertexBuffers(cmdbuffer, 0, 1, &vtxbuf, &vtxoff);
 
-                std::array<VkDescriptorBufferInfo, 2> bufferDescriptorInfos = {};
-                std::array<VkDescriptorImageInfo, 2> imageDescriptorInfos = {};
-                std::array<VkWriteDescriptorSet, 4> writeDescriptorSets = {};
-
                 bufferDescriptorInfos[0] = {
-                    .buffer = mImpl->geomUniformBuffer,
+                    .buffer = mImpl->textVertUniformBuffer,
                     .offset = 0,
                     .range = VK_WHOLE_SIZE
                 };
                 bufferDescriptorInfos[1] = {
-                    .buffer = mImpl->colorUniformBuffer,
+                    .buffer = mImpl->textFragUniformBuffer,
                     .offset = 0,
                     .range = VK_WHOLE_SIZE
                 };

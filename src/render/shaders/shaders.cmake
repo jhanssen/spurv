@@ -13,5 +13,7 @@ macro(add_shader FILE STAGE)
     add_dependencies(spurv-render ${FILE})
 endmacro()
 
+add_shader(box-vs vertex)
+add_shader(box-fs fragment)
 add_shader(text-vs vertex)
 add_shader(text-fs fragment)

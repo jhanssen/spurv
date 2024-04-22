@@ -14,6 +14,7 @@ struct GraphicsPipelineCreateInfo
 
     VkRenderPass renderPass;
     VkPipelineLayout layout;
+    VkPrimitiveTopology topology;
 
     uint32_t vertexBindingDescriptionCount = 0;
     VkVertexInputBindingDescription* pVertexBindingDescriptions = nullptr;
