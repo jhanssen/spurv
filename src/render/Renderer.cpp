@@ -45,6 +45,12 @@ struct FenceInfo
     bool valid = false;
 };
 
+struct StagingBuffer
+{
+    VkBuffer buffer;
+    VmaAllocation allocation;
+};
+
 struct RendererImpl
 {
     uv_idle_t idle;
@@ -81,6 +87,7 @@ struct RendererImpl
 
     GenericPool<VkCommandBuffer, 5> freeGraphicsCommandBuffers = {};
     GenericPool<VkCommandBuffer, 32> freeTransferCommandBuffers = {};
+    GenericPool<StagingBuffer, 32> stagingBuffers = {};
 
     std::unordered_map<VkFence, FenceInfo> fenceInfos = {};
     GenericPool<VkFence, 5> freeFences = {};
@@ -349,32 +356,26 @@ void RendererImpl::recreateUniformBuffers()
     inFrameCallbacks.push_back([impl = this](VkCommandBuffer cmdbuffer) -> void {
         // create uniform buffers for geometry and color
 
-        // create a vulkan staging buffers
-        VkBufferCreateInfo bufferInfo = {};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = 4 * sizeof(float);
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-
-        VmaAllocationCreateInfo bufferAllocationInfo = {};
-        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-
-        VkBuffer geomStagingBuffer = VK_NULL_HANDLE;
-        VmaAllocation geomStagingBufferAllocation = VK_NULL_HANDLE;
-        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &geomStagingBuffer, &geomStagingBufferAllocation, nullptr));
+        auto geomStagingBuffer = *impl->stagingBuffers.get();
 
         // copy data to buffer
         void* data;
-        VK_CHECK_SUCCESS(vmaMapMemory(impl->allocator, geomStagingBufferAllocation, &data));
+        VK_CHECK_SUCCESS(vmaMapMemory(impl->allocator, geomStagingBuffer.allocation, &data));
         const float geomData[] = {
             0.f, 0.f,
             static_cast<float>(impl->width),
             static_cast<float>(impl->height)
         };
         ::memcpy(data, geomData, 4 * sizeof(float));
-        vmaUnmapMemory(impl->allocator, geomStagingBufferAllocation);
+        vmaUnmapMemory(impl->allocator, geomStagingBuffer.allocation);
 
         // create the geom ubo
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = 4 * sizeof(float);
         bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+
+        VmaAllocationCreateInfo bufferAllocationInfo = {};
         bufferAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
         VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->geomUniformBuffer, &impl->geomUniformBufferAllocation, nullptr));
@@ -382,7 +383,7 @@ void RendererImpl::recreateUniformBuffers()
         // copy staging buffer to ubo
         VkBufferCopy bufferCopy = {};
         bufferCopy.size = 4 * sizeof(float);
-        vkCmdCopyBuffer(cmdbuffer, geomStagingBuffer, impl->geomUniformBuffer, 1, &bufferCopy);
+        vkCmdCopyBuffer(cmdbuffer, geomStagingBuffer.buffer, impl->geomUniformBuffer, 1, &bufferCopy);
 
         // insert a memory barrier to ensure that the buffer copy has completed before it's used as a uniform buffer
         VkBufferMemoryBarrier memoryBarrier = {};
@@ -402,16 +403,10 @@ void RendererImpl::recreateUniformBuffers()
                              1, &memoryBarrier,
                              0, nullptr);
 
-        bufferInfo.size = 5 * sizeof(float);
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-
-        VkBuffer colorStagingBuffer = VK_NULL_HANDLE;
-        VmaAllocation colorStagingBufferAllocation = VK_NULL_HANDLE;
-        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &colorStagingBuffer, &colorStagingBufferAllocation, nullptr));
+        auto colorStagingBuffer = *impl->stagingBuffers.get();
 
         // copy data to buffer
-        VK_CHECK_SUCCESS(vmaMapMemory(impl->allocator, colorStagingBufferAllocation, &data));
+        VK_CHECK_SUCCESS(vmaMapMemory(impl->allocator, colorStagingBuffer.allocation, &data));
         const float colorData[] = {
             1.0f,
             1.0f,
@@ -420,17 +415,16 @@ void RendererImpl::recreateUniformBuffers()
             4.0f
         };
         ::memcpy(data, colorData, 5 * sizeof(float));
-        vmaUnmapMemory(impl->allocator, colorStagingBufferAllocation);
+        vmaUnmapMemory(impl->allocator, colorStagingBuffer.allocation);
 
         // create the color ubo
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+        bufferInfo.size = 5 * sizeof(float);
 
         VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->colorUniformBuffer, &impl->colorUniformBufferAllocation, nullptr));
 
         // copy staging buffer to ubo
         bufferCopy.size = 5 * sizeof(float);
-        vkCmdCopyBuffer(cmdbuffer, colorStagingBuffer, impl->colorUniformBuffer, 1, &bufferCopy);
+        vkCmdCopyBuffer(cmdbuffer, colorStagingBuffer.buffer, impl->colorUniformBuffer, 1, &bufferCopy);
 
         // insert a memory barrier to ensure that the buffer copy has completed before it's used as a uniform buffer
         memoryBarrier.buffer = impl->colorUniformBuffer;
@@ -441,17 +435,6 @@ void RendererImpl::recreateUniformBuffers()
                              0, nullptr,
                              1, &memoryBarrier,
                              0, nullptr);
-
-        Renderer::instance()->afterCurrentFrame([
-            allocator = impl->allocator,
-            geomStagingBuffer, geomStagingBufferAllocation,
-            colorStagingBuffer, colorStagingBufferAllocation
-            ]() -> void {
-            vmaDestroyBuffer(allocator, geomStagingBuffer, geomStagingBufferAllocation);
-            vmaDestroyBuffer(allocator, colorStagingBuffer, colorStagingBufferAllocation);
-
-            spdlog::info("Destroyed uniform staging buffers");
-        });
 
         spdlog::info("Created uniform buffers");
     });
@@ -790,6 +773,23 @@ void Renderer::thread_internal()
     }, [](VkCommandBuffer cmdbuffer) -> void {
         vkResetCommandBuffer(cmdbuffer, 0);
     }, GenericPoolBase::AvailabilityMode::Manual);
+
+    mImpl->stagingBuffers.initialize([impl = mImpl]() -> StagingBuffer {
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = 4096 * sizeof(float);
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+        VmaAllocationCreateInfo bufferAllocationInfo = {};
+        bufferAllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+        VkBuffer stagingBuffer = VK_NULL_HANDLE;
+        VmaAllocation stagingBufferAllocation = VK_NULL_HANDLE;
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &stagingBuffer, &stagingBufferAllocation, nullptr));
+        return { stagingBuffer, stagingBufferAllocation };
+    }, [impl = mImpl](StagingBuffer buffer) -> void {
+        vmaDestroyBuffer(impl->allocator, buffer.buffer, buffer.allocation);
+    });
 
     VkSamplerCreateInfo textSamplerInfo = {};
     textSamplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
