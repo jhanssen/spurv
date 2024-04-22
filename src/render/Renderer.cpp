@@ -1236,6 +1236,11 @@ void Renderer::render()
         mImpl->graphicsTimeline.semaphore,
         VK_NULL_HANDLE
     };
+    const static VkPipelineStageFlags waitStages[] = {
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT
+    };
 
     {
         std::unique_lock lock(mMutex);
@@ -1264,7 +1269,6 @@ void Renderer::render()
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.pNext = &timelineInfo;
-    const static VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.waitSemaphoreCount = waitSems[2] == VK_NULL_HANDLE ? 2 : 3;
     submitInfo.pWaitSemaphores = waitSems;
