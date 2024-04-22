@@ -35,7 +35,7 @@ void SemaphorePool::recreate()
 {
     if (mSemaphores.empty()) {
         assert(mCurrent == 0);
-        assert(mFence = VK_NULL_HANDLE);
+        assert(mFence == VK_NULL_HANDLE);
         return;
     }
 
