@@ -272,7 +272,7 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
             hb_font_get_h_extents(line.font.font(), &fontExtents);
             const float lineHeight = ceilf(((fontExtents.ascender + fontExtents.descender + fontExtents.line_gap) / 64.f) + (fontSize / 4.f));
             const float baseLine = ceilf(fontExtents.ascender / 64.f);
-            const float x_tracking = floorf(fontSize / 10.f);
+            const float x_tracking = std::max(floorf(fontSize / 10.f), 1.f);
 
             VkImageView view = VK_NULL_HANDLE;
             uint32_t glyph_count;
@@ -299,9 +299,9 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
 
                 vbo.add(
                     {
-                        floorf(cursor_x) + floorf(x_left),
+                        cursor_x + x_left,
                         floorf(-y_bottom) + baseLine + linePos,
-                        ceilf(x_right) - floorf(x_left) + 1.f,
+                        x_right - x_left + 1.f,
                         floorf(y_bottom) - floorf(y_top) - 1.f
                     }, glyphInfo->box);
 
