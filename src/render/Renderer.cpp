@@ -296,9 +296,9 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
 
                 vbo.add(
                     {
-                        floorf(cursor_x) + ceilf(x_left),
+                        floorf(cursor_x) + floorf(x_left),
                         floorf(-y_bottom) + baseLine + linePos,
-                        ceilf(x_right - x_left + 1.f),
+                        ceilf(x_right) - floorf(x_left) + 1.f,
                         floorf(y_bottom) - floorf(y_top) - 1.f
                     }, glyphInfo->box);
 
