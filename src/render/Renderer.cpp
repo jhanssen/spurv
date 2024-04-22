@@ -537,7 +537,11 @@ static inline vkb::Result<uint32_t> get_transfer_queue_index(vkb::Device& device
 
 void Renderer::thread_internal()
 {
-    VK_CHECK_SUCCESS(volkInitialize());
+    if (volkInitialize() != VK_SUCCESS) {
+        spdlog::critical("Failed to initialize volk/vulkan. You may need to download the Vulkan SDK and source the setup-env.sh script");
+        spdlog::critical("- Remember to bundle the vulkan/moltenvk libraries/icds when making a mac bundle");
+        abort();
+    }
 
     // initialize vulkan
     vkb::InstanceBuilder builder;
