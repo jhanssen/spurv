@@ -24,6 +24,14 @@ void Window::init_sys()
         userData->set<0>(this);
         glfwSetWindowUserPointer(mWindow, userData);
 
+        float xscale = 1.f, yscale = 1.f;
+        glfwGetWindowContentScale(mWindow, &xscale, &yscale);
+        {
+            std::lock_guard lock(mMutex);
+            mContentScale.width = xscale;
+            mContentScale.height = yscale;
+        }
+
         glfwSetWindowPosCallback(mWindow, [](GLFWwindow* glfwwin, int x, int y) {
             auto window = GlfwUserData::get<0, Window>(glfwwin);
             {

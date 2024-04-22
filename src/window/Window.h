@@ -32,6 +32,8 @@ public:
     EventLoop* eventLoop() const;
     VkSurfaceKHR surface(VkInstance instance);
 
+    const SizeF& contentScale() const;
+
 #if defined(USE_GLFW)
     GLFWwindow* glfwWindow() const;
 #endif
@@ -45,7 +47,8 @@ private:
 
 private:
     mutable std::mutex mMutex;
-    Rect mRect;
+    Rect mRect = {};
+    SizeF mContentScale = {};
     EventEmitter<void(int32_t, int32_t)> mOnMove;
     EventEmitter<void(uint32_t, uint32_t)> mOnResize;
 
@@ -63,6 +66,12 @@ inline const Rect& Window::rect() const
 {
     std::lock_guard lock(mMutex);
     return mRect;
+}
+
+inline const SizeF& Window::contentScale() const
+{
+    std::lock_guard lock(mMutex);
+    return mContentScale;
 }
 
 inline bool Window::isMainWindow() const

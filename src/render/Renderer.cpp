@@ -77,6 +77,7 @@ struct RendererImpl
     uint32_t currentSwapchainImage = 0;
 
     uint32_t width = 0, height = 0;
+    uint32_t scaledWidth = 0, scaledHeight = 0;
 
     GenericPool<VkCommandBuffer, 5> freeGraphicsCommandBuffers = {};
     GenericPool<VkCommandBuffer, 32> freeTransferCommandBuffers = {};
@@ -100,6 +101,8 @@ struct RendererImpl
     VkDescriptorSetLayout textUniformLayout = VK_NULL_HANDLE;
     VkPipelineLayout textPipelineLayout = VK_NULL_HANDLE;
     VkPipeline textPipeline = VK_NULL_HANDLE;
+
+    SizeF contentScale = { 1.f, 1.f };
 
     bool suboptimal = false;
 
@@ -586,6 +589,8 @@ void Renderer::thread_internal()
     }
     lock.unlock();
 
+    mImpl->contentScale = window->contentScale();
+
     VkPhysicalDeviceVulkan12Features features12 = {};
     features12.timelineSemaphore = VK_TRUE;
 
@@ -854,6 +859,8 @@ void Renderer::thread_internal()
         const auto& rect = window->rect();
         mImpl->width = rect.width;
         mImpl->height = rect.height;
+        mImpl->scaledWidth = static_cast<uint32_t>(rect.width * mImpl->contentScale.width);
+        mImpl->scaledHeight = static_cast<uint32_t>(rect.height * mImpl->contentScale.height);
         recreateSwapchain();
 
         {
@@ -867,6 +874,8 @@ void Renderer::thread_internal()
                 spdlog::info("Window resized, recreating swapchain {}x{}", width, height);
                 mImpl->width = width;
                 mImpl->height = height;
+                mImpl->scaledWidth = static_cast<uint32_t>(width * mImpl->contentScale.width);
+                mImpl->scaledHeight = static_cast<uint32_t>(height * mImpl->contentScale.height);
                 recreateSwapchain();
             });
 
@@ -891,7 +900,6 @@ bool Renderer::recreateSwapchain()
     vkb::SwapchainBuilder swapchainBuilder { mImpl->vkbDevice };
     auto maybeSwapchain = swapchainBuilder
         .set_old_swapchain(mImpl->vkbSwapchain)
-        .set_desired_extent(mImpl->width, mImpl->height)
         .set_desired_present_mode(VK_PRESENT_MODE_FIFO_RELAXED_KHR)
         .add_fallback_present_mode(VK_PRESENT_MODE_FIFO_KHR)
         .build();
@@ -998,8 +1006,8 @@ bool Renderer::recreateSwapchain()
         framebufferInfo.renderPass = mImpl->swapchainRenderPass;
         framebufferInfo.attachmentCount = 1;
         framebufferInfo.pAttachments = &mImpl->imageViews[viewIdx];
-        framebufferInfo.width = mImpl->width;
-        framebufferInfo.height = mImpl->height;
+        framebufferInfo.width = mImpl->scaledWidth;
+        framebufferInfo.height = mImpl->scaledHeight;
         framebufferInfo.layers = 1;
         VK_CHECK_SUCCESS(vkCreateFramebuffer(mImpl->device, &framebufferInfo, nullptr, &mImpl->swapchainFramebuffers[viewIdx]));
     }
@@ -1124,7 +1132,7 @@ void Renderer::render()
         renderPassInfo.framebuffer = mImpl->swapchainFramebuffers[mImpl->currentSwapchainImage];
         renderPassInfo.renderArea = {
             { 0, 0 },
-            { mImpl->width, mImpl->height }
+            { mImpl->scaledWidth, mImpl->scaledHeight }
         };
         const VkClearValue clear0 = {};
         renderPassInfo.clearValueCount = 1;
@@ -1136,15 +1144,15 @@ void Renderer::render()
             VkViewport viewport = {};
             viewport.x = 0.f;
             viewport.y = 0.f;
-            viewport.width = static_cast<float>(mImpl->width);
-            viewport.height = static_cast<float>(mImpl->height);
+            viewport.width = static_cast<float>(mImpl->scaledWidth);
+            viewport.height = static_cast<float>(mImpl->scaledHeight);
             viewport.minDepth = 0.0f;
             viewport.maxDepth = 1.0f;
             vkCmdSetViewport(cmdbuffer, 0, 1, &viewport);
 
             VkRect2D scissor = {};
             scissor.offset = { 0, 0 };
-            scissor.extent = { mImpl->width, mImpl->height };
+            scissor.extent = { mImpl->scaledWidth, mImpl->scaledHeight };
             vkCmdSetScissor(cmdbuffer, 0, 1, &scissor);
 
             for (const auto& line : lines) {
