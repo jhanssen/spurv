@@ -414,7 +414,7 @@ void RendererImpl::writeUniformBuffer(VkCommandBuffer cmdbuffer, VkBuffer buffer
     memoryBarrier.srcAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
     memoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     vkCmdPipelineBarrier(cmdbuffer,
-                         VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                         VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          0,
                          0, nullptr,
@@ -432,7 +432,7 @@ void RendererImpl::writeUniformBuffer(VkCommandBuffer cmdbuffer, VkBuffer buffer
     memoryBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
     vkCmdPipelineBarrier(cmdbuffer,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
-                         VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                         VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                          0,
                          0, nullptr,
                          1, &memoryBarrier,
