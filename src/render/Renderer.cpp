@@ -337,6 +337,10 @@ void RendererImpl::recreateUniformBuffers()
                 vmaDestroyBuffer(impl->allocator, colorBuffer, colorAlloc);
             }
         });
+        geomUniformBuffer = VK_NULL_HANDLE;
+        geomUniformBufferAllocation = VK_NULL_HANDLE;
+        colorUniformBuffer = VK_NULL_HANDLE;
+        colorUniformBufferAllocation = VK_NULL_HANDLE;
     }
 
     inFrameCallbacks.push_back([impl = this](VkCommandBuffer cmdbuffer) -> void {
