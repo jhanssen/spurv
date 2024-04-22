@@ -1,6 +1,6 @@
 #include "Font.h"
 #include <fontconfig/fontconfig.h>
-#include <thread>
+#include <mutex>
 
 static std::once_flag initFc;
 
