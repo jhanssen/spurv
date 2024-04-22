@@ -33,6 +33,8 @@ set(SIMDUTF_CXX_STANDARD 20 CACHE STRING "")
 
 set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "")
 
+set(VULKAN_HEADERS_INSTALL_DIR ${CMAKE_CURRENT_LIST_DIR}/Vulkan-Headers CACHE PATH "")
+
 set(VK_BOOTSTRAP_VULKAN_HEADER_DIR ${CMAKE_CURRENT_LIST_DIR}/Vulkan-Headers/include CACHE FILEPATH "")
 
 add_subdirectory(FunctionTraits)
@@ -58,6 +60,7 @@ add_subdirectory(shaderc)
 add_subdirectory(simdutf)
 add_subdirectory(spdlog)
 add_subdirectory(vk-bootstrap)
+add_subdirectory(volk)
 
 # hack to make freetype pick up harfbuzz
 target_link_libraries(freetype PRIVATE harfbuzz)

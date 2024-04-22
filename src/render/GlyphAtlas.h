@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
+#include <volk.h>
 #include <vk_mem_alloc.h>
 #include <msdf-atlas-gen/msdf-atlas-gen.h>
 #include <filesystem>

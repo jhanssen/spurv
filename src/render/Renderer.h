@@ -11,7 +11,7 @@
 #include <optional>
 #include <cstdint>
 #include <cassert>
-#include <vulkan/vulkan.h>
+#include <volk.h>
 
 namespace spurv {
 

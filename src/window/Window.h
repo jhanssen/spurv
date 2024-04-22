@@ -7,7 +7,7 @@
 #include <Geometry.h>
 #include <EventEmitter.h>
 #include <EventLoop.h>
-#include <vulkan/vulkan.h>
+#include <volk.h>
 
 #if defined(USE_GLFW)
 # include <GLFW/glfw3.h>

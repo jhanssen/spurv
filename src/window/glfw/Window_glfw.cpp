@@ -8,7 +8,6 @@ using namespace spurv;
 void Window::init_sys()
 {
     if (isMainWindow()) {
-        glfwInitVulkanLoader(vkGetInstanceProcAddr);
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     }

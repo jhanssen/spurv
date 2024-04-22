@@ -3,7 +3,7 @@
 #include <Geometry.h>
 #include <Result.h>
 #include <filesystem>
-#include <vulkan/vulkan.h>
+#include <volk.h>
 
 namespace spurv {
 

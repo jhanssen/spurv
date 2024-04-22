@@ -11,7 +11,7 @@ set(LIBS
     FontConfig::FontConfig
     FunctionTraits::FunctionTraits
     GPUOpen::VulkanMemoryAllocator
-    Vulkan::Vulkan
+    volk::volk
     fmt::fmt
     glfw::glfw
     harfbuzz::harfbuzz

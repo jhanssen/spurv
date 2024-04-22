@@ -537,6 +537,8 @@ static inline vkb::Result<uint32_t> get_transfer_queue_index(vkb::Device& device
 
 void Renderer::thread_internal()
 {
+    VK_CHECK_SUCCESS(volkInitialize());
+
     // initialize vulkan
     vkb::InstanceBuilder builder;
     auto maybeInstance = builder
@@ -551,6 +553,7 @@ void Renderer::thread_internal()
         return;
     }
     auto instance = maybeInstance.value();
+    volkLoadInstance(instance);
 
     auto window = Window::mainWindow();
     if (window == nullptr) {
@@ -618,6 +621,7 @@ void Renderer::thread_internal()
 
     mImpl->vkbDevice = maybeDevice.value();
     mImpl->device = mImpl->vkbDevice.device;
+    volkLoadDevice(mImpl->device);
 
     spurv_vk::vkCmdPushDescriptorSetKHR = reinterpret_cast<PFN_vkCmdPushDescriptorSetKHR>(vkGetDeviceProcAddr(mImpl->device, "vkCmdPushDescriptorSetKHR"));
     if (spurv_vk::vkCmdPushDescriptorSetKHR == nullptr) {
@@ -684,11 +688,41 @@ void Renderer::thread_internal()
     VK_CHECK_SUCCESS(vkCreateCommandPool(mImpl->device, &transferPoolInfo, nullptr, &mImpl->transferCommandPool));
 
     // create a vma instance
+    VmaVulkanFunctions vmaVulkanFuncs = {};
+    vmaVulkanFuncs.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    vmaVulkanFuncs.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+    vmaVulkanFuncs.vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties;
+    vmaVulkanFuncs.vkGetPhysicalDeviceMemoryProperties = vkGetPhysicalDeviceMemoryProperties;
+    vmaVulkanFuncs.vkAllocateMemory = vkAllocateMemory;
+    vmaVulkanFuncs.vkFreeMemory = vkFreeMemory;
+    vmaVulkanFuncs.vkMapMemory = vkMapMemory;
+    vmaVulkanFuncs.vkUnmapMemory = vkUnmapMemory;
+    vmaVulkanFuncs.vkFlushMappedMemoryRanges = vkFlushMappedMemoryRanges;
+    vmaVulkanFuncs.vkInvalidateMappedMemoryRanges = vkInvalidateMappedMemoryRanges;
+    vmaVulkanFuncs.vkBindBufferMemory = vkBindBufferMemory;
+    vmaVulkanFuncs.vkBindImageMemory = vkBindImageMemory;
+    vmaVulkanFuncs.vkGetBufferMemoryRequirements = vkGetBufferMemoryRequirements;
+    vmaVulkanFuncs.vkGetImageMemoryRequirements = vkGetImageMemoryRequirements;
+    vmaVulkanFuncs.vkCreateBuffer = vkCreateBuffer;
+    vmaVulkanFuncs.vkDestroyBuffer = vkDestroyBuffer;
+    vmaVulkanFuncs.vkCreateImage = vkCreateImage;
+    vmaVulkanFuncs.vkDestroyImage = vkDestroyImage;
+    vmaVulkanFuncs.vkCmdCopyBuffer = vkCmdCopyBuffer;
+    vmaVulkanFuncs.vkGetBufferMemoryRequirements2KHR = vkGetBufferMemoryRequirements2;
+    vmaVulkanFuncs.vkGetImageMemoryRequirements2KHR = vkGetImageMemoryRequirements2;
+    vmaVulkanFuncs.vkBindBufferMemory2KHR = vkBindBufferMemory2;
+    vmaVulkanFuncs.vkBindImageMemory2KHR = vkBindImageMemory2;
+    vmaVulkanFuncs.vkGetPhysicalDeviceMemoryProperties2KHR = vkGetPhysicalDeviceMemoryProperties2;
+    vmaVulkanFuncs.vkGetDeviceBufferMemoryRequirements = vkGetDeviceBufferMemoryRequirements;
+    vmaVulkanFuncs.vkGetDeviceImageMemoryRequirements = vkGetDeviceImageMemoryRequirements;
+
     VmaAllocatorCreateInfo vmaInfo = {};
     vmaInfo.physicalDevice = maybePhysicalDevice.value();
     vmaInfo.device = mImpl->device;
     vmaInfo.instance = instance;
     vmaInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+    vmaInfo.pVulkanFunctions = &vmaVulkanFuncs;
+
     VK_CHECK_SUCCESS(vmaCreateAllocator(&vmaInfo, &mImpl->allocator));
 
     mImpl->freeFences.initialize([impl = mImpl]() -> VkFence {
