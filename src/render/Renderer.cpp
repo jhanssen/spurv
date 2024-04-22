@@ -561,11 +561,26 @@ void Renderer::thread_internal()
         return;
     }
 
-    auto surface = window->surface(instance);
+    std::mutex waitMutex;
+    std::condition_variable waitCond;
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    std::unique_lock lock(waitMutex);
+
+    window->eventLoop()->post([&]() {
+        std::unique_lock sublock(waitMutex);
+        surface = window->surface(instance);
+        waitCond.notify_one();
+    });
+
+    while (surface == VK_NULL_HANDLE) {
+        waitCond.wait(lock);
+    }
+
     if (surface == VK_NULL_HANDLE) {
         spdlog::critical("No vulkan surface");
         return;
     }
+    lock.unlock();
 
     VkPhysicalDeviceVulkan12Features features12 = {};
     features12.timelineSemaphore = VK_TRUE;
