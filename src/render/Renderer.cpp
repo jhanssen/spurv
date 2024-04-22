@@ -551,7 +551,6 @@ void Renderer::thread_internal()
     auto maybeInstance = builder
         .set_app_name("spurv")
         .require_api_version(1, 2, 0)
-        .enable_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)
         .request_validation_layers()
         .set_debug_callback(vulkanDebugCallback)
         .build();
