@@ -567,26 +567,27 @@ void Renderer::thread_internal()
         return;
     }
 
-    std::mutex waitMutex;
-    std::condition_variable waitCond;
-    VkSurfaceKHR surface = VK_NULL_HANDLE;
-    std::unique_lock lock(waitMutex);
+    std::mutex surfaceMutex;
+    std::condition_variable surfaceCond;
+    std::optional<VkSurfaceKHR> maybeSurface = {};
+    std::unique_lock surfaceLock(surfaceMutex);
 
     window->eventLoop()->post([&]() {
-        std::unique_lock sublock(waitMutex);
-        surface = window->surface(instance);
-        waitCond.notify_one();
+        std::unique_lock surfaceSubLock(surfaceMutex);
+        maybeSurface = window->surface(instance);
+        surfaceCond.notify_one();
     });
 
-    while (surface == VK_NULL_HANDLE) {
-        waitCond.wait(lock);
+    while (!maybeSurface.has_value()) {
+        surfaceCond.wait(surfaceLock);
     }
 
+    const auto surface = maybeSurface.value();
     if (surface == VK_NULL_HANDLE) {
         spdlog::critical("No vulkan surface");
         return;
     }
-    lock.unlock();
+    surfaceLock.unlock();
 
     mImpl->contentScale = window->contentScale();
 
