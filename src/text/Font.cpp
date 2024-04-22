@@ -1,5 +1,8 @@
 #include "Font.h"
 #include <fontconfig/fontconfig.h>
+#include <thread>
+
+static std::once_flag initFc;
 
 class FontConfigHolder
 {
@@ -17,9 +20,9 @@ FcConfig* FontConfigHolder::sConfig = nullptr;
 
 std::filesystem::path FontConfigHolder::fontFileForPattern(const std::string& name)
 {
-    if (sConfig == nullptr) {
+    std::call_once(initFc, []() {
         sConfig = FcInitLoadConfigAndFonts();
-    }
+    });
 
     auto pattern = FcNameParse(reinterpret_cast<const FcChar8*>(name.c_str()));
     FcConfigSubstitute(sConfig, pattern, FcMatchPattern);
