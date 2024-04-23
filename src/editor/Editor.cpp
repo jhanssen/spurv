@@ -83,10 +83,16 @@ void Editor::load(const std::filesystem::path& path)
 
             mCurrentDoc->setFont(Font("Inconsolata", 25));
 
-            mCurrentDoc->setStylesheet("hello { color: #324354 }");
-            auto selector = mCurrentDoc->addSelector(50, 100, "hello");
+            mCurrentDoc->setStylesheet("hello1 { color: #324354 }");
+            auto selector1 = mCurrentDoc->addSelector(50, 100, "hello1");
+            auto selector2 = mCurrentDoc->addSelector(75, 95, "hello2");
+            auto selector3 = mCurrentDoc->addSelector(75, 150, "hello3");
 
-            mCurrentDoc->onReady().connect([doc = mCurrentDoc, selector = std::move(selector)]() {
+            mCurrentDoc->onReady().connect([
+                doc = mCurrentDoc,
+                selector1 = std::move(selector1),
+                selector2 = std::move(selector2),
+                selector3 = std::move(selector3)]() {
                 spdlog::info("document ready");
                 // send some lines to the renderer for now
                 std::size_t lineNo = 0;

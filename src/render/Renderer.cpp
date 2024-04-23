@@ -328,6 +328,51 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
             textVBOs.resize(box + 1);
         }
 
+        const auto* props = box < textProperties.size() ? &textProperties[box] : nullptr;
+        auto getProp = [props](std::size_t propIdx) -> const TextProperty* {
+            if (props == nullptr) {
+                return nullptr;
+            }
+            if (propIdx >= props->size()) {
+                return nullptr;
+            }
+            return &(*props)[propIdx];
+        };
+
+        std::size_t propStart = 0;
+        // better not have more than 32 matching props for a given character
+        std::bitset<32> propMatching = {}, propCurrent = {};
+        std::size_t highestMatching = 0;
+
+        const TextProperty* curProp = getProp(propStart);
+        if (curProp->start > 0) {
+            curProp = nullptr;
+        }
+        auto scanMatching = [&](std::size_t idx) -> void {
+            propMatching.reset();
+            if (curProp == nullptr) {
+                return;
+            }
+            for (std::size_t n = 0; n < 32; ++n) {
+                auto np = getProp(propStart + n);
+                if (np == nullptr || idx < np->start) {
+                    return;
+                }
+                if (idx <= np->end) {
+                    propMatching.set(n);
+                }
+            }
+            if (propMatching.to_ullong() > 0) {
+                highestMatching = 31 - __builtin_clzll(propMatching.to_ullong());
+            } else {
+                highestMatching = 0;
+            }
+        };
+        if (curProp != nullptr) {
+            scanMatching(propStart);
+            propCurrent = propMatching;
+        }
+
         float linePos = 0;
         auto& vbos = textVBOs[box];
         for (const auto& line : lines) {
@@ -335,6 +380,8 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
             auto& vbo = vbos.back();
             auto& atlas = atlasFor(line.font);
             const auto fontSize = line.font.size();
+
+            std::size_t glyphOffset = line.offset;
 
             hb_font_extents_t fontExtents;
             hb_font_get_h_extents(line.font.font(), &fontExtents);
@@ -346,7 +393,7 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
             uint32_t glyph_count;
             float cursor_x = 0.f;
             hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(line.buffer, &glyph_count);
-            for (uint32_t i = 0; i < glyph_count; i++) {
+            for (uint32_t i = 0; i < glyph_count; ++i, ++glyphOffset) {
                 hb_codepoint_t glyphid = glyph_info[i].codepoint;
                 auto glyphInfo = atlas.glyphBox(glyphid);
                 if (glyphInfo == nullptr || glyphInfo->image == VK_NULL_HANDLE) {
@@ -364,6 +411,34 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
                 const float x_advance = glyphInfo->box.advance * fontSize;
                 const float y_bottom = glyphInfo->box.bounds.b * fontSize;
                 const float y_top = glyphInfo->box.bounds.t * fontSize;
+
+                if (props != nullptr) {
+                    // check if any of the properties match
+                    if (curProp == nullptr || glyphOffset > curProp->end) {
+                        // find the first new prop (if any)
+                        for (;;) {
+                            curProp = getProp(propStart);
+                            if (curProp == nullptr) {
+                                // done, no more props
+                                props = nullptr;
+                                break;
+                            }
+                            if (glyphOffset < curProp->start) {
+                                curProp = nullptr;
+                                break;
+                            }
+                            if (glyphOffset >= curProp->start && glyphOffset <= curProp->end) {
+                                break;
+                            }
+                            ++propStart;
+                        }
+                    }
+                    scanMatching(glyphOffset);
+                    if (propCurrent != propMatching) {
+                        spdlog::info("text props changed {} {:#x}", glyphOffset, propMatching.to_ullong());
+                        propCurrent = propMatching;
+                    }
+                }
 
                 vbo.add(
                     {
