@@ -3,6 +3,7 @@
 #include <EventEmitter.h>
 #include <EventLoop.h>
 #include <TextLine.h>
+#include <TextProperty.h>
 #include "Box.h"
 #include <condition_variable>
 #include <mutex>
@@ -38,6 +39,7 @@ public:
     EventEmitter<void()>& onReady();
 
     void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
+    void addTextProperties(uint32_t box, std::vector<TextProperty>&& lines);
 
     void afterCurrentFrame(std::function<void()>&& func);
     void afterTransfer(uint64_t value, std::function<void()>&& func);

@@ -23,15 +23,15 @@ public:
     bool running = false;
     Layout* layout = nullptr;
 
-    static void runJob(std::shared_ptr<LayoutJob> job);
+    static void runJob(std::shared_ptr<LayoutJob> job, std::size_t prevProcessed);
 };
 
-void LayoutJob::runJob(std::shared_ptr<LayoutJob> job)
+void LayoutJob::runJob(std::shared_ptr<LayoutJob> job, std::size_t prevProcessed)
 {
     job->running = true;
     auto loop = EventLoop::eventLoop();
-    ThreadPool::mainThreadPool()->post([job = std::move(job), loop]() -> void {
-        std::size_t processed = 0, processedStart = 0;
+    ThreadPool::mainThreadPool()->post([job = std::move(job), loop, prevProcessed]() -> void {
+        std::size_t processed = 0, processedStart = 0, total = 0;
         std::size_t currentChunk = 0;
         std::size_t currentLinebreak = 0;
         LayoutChunk chunk;
@@ -43,10 +43,10 @@ void LayoutJob::runJob(std::shared_ptr<LayoutJob> job)
                 std::lock_guard lock(job->mutex);
                 if (!buffers.empty()) {
                     ++job->posted;
-                    loop->post([buffers = std::move(buffers), layout = job->layout]() -> void {
+                    loop->post([buffers = std::move(buffers), layout = job->layout, total]() -> void {
                         layout->mLines.reserve(layout->mLines.size() + buffers.size());
                         layout->mLines.insert(layout->mLines.end(), buffers.begin(), buffers.end());
-                        layout->notifyLines();
+                        layout->notifyLines(total);
                     });
                 }
                 if (currentChunk == job->chunks.size()) {
@@ -91,7 +91,7 @@ void LayoutJob::runJob(std::shared_ptr<LayoutJob> job)
             }
 
             // for each linebreak
-            std::size_t prev = 0;
+            std::size_t prev = 0, accum = 0;
             for (const auto& lb : linebreaks) {
                 const auto line = std::u32string_view(chunk.data.begin() + prev, chunk.data.begin() + (lb.first - processedStart));
 
@@ -100,9 +100,11 @@ void LayoutJob::runJob(std::shared_ptr<LayoutJob> job)
                                     line.size(), 0, line.size());
                 hb_buffer_guess_segment_properties(buf);
                 hb_shape(chunk.font.font(), buf, nullptr, 0);
-                buffers.push_back({ buf, processedStart, processedStart + line.size(), chunk.font });
+                buffers.push_back({ buf, processedStart + prevProcessed + accum, processedStart + line.size() + prevProcessed + accum, chunk.font });
                 prev = lb.first - processedStart + 1;
+                accum = lb.first - processedStart;
             }
+            total = accum;
 
             // memmove the remaining chunk data if any
             const auto lbidx = linebreaks.back().first - processedStart;
@@ -140,6 +142,7 @@ void Layout::reset(Mode mode)
     mMode = mode;
     mFinalized = false;
     mReceived = 0;
+    mProcessed = 0;
     mOnReady.disconnectAll();
 }
 
@@ -160,7 +163,7 @@ void Layout::calculate(std::u32string&& data, std::vector<Linebreak>&& linebreak
             mJob = std::make_shared<LayoutJob>();
         }
         mJob->layout = this;
-        LayoutJob::runJob(mJob);
+        LayoutJob::runJob(mJob, mProcessed);
     }
     const auto dataSize = data.size();
     mJob->chunks.push_back({ std::move(data), mFont });
@@ -194,9 +197,10 @@ void Layout::calculate(std::u32string&& data, std::vector<Linebreak>&& linebreak
     mJob->length += dataSize;
 }
 
-void Layout::notifyLines()
+void Layout::notifyLines(std::size_t processed)
 {
     ++mReceived;
+    mProcessed += processed;
     if (mMode == Mode::Single || mFinalized) {
         mOnReady.emit();
     }

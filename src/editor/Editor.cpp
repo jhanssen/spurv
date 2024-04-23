@@ -80,14 +80,24 @@ void Editor::load(const std::filesystem::path& path)
             assert(mCurrentDoc == nullptr);
             mDocuments.push_back(std::make_unique<Document>());
             mCurrentDoc = mDocuments.back().get();
+
             mCurrentDoc->setFont(Font("Inconsolata", 25));
-            mCurrentDoc->onReady().connect([doc = mCurrentDoc]() {
+
+            mCurrentDoc->setStylesheet("hello { color: #324354 }");
+            auto selector = mCurrentDoc->addSelector(50, 100, "hello");
+
+            mCurrentDoc->onReady().connect([doc = mCurrentDoc, selector = std::move(selector)]() {
                 spdlog::info("document ready");
                 // send some lines to the renderer for now
                 std::size_t lineNo = 0;
                 auto renderer = Renderer::instance();
-                auto textLines = doc->lineRange(lineNo, lineNo + 100);
+                auto textLines = doc->textForRange(lineNo, lineNo + 100);
                 renderer->addTextLines(0, std::move(textLines));
+                auto props = doc->propertiesForRange(lineNo, lineNo + 100);
+                for (auto& prop : props) {
+                    spdlog::debug("prop {}-{}, color {}", prop.start, prop.end, prop.foreground);
+                }
+                renderer->addTextProperties(0, std::move(props));
             });
         }
         mDocuments.back()->load(path);

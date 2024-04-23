@@ -4,13 +4,18 @@
 #include <EventEmitter.h>
 #include <Font.h>
 #include <TextLine.h>
+#include <TextProperty.h>
 #include <rope.hpp>
+#include <qssdocument.h>
 #include <filesystem>
 #include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
 namespace spurv {
+
+struct DocumentSelectorInternal;
 
 class Document
 {
@@ -25,7 +30,32 @@ public:
     void load(const std::u32string& data);
     void load(std::u32string&& data);
 
+    // styling
     void setFont(const Font& font);
+
+    enum class StylesheetMode {
+        Replace,
+        Merge
+    };
+    void setStylesheet(const std::string& qss, StylesheetMode mode = StylesheetMode::Replace);
+
+    class Selector
+    {
+    public:
+        ~Selector();
+
+        void remove();
+
+    private:
+        Selector(std::shared_ptr<DocumentSelectorInternal>&&);
+
+    private:
+        std::shared_ptr<DocumentSelectorInternal> internal;
+
+        friend class Document;
+    };
+
+    Selector addSelector(std::size_t start, std::size_t end, const std::string& name);
 
     // navigate
     // enum class Navigate
@@ -47,8 +77,12 @@ public:
     EventEmitter<void()>& onReady();
 
     std::size_t numLines() const;
-    TextLine lineAt(std::size_t line) const;
-    std::vector<TextLine> lineRange(std::size_t start, std::size_t end);
+
+    TextLine textForLine(std::size_t line) const;
+    std::vector<TextLine> textForRange(std::size_t start, std::size_t end);
+
+    std::vector<TextProperty> propertiesForLine(std::size_t line) const;
+    std::vector<TextProperty> propertiesForRange(std::size_t start, std::size_t end) const;
 
 private:
     Document(Document&&) = delete;
@@ -65,6 +99,10 @@ private:
     void loadChunk(std::u32string&& data);
     void loadComplete();
 
+    void removeSelector(const DocumentSelectorInternal* selector);
+
+    TextProperty propertyForSelector(std::size_t start, std::size_t end, const std::string& selector) const;
+
 private:
     Font mFont;
     Layout mLayout;
@@ -74,9 +112,13 @@ private:
     std::u32string mChunk;
     std::size_t mChunkStart = 0, mChunkOffset = 0;
     std::size_t mDocumentSize = 0, mDocumentLines = 0;
+    qss::Document mQss = {};
+    std::vector<std::shared_ptr<DocumentSelectorInternal>> mSelectors = {};
 
     bool mReady = true;
     EventEmitter<void()> mOnReady;
+
+    friend struct DocumentSelectorInternal;
 };
 
 inline void Document::insert(char32_t uc)

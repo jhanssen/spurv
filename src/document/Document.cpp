@@ -5,7 +5,30 @@
 #include <simdutf.h>
 #include <fmt/core.h>
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
+
+namespace spurv {
+
+struct DocumentSelectorInternal : public std::enable_shared_from_this<DocumentSelectorInternal>
+{
+    DocumentSelectorInternal(Document* d, std::size_t s, std::size_t e, const std::string& n)
+        : document(d), start(s), end(e), name(n)
+    {
+    }
+    ~DocumentSelectorInternal()
+    {
+        if (document) {
+            document->removeSelector(this);
+        }
+    }
+
+    Document* document;
+    std::size_t start, end;
+    std::string name;
+};
+
+} // namespace spurv
 
 using namespace spurv;
 
@@ -205,37 +228,38 @@ void Document::commit(Commit mode, std::size_t offset)
     }
 }
 
-TextLine Document::lineAt(std::size_t line) const
+TextLine Document::textForLine(std::size_t line) const
 {
     if (line < mLayout.numLines()) {
         const auto& ll = mLayout.lineAt(line);
         return {
-            line,
+            line, ll.start,
             hb_buffer_reference(ll.buffer),
             ll.font
         };
     }
     return {
         static_cast<std::size_t>(0),
+        static_cast<std::size_t>(0),
         nullptr,
         Font {}
     };
 }
 
-std::vector<TextLine> Document::lineRange(std::size_t start, std::size_t end)
+std::vector<TextLine> Document::textForRange(std::size_t start, std::size_t end)
 {
     if (start >= mLayout.numLines() || end > mLayout.numLines() || start > end) {
         return {};
     }
     if (start == end) {
-        return { lineAt(start) };
+        return { textForLine(start) };
     }
     std::vector<TextLine> out;
     out.reserve(end - start);
     for (std::size_t l = start; l < end; ++l) {
         const auto& ll = mLayout.lineAt(l);
         out.push_back({
-                l,
+                l, ll.start,
                 hb_buffer_reference(ll.buffer),
                 ll.font
             });
@@ -243,7 +267,107 @@ std::vector<TextLine> Document::lineRange(std::size_t start, std::size_t end)
     return out;
 }
 
+TextProperty Document::propertyForSelector(std::size_t start, std::size_t end, const std::string& selector) const
+{
+    // ### should parse these up front
+    TextProperty prop = { start, end };
+    for (auto dit = mQss.cbegin(); dit < mQss.cend(); ++dit) {
+        const auto& fragment = dit->first;
+        if (fragment.selector() == selector) {
+            const auto& block = fragment.block();
+            for (auto bit = block.cbegin(); bit != block.cend(); ++bit) {
+                const auto& name = bit->first;
+                if (name == "background-color") {
+                    prop.background = parseColor(bit->second.first);
+                } else if (name == "color") {
+                    prop.foreground = parseColor(bit->second.first);
+                }
+            }
+            break;
+        }
+    }
+    return prop;
+}
+
+std::vector<TextProperty> Document::propertiesForRange(std::size_t start, std::size_t end) const
+{
+    if (start >= mLayout.numLines() || end > mLayout.numLines() || start > end) {
+        return {};
+    }
+
+    const auto& sinfo = mLayout.lineAt(start);
+    const auto& einfo = mLayout.lineAt(end);
+
+    std::vector<TextProperty> props;
+    auto pit = mSelectors.begin();
+    const auto pitend = mSelectors.cend();
+    while (pit != pitend) {
+        const auto& ptr = *pit;
+        if (sinfo.start > ptr->end) {
+            ++pit;
+            continue;
+        }
+        if (einfo.end < ptr->start) {
+            break;
+        }
+
+        assert(ptr->start < einfo.end && sinfo.start < ptr->end);
+        props.push_back(propertyForSelector(ptr->start, ptr->end, ptr->name));
+        ++pit;
+    }
+    return props;
+}
+
+std::vector<TextProperty> Document::propertiesForLine(std::size_t line) const
+{
+    return propertiesForRange(line, line);
+}
+
 void Document::setFont(const Font& font)
 {
     mLayout.setFont(font);
+}
+
+void Document::setStylesheet(const std::string& qss, StylesheetMode mode)
+{
+    if (mode == StylesheetMode::Replace) {
+        mQss = qss::Document(qss);
+    } else {
+        mQss += qss::Document(qss);
+    }
+}
+
+Document::Selector Document::addSelector(std::size_t start, std::size_t end, const std::string& name)
+{
+    auto intern = std::make_shared<DocumentSelectorInternal>(this, start, end, name);
+    // mSelectors.push_back(intern);
+    auto it = std::lower_bound(mSelectors.begin(), mSelectors.end(), intern, [](const auto& a, const auto& b) -> bool {
+        return a->start < b->start || (a->start == b->start && a->end < b->end);
+    });
+    mSelectors.insert(it, intern);
+    return Document::Selector(std::move(intern));
+}
+
+void Document::removeSelector(const DocumentSelectorInternal* selector)
+{
+    auto it = std::find_if(mSelectors.begin(), mSelectors.end(), [selector](const auto& cand) {
+        return cand.get() == selector;
+    });
+    if (it != mSelectors.end()) {
+        mSelectors.erase(it);
+    }
+}
+
+Document::Selector::Selector(std::shared_ptr<DocumentSelectorInternal>&& intern)
+    : internal(std::move(intern))
+{
+}
+
+Document::Selector::~Selector()
+{
+}
+
+void Document::Selector::remove()
+{
+    internal.reset();
 }

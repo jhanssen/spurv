@@ -39,7 +39,7 @@ public:
 
 private:
     void clearLines();
-    void notifyLines();
+    void notifyLines(std::size_t processed);
 
 private:
     Layout(const Layout&) = delete;
@@ -52,7 +52,7 @@ private:
 
     Mode mMode = Mode::Single;
     Font mFont = {};
-    std::size_t mReceived = 0;
+    std::size_t mReceived = 0, mProcessed = 0;
     bool mFinalized = false;
 
     std::vector<LineInfo> mLines;

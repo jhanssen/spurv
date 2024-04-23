@@ -135,6 +135,7 @@ struct RendererImpl
 
     std::unordered_map<std::filesystem::path, GlyphAtlas> glyphAtlases = {};
     std::vector<std::vector<TextLine>> textLines = {};
+    std::vector<std::vector<TextProperty>> textProperties = {};
     std::vector<std::vector<TextVBO>> textVBOs = {};
 
     VkSampler textSampler = VK_NULL_HANDLE;
@@ -165,6 +166,7 @@ struct RendererImpl
     void checkFences();
     void runFenceCallbacks(FenceInfo& info);
     void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
+    void addTextProperties(uint32_t box, std::vector<TextProperty>&& properties);
     void generateVBOs(VkCommandBuffer cmdbuffer);
     void recreateUniformBuffers();
     void writeUniformBuffer(VkCommandBuffer cmdbuffer, VkBuffer buffer, const void* data, std::size_t size, uint32_t bufferOffset);
@@ -301,6 +303,14 @@ void RendererImpl::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
     }
     textLines[box] = std::move(lines);
     textVBOs.clear();
+}
+
+void RendererImpl::addTextProperties(uint32_t box, std::vector<TextProperty>&& properties)
+{
+    if (box >= textProperties.size()) {
+        textProperties.resize(box + 1);
+    }
+    textProperties[box] = std::move(properties);
 }
 
 void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
@@ -997,7 +1007,7 @@ void Renderer::thread_internal()
     VkDescriptorSetLayoutCreateInfo boxUniformLayoutInfo = {};
     boxUniformLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     boxUniformLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
-    boxUniformLayoutInfo.bindingCount = 4;
+    boxUniformLayoutInfo.bindingCount = 2;
     boxUniformLayoutInfo.pBindings = boxUniformBinding;
     VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &boxUniformLayoutInfo, nullptr, &mImpl->boxUniformLayout));
 
@@ -1240,6 +1250,13 @@ void Renderer::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
 {
     mEventLoop->post([box, lines = std::move(lines), impl = mImpl]() mutable {
         impl->addTextLines(box, std::move(lines));
+    });
+}
+
+void Renderer::addTextProperties(uint32_t box, std::vector<TextProperty>&& properties)
+{
+    mEventLoop->post([box, properties = std::move(properties), impl = mImpl]() mutable {
+        impl->addTextProperties(box, std::move(properties));
     });
 }
 
