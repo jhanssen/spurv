@@ -1,6 +1,7 @@
 set(SOURCES
     Color.cpp
     FS.cpp
+    AppPath.cpp
 )
 
 add_library(spurv-common OBJECT ${SOURCES})

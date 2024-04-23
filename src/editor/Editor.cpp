@@ -1,7 +1,8 @@
 #include "Editor.h"
-#include <Renderer.h>
-#include <MainEventLoop.h>
 #include <Logger.h>
+#include <MainEventLoop.h>
+#include <Renderer.h>
+#include <ScriptEngine.h>
 #include <fmt/core.h>
 #include <uv.h>
 
@@ -11,15 +12,17 @@ namespace spurv {
 struct EditorImpl
 {
     uv_loop_t* loop = nullptr;
+    std::filesystem::path appPath;
 };
 } // namespace spurv
 
 std::unique_ptr<Editor> Editor::sInstance = {};
 
-Editor::Editor()
+Editor::Editor(const std::filesystem::path &appPath)
     : mEventLoop(new EventLoop())
 {
     mImpl = new EditorImpl();
+    mImpl->appPath = appPath;
     mThread = std::thread(&Editor::thread_internal, this);
 }
 
@@ -64,10 +67,10 @@ void Editor::stop()
     mThread.join();
 }
 
-void Editor::initialize()
+void Editor::initialize(const std::filesystem::path &appPath)
 {
     assert(!sInstance);
-    sInstance = std::unique_ptr<Editor>(new Editor());
+    sInstance = std::unique_ptr<Editor>(new Editor(appPath));
 }
 
 void Editor::load(const std::filesystem::path& path)

@@ -26,7 +26,7 @@ class Renderer
 public:
     ~Renderer();
 
-    static void initialize();
+    static void initialize(const std::filesystem::path &appPath);
     static void destroy();
     static Renderer* instance();
     static EventLoop* eventLoop();
@@ -45,7 +45,7 @@ public:
     void afterTransfer(uint64_t value, std::function<void()>&& func);
 
 private:
-    Renderer();
+    Renderer(const std::filesystem::path &appPath);
 
     Renderer(Renderer&&) = delete;
     Renderer(const Renderer&) = delete;
@@ -67,9 +67,9 @@ private:
     std::thread mThread;
     std::unique_ptr<EventLoop> mEventLoop;
     EventEmitter<void()> mOnReady;
-    bool mInitialized = false; //, mStopped = true;
 
     RendererImpl* mImpl;
+    bool mInitialized = false; //, mStopped = true;
 
     friend struct RendererImpl;
     friend class GlyphAtlas;

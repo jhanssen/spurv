@@ -13,7 +13,7 @@ namespace spurv {
 class ScriptEngine
 {
 public:
-    ScriptEngine();
+    ScriptEngine(const std::filesystem::path &appPath);
     ~ScriptEngine();
 
     ScriptValue eval(const std::filesystem::path &file);
@@ -43,6 +43,7 @@ private:
 
     JSRuntime *mRuntime = nullptr;
     JSContext *mContext = nullptr;
+    const std::filesystem::path mAppPath;
     ScriptAtoms mAtoms;
     JSValue mGlobal {};
     ScriptValue mProcessHandler;

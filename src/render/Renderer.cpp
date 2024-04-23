@@ -115,6 +115,7 @@ struct RendererImpl
     uv_idle_t idle;
     uv_loop_t* loop = nullptr;
 
+    std::filesystem::path appPath;
     Renderer::Boxes boxes;
 
     vkb::Device vkbDevice = {};
@@ -767,10 +768,11 @@ inline VkBool32 VKAPI_CALL vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBi
     return VK_FALSE; // Applications must return false here
 }
 
-Renderer::Renderer()
-    : mEventLoop(new EventLoop())
+Renderer::Renderer(const std::filesystem::path &appPath)
+    : mEventLoop(new EventLoop)
 {
-    mImpl = new RendererImpl();
+    mImpl = new RendererImpl;
+    mImpl->appPath = appPath;
     mThread = std::thread(&Renderer::thread_internal, this);
 }
 
@@ -1330,8 +1332,8 @@ bool Renderer::recreateSwapchain()
     textVertexAttributeDescriptions[1].offset = 2 * sizeof(float);
 
     GraphicsPipelineCreateInfo textPipelineInfo = {};
-    textPipelineInfo.vertexShader = "bin/shaders/text-vs.spv";
-    textPipelineInfo.fragmentShader = "bin/shaders/text-fs.spv";
+    textPipelineInfo.vertexShader = mImpl->appPath / "shaders/text-vs.spv";
+    textPipelineInfo.fragmentShader = mImpl->appPath / "shaders/text-fs.spv";
     textPipelineInfo.renderPass = mImpl->swapchainRenderPass;
     textPipelineInfo.layout = mImpl->textPipelineLayout;
     textPipelineInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -1347,8 +1349,8 @@ bool Renderer::recreateSwapchain()
     mImpl->textPipeline = std::move(maybeTextPipeline).data();
 
     GraphicsPipelineCreateInfo boxPipelineInfo = {};
-    boxPipelineInfo.vertexShader = "bin/shaders/box-vs.spv";
-    boxPipelineInfo.fragmentShader = "bin/shaders/box-fs.spv";
+    boxPipelineInfo.vertexShader = mImpl->appPath / "shaders/box-vs.spv";
+    boxPipelineInfo.fragmentShader = mImpl->appPath / "shaders/box-fs.spv";
     boxPipelineInfo.renderPass = mImpl->swapchainRenderPass;
     boxPipelineInfo.layout = mImpl->boxPipelineLayout;
     boxPipelineInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
@@ -1383,10 +1385,10 @@ bool Renderer::recreateSwapchain()
     return true;
 }
 
-void Renderer::initialize()
+void Renderer::initialize(const std::filesystem::path &appPath)
 {
     assert(!sInstance);
-    sInstance = std::unique_ptr<Renderer>(new Renderer());
+    sInstance = std::unique_ptr<Renderer>(new Renderer(appPath));
 }
 
 void Renderer::stop()

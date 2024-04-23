@@ -12,13 +12,14 @@
 namespace spurv {
 
 struct EditorImpl;
+class ScriptEngine;
 
 class Editor
 {
 public:
     ~Editor();
 
-    static void initialize();
+    static void initialize(const std::filesystem::path &appPath);
     static void destroy();
     static Editor* instance();
     static EventLoop* eventLoop();
@@ -28,7 +29,7 @@ public:
     void load(const std::filesystem::path& path);
 
 private:
-    Editor();
+    Editor(const std::filesystem::path &appPath);
 
     Editor(Editor&&) = delete;
     Editor(const Editor&) = delete;
@@ -42,15 +43,18 @@ private:
     static std::unique_ptr<Editor> sInstance;
 
     mutable std::mutex mMutex;
+
+    std::unique_ptr<ScriptEngine> mScriptEngine;
     std::condition_variable mCond;
     std::thread mThread;
     std::unique_ptr<EventLoop> mEventLoop;
     std::vector<std::unique_ptr<Document>> mDocuments;
     Document* mCurrentDoc = nullptr;
     EventEmitter<void()> mOnReady;
+    EditorImpl* mImpl;
+
     bool mInitialized = false;
 
-    EditorImpl* mImpl;
 };
 
 inline Editor* Editor::instance()

@@ -58,7 +58,7 @@ add_subdirectory(window)
 add_executable(spurv ${SOURCES}
     $<TARGET_OBJECTS:Spurv::Window> $<TARGET_OBJECTS:Spurv::Event> $<TARGET_OBJECTS:Spurv::Text>
     $<TARGET_OBJECTS:Spurv::Thread> $<TARGET_OBJECTS:Spurv::Document> $<TARGET_OBJECTS:Spurv::Editor>
-    $<TARGET_OBJECTS:Spurv::Render> $<TARGET_OBJECTS:Spurv::Common>
+    $<TARGET_OBJECTS:Spurv::Render> $<TARGET_OBJECTS:Spurv::Common> $<TARGET_OBJECTS:Spurv::Script>
 )
 target_link_libraries(spurv Spurv::Event Spurv::Document ${LIBS})
 

@@ -2,6 +2,7 @@
 #include "window/Window.h"
 #include "event/MainEventLoop.h"
 #include "Args.h"
+#include "AppPath.h"
 #include "common/Geometry.h"
 #include "thread/ThreadPool.h"
 #include "editor/Editor.h"
@@ -53,13 +54,15 @@ int main(int argc, char** argv, char** envp)
 
     std::string filename = args.freeformSize() > 0 ? args.freeformValue(0) : std::string {};
 
+    std::filesystem::path self = appPath();
+
     MainEventLoop loop;
 
-    Renderer::initialize();
-    Renderer::instance()->onReady().connect([filename = std::move(filename)]() {
+    Renderer::initialize(self);
+    Renderer::instance()->onReady().connect([filename = std::move(filename), self = std::move(self)]() {
         spdlog::info("renderer ready");
 
-        Editor::initialize();
+        Editor::initialize(self);
         Editor::instance()->onReady().connect([filename = std::move(filename)]() {
             spdlog::info("editor ready");
             Editor::instance()->load(std::filesystem::path(filename));

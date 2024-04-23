@@ -82,8 +82,9 @@ JSValue closeProcessStdin(JSContext *ctx, JSValueConst /*this_val*/, int argc, J
 
 } // anonymous namespace
 
-ScriptEngine::ScriptEngine()
-    : mRuntime(JS_NewRuntime()), mContext(JS_NewContext(mRuntime))
+thread_local ScriptEngine *ScriptEngine::tScriptEngine;
+ScriptEngine::ScriptEngine(const std::filesystem::path &appPath)
+    : mRuntime(JS_NewRuntime()), mContext(JS_NewContext(mRuntime)), mAppPath(appPath)
 {
     mGlobal = JS_GetGlobalObject(mContext);
 
