@@ -28,6 +28,9 @@ public:
     const T *operator->() const;
     T *operator->();
 
+    const T &operator*() const &;
+    T &&operator*() &&;
+
     const T &data() const &;
     T &&data() &&;
 
@@ -61,6 +64,20 @@ inline T *Result<T>::operator->()
 {
     assert(ok());
     return &std::get<T>(mData);
+}
+
+template<typename T>
+inline const T &Result<T>::operator*() const &
+{
+    assert(ok());
+    return std::get<T>(mData);
+}
+
+template<typename T>
+inline T &&Result<T>::operator*() &&
+{
+    assert(ok());
+    return std::get<T>(std::move(mData));
 }
 
 template<typename T>

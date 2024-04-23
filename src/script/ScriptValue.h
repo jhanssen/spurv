@@ -12,7 +12,7 @@ class ScriptValue
 {
 public:
     ScriptValue() = default;
-    ScriptValue(ScriptValue &&other) = default;
+    ScriptValue(ScriptValue &&other);
     explicit ScriptValue(JSValue value);
     explicit ScriptValue(bool value);
     explicit ScriptValue(int32_t value);
@@ -27,6 +27,7 @@ public:
     ~ScriptValue();
 
     ScriptValue clone() const;
+    JSValue acquire();
     enum class Type {
         Invalid           = 0x000000,
         Undefined         = 0x000001,
@@ -47,10 +48,11 @@ public:
         BigNum            = 0x008000,
         BigInt            = 0x010000 | BigNum,
         BigFloat          = 0x020000 | BigNum,
-        BigDecimal        = 0x040000 | BigNum
+        BigDecimal        = 0x040000 | BigNum,
+        Function          = 0x080000
     };
 
-    ScriptValue &operator=(ScriptValue &&other) = default;
+    ScriptValue &operator=(ScriptValue &&other);
 
     static ScriptValue makeError(std::string message);
     static ScriptValue makeArrayBuffer(const void *data, size_t byteLength);

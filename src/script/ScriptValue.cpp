@@ -9,6 +9,13 @@ ScriptValue::ScriptValue(JSValue value)
     : mValue(value)
 {}
 
+ScriptValue::ScriptValue(ScriptValue &&other)
+    : mValue(std::move(other.mValue)), mType(std::move(other.mType))
+{
+    other.mValue = {};
+    other.mType = {};
+}
+
 ScriptValue::ScriptValue(bool value)
     : mValue(JS_NewBool(ScriptEngine::scriptEngine()->context(), value))
 {
@@ -73,12 +80,23 @@ ScriptValue::ScriptValue(const std::vector<std::pair<std::string, ScriptValue>> 
     mValue = v;
 }
 
-
 ScriptValue::~ScriptValue()
 {
     if (mValue) {
         JS_FreeValue(ScriptEngine::scriptEngine()->context(), *mValue);
     }
+}
+
+ScriptValue &ScriptValue::operator=(ScriptValue &&other)
+{
+    if (mValue) {
+        JS_FreeValue(ScriptEngine::scriptEngine()->context(), *mValue);
+    }
+    mValue = std::move(other.mValue);
+    mType = std::move(other.mType);
+    other.mValue = {};
+    other.mType = {};
+    return *this;
 }
 
 ScriptValue ScriptValue::clone() const
@@ -89,6 +107,15 @@ ScriptValue ScriptValue::clone() const
 
     ScriptValue ret(JS_DupValue(ScriptEngine::scriptEngine()->context(), *mValue));
     ret.mType = mType;
+    return ret;
+}
+
+JSValue ScriptValue::acquire()
+{
+    assert(mValue);
+    JSValue ret = *mValue;
+    mValue = {};
+    mType = {};
     return ret;
 }
 
@@ -175,6 +202,8 @@ ScriptValue::Type ScriptValue::type() const
             mType = Type::ArrayBuffer;
         } else if (JS_IsTypedArray(ctx, *mValue)) {
             mType = Type::TypedArray;
+        } else if (JS_IsFunction(ctx, *mValue)) {
+            mType = Type::Function;
         } else if (JS_IsError(ctx, *mValue)) {
             mType = Type::Error;
         } else if (JS_IsException(*mValue)) {

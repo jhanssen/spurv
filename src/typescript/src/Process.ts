@@ -188,31 +188,31 @@ export class Process {
     // }
 }
 
-setProcessHandler((event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => {
-    const data = processes.get(event.pid);
-    if (!data) {
-        error("Got event for unknown pid", event);
-        return;
-    }
+// setProcessHandler((event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => {
+//     const data = processes.get(event.pid);
+//     if (!data) {
+//         error("Got event for unknown pid", event);
+//         return;
+//     }
 
-    switch (event.type) {
-        case "finished":
-            data.finish(event.exitCode, event.error);
-            break;
-        case "stdout":
-            data.process.emit("stdout", event);
-            // ### maybe not add it if there's listeners? This API is getting a little weird
-            if (event.data) {
-                data.add(event.type, event.data);
-            }
-            break;
-        case "stderr":
-            data.process.emit("stderr", event);
-            if (event.data) {
-                data.add(event.type, event.data);
-            }
-            break;
-    }
-});
+//     switch (event.type) {
+//         case "finished":
+//             data.finish(event.exitCode, event.error);
+//             break;
+//         case "stdout":
+//             data.process.emit("stdout", event);
+//             // ### maybe not add it if there's listeners? This API is getting a little weird
+//             if (event.data) {
+//                 data.add(event.type, event.data);
+//             }
+//             break;
+//         case "stderr":
+//             data.process.emit("stderr", event);
+//             if (event.data) {
+//                 data.add(event.type, event.data);
+//             }
+//             break;
+//     }
+// });
 
 

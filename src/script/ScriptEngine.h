@@ -16,10 +16,10 @@ public:
     ScriptEngine(const std::filesystem::path &appPath);
     ~ScriptEngine();
 
-    ScriptValue eval(const std::filesystem::path &file);
-    ScriptValue eval(const std::string &url, const std::string &source);
+    bool eval(const std::filesystem::path &file);
+    bool eval(const std::string &url, const std::string &source);
 
-    void setProcessHandler(JSValue value);
+    void setProcessHandler(ScriptValue &&value);
 
     static ScriptEngine *scriptEngine() { return tScriptEngine; }
 
@@ -39,7 +39,7 @@ private:
         std::function<ScriptValue(std::vector<ScriptValue> &&args)> function;
     };
 
-    std::unordered_map<int, FunctionData> mFunctions;
+    std::unordered_map<int, std::unique_ptr<FunctionData>> mFunctions;
 
     JSRuntime *mRuntime = nullptr;
     JSContext *mContext = nullptr;

@@ -4,6 +4,13 @@
 #include <ScriptValue.h>
 
 namespace spurv {
+namespace Builtins {
+// declare function log(level: LogLevel, message: string): void;
+ScriptValue log(std::vector<ScriptValue> &&args);
+
+// declare function setProcessHandler(handler: (event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => void): void;
+ScriptValue setProcessHandler(std::vector<ScriptValue> &&args);
+
 // declare function utf8tostring(buffer: ArrayBuffer): string;
 ScriptValue utf8tostring(std::vector<ScriptValue> &&args);
 
@@ -30,4 +37,5 @@ ScriptValue stringtoutf16be(std::vector<ScriptValue> &&args);
 // declare function stringtoutf32(str: string): ArrayBuffer;
 ScriptValue stringtoutf32(std::vector<ScriptValue> &&args);
 
+} // namespace Builtins
 } // namespace spurv

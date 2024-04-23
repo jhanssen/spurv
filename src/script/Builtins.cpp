@@ -1,7 +1,39 @@
 #include "Builtins.h"
+#include "ScriptEngine.h"
 #include <simdutf.h>
+#include <spdlog/spdlog.h>
 
 namespace spurv {
+namespace Builtins {
+ScriptValue log(std::vector<ScriptValue> &&args)
+{
+    if (args.size() < 2 || args[0].type() & ScriptValue::Type::Number) {
+        return ScriptValue::makeError("Invalid arguments");
+    }
+
+    auto level = *args[0].toUint();
+    if (level < spdlog::level::trace || level > spdlog::level::critical) {
+        return ScriptValue::makeError(fmt::format("Invalid level {}", level));
+    }
+
+    auto str = args[1].toString();
+    if (str.hasError()) {
+        return ScriptValue::makeError(std::move(str).error().message);
+    }
+
+    spdlog::log({}, static_cast<spdlog::level::level_enum>(level), "{}", *str);
+    return {};
+}
+
+ScriptValue setProcessHandler(std::vector<ScriptValue> &&args)
+{
+    if (args.empty() || args[0].type() == ScriptValue::Type::Function) {
+        return ScriptValue::makeError("Invalid arguments");
+    }
+    ScriptEngine::scriptEngine()->setProcessHandler(std::move(args[0]));
+    return {};
+}
+
 ScriptValue utf8tostring(std::vector<ScriptValue> &&args)
 {
     if (args.empty()) {
@@ -189,4 +221,5 @@ ScriptValue stringtoutf32(std::vector<ScriptValue> &&args)
     const size_t converted = simdutf::convert_valid_utf8_to_utf32(data->c_str(), data->size(), vector.data());
     return ScriptValue::makeArrayBuffer(vector.data(), converted);
 }
+} // namespace Builtins
 } // namespace spurv
