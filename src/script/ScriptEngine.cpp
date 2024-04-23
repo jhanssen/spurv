@@ -27,6 +27,14 @@ JSValue log(JSContext *ctx, JSValueConst /*this_val*/, int argc, JSValueConst *a
     spdlog::log({}, static_cast<spdlog::level::level_enum>(level), "{}", ret);
     return { {}, JS_TAG_UNDEFINED };
 }
+
+JSValue setProcessHandler(JSContext *ctx, JSValueConst /*this_val*/, int argc, JSValueConst *argv)
+{
+    if (argc < 1 || !JS_IsFunction(ctx, argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid arguments");
+    }
+    return { {}, JS_TAG_UNDEFINED };
+}
 } // anonymous namespace
 
 ScriptEngine::ScriptEngine()
@@ -35,6 +43,7 @@ ScriptEngine::ScriptEngine()
     mGlobal = JS_GetGlobalObject(mContext);
 
     JS_SetPropertyStr(mContext, mGlobal, "log", JS_NewCFunction(mContext, log, "log", 2));
+    JS_SetPropertyStr(mContext, mGlobal, "setProcessHandler", JS_NewCFunction(mContext, setProcessHandler, "setProcessHandler", 1));
 
     assert(!tScriptEngine);
     tScriptEngine = this;

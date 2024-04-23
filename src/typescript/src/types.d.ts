@@ -13,7 +13,7 @@ declare function log(level: LogLevel, message: string): void;
 // process
 declare interface NativeProcessParameters {
     arguments: string[];
-    stdin?: ArrayBuffer | string | boolean;
+    stdin?: ArrayBuffer | false;
     stdout?: boolean;
     stderr?: boolean;
 }
@@ -48,6 +48,6 @@ declare interface NativeSynchronousProcessResult {
 
 declare function setProcessHandler(handler: (event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => void): void;
 declare function startProcess(parameters: NativeProcessParameters): number;
-declare function execProcess(parameters: NativeProcessParameters): NAtiveSynchronousProcessResult;
+declare function execProcess(parameters: NativeProcessParameters): NativeSynchronousProcessResult;
 declare function writeToProcessStdin(id: number, data: ArrayBuffer | string): void;
 declare function closeProcessStdin(id: number): void;

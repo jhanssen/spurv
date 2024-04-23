@@ -1,6 +1,6 @@
 export interface ProcessFinishedEvent {
     type: "finished";
-    statusCode: number;
+    exitCode: number;
     error?: string;
     stdout?: ArrayBuffer;
     stderr?: ArrayBuffer;
