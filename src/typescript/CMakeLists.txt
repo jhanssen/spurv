@@ -17,5 +17,5 @@ set(TS_DEPS
     src/types.d.ts
     tsconfig.json)
 
-add_custom_target(spurv_js ALL COMMAND node ${CMAKE_CURRENT_LIST_DIR}/build.js)
-
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dist/spurv.js COMMAND node ${CMAKE_CURRENT_LIST_DIR}/build.js DEPENDS ${TS_DEPS})
+add_custom_target(spurv-js DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/dist/spurv.js)
