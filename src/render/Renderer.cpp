@@ -584,6 +584,11 @@ void RendererImpl::recreateUniformBuffers()
         boxVertUniformBufferAllocation = VK_NULL_HANDLE;
         boxFragUniformBuffer = VK_NULL_HANDLE;
         boxFragUniformBufferAllocation = VK_NULL_HANDLE;
+
+        // make sure we recreate the per text property ubos
+        // this could likely be optimized, right now this also makes all
+        // the vbos be recreated as well
+        textVBOs.clear();
     }
 
     inFrameCallbacks.push_back([impl = this](VkCommandBuffer cmdbuffer) -> void {
@@ -684,7 +689,7 @@ void RendererImpl::recreateUniformBuffers()
 
 void RendererImpl::writeUniformBuffer(VkCommandBuffer cmdbuffer, VkBuffer buffer, const void* data, std::size_t size, uint32_t bufferOffset)
 {
-    auto stagingBuffer = *stagingBuffers.get();
+    auto stagingBuffer = *stagingBuffers.getOrCreate();
 
     // copy data to buffer
     ::memcpy(stagingBuffer.data, data, size);
@@ -1556,6 +1561,10 @@ void Renderer::render()
                 if (vbo.view() == VK_NULL_HANDLE) {
                     continue;
                 }
+                auto fragbuf = mImpl->textFragUniformBuffer(vbo.property());
+                if (fragbuf == VK_NULL_HANDLE) {
+                    continue;
+                }
 
                 VkBuffer vtxbuf = vbo.buffer();
                 VkDeviceSize vtxoff = 0;
@@ -1566,9 +1575,6 @@ void Renderer::render()
                     .offset = 0,
                     .range = VK_WHOLE_SIZE
                 };
-
-                auto fragbuf = mImpl->textFragUniformBuffer(vbo.property());
-                assert(fragbuf != VK_NULL_HANDLE);
                 bufferDescriptorInfos[1] = {
                     .buffer = fragbuf,
                     .offset = 0,

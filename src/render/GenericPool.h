@@ -197,7 +197,7 @@ GenericPool<T, Num>::Handle::Handle(T entry, GenericPool* pool, std::size_t inde
 template<typename T, std::size_t Num>
 GenericPool<T, Num>::Handle::~Handle()
 {
-    if (mPool->mMode == AvailabilityMode::Automatic) {
+    if (mPool != nullptr && mPool->mMode == AvailabilityMode::Automatic) {
         if (mIndex < std::numeric_limits<std::size_t>::max()) {
             if (mPool->mResetor) {
                 mPool->runLater([pool = mPool, entry = std::move(mEntry), index = mIndex]() mutable {
