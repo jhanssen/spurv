@@ -1,5 +1,6 @@
 export interface ProcessOptions {
-    stdin?: ArrayBuffer | false;
+    stdin?: ArrayBuffer;
     stdout?: boolean;
     stderr?: boolean;
+    strings?: boolean;
 }

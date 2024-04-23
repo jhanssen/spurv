@@ -1,5 +1,5 @@
 export interface ProcessStderrEvent {
     type: "stderr";
-    data?: ArrayBuffer;
+    data?: ArrayBuffer | string;
     end: boolean;
 }

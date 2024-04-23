@@ -19,6 +19,9 @@ public:
     explicit ScriptValue(uint32_t value);
     explicit ScriptValue(double value);
     explicit ScriptValue(const std::string &str);
+    explicit ScriptValue(const char *str, size_t len);
+    explicit ScriptValue(const std::u8string &str);
+    explicit ScriptValue(const char8_t *str, size_t len);
     explicit ScriptValue(const std::vector<ScriptValue> &array);
     explicit ScriptValue(const std::vector<std::pair<std::string, ScriptValue>> &object);
     ~ScriptValue();
@@ -50,6 +53,7 @@ public:
     ScriptValue &operator=(ScriptValue &&other) = default;
 
     static ScriptValue makeError(std::string message);
+    static ScriptValue makeArrayBuffer(const void *data, size_t byteLength);
     static ScriptValue undefined();
     static ScriptValue null();
 

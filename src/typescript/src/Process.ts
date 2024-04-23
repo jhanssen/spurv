@@ -1,8 +1,7 @@
+import { ProcessData } from "./ProcessData";
 import { assert } from "./assert";
-import { concatArrayBuffers } from "./concatArrayBuffers";
 import { error } from "./log";
 import { splitCommand } from "./splitCommand";
-import type { ProcessData } from "./ProcessData";
 import type { ProcessFinishedEvent } from "./ProcessFinishedEvent";
 import type { ProcessOptions } from "./ProcessOptions";
 import type { ProcessResult } from "./ProcessResult";
@@ -11,21 +10,18 @@ import type { ProcessStdoutEvent } from "./ProcessStdoutEvent";
 
 const processes: Map<number, ProcessData> = new Map();
 
-type Events = "finished" | "stdout" | "stderr";
-type ProcessFinishedEventHandler = (event: ProcessFinishedEvent) => void;
+type Events = "stdout" | "stderr";
 type ProcessStdoutEventHandler = (event: ProcessStdoutEvent) => void;
 type ProcessStderrEventHandler = (event: ProcessStderrEvent) => void;
-type EventHandlers = ProcessFinishedEventHandler | ProcessStdoutEventHandler | ProcessStderrEventHandler;
+type EventHandlers = ProcessStdoutEventHandler | ProcessStderrEventHandler;
 
 export class Process {
-    private finishedHandlers: Array<(event: ProcessFinishedEvent) => void>;
     private stdoutHandlers: Array<(event: ProcessStdoutEvent) => void>;
     private stderrHandlers: Array<(event: ProcessStderrEvent) => void>;
     private processId?: number;
     private stdinClosed?: boolean;
 
     constructor() {
-        this.finishedHandlers = [];
         this.stdoutHandlers = [];
         this.stderrHandlers = [];
     }
@@ -34,65 +30,47 @@ export class Process {
         return this.processId;
     }
 
-    on(type: Events & "finished", handler: ProcessFinishedEventHandler): void;
     on(type: Events & "stdout", handler: ProcessStdoutEventHandler): void;
     on(type: Events & "stderr", handler: ProcessStderrEventHandler): void;
     on(type: Events, handler: EventHandlers): void {
         this.onImpl(type, handler);
     }
 
-    off(type: Events & "finished", handler: ProcessFinishedEventHandler): void;
     off(type: Events & "stdout", handler: ProcessStdoutEventHandler): void;
     off(type: Events & "stderr", handler: ProcessStderrEventHandler): void;
     off(type: Events, handler: EventHandlers): void {
         this.offImpl(type, handler);
     }
 
-    addEventListener(type: Events & "finished", handler: ProcessFinishedEventHandler): void;
     addEventListener(type: Events & "stdout", handler: ProcessStdoutEventHandler): void;
     addEventListener(type: Events & "stderr", handler: ProcessStderrEventHandler): void;
     addEventListener(type: Events, handler: EventHandlers): void {
         this.onImpl(type, handler);
     }
 
-    removeEventListener(type: Events & "finished", handler: ProcessFinishedEventHandler): void;
     removeEventListener(type: Events & "stdout", handler: ProcessStdoutEventHandler): void;
     removeEventListener(type: Events & "stderr", handler: ProcessStderrEventHandler): void;
     removeEventListener(type: Events, handler: EventHandlers): void {
         this.offImpl(type, handler);
     }
 
-    addListener(type: Events & "finished", handler: ProcessFinishedEventHandler): void;
     addListener(type: Events & "stdout", handler: ProcessStdoutEventHandler): void;
     addListener(type: Events & "stderr", handler: ProcessStderrEventHandler): void;
     addListener(type: Events, handler: EventHandlers): void {
         this.onImpl(type, handler);
     }
 
-    removeListener(type: Events & "finished", handler: ProcessFinishedEventHandler): void;
     removeListener(type: Events & "stdout", handler: ProcessStdoutEventHandler): void;
     removeListener(type: Events & "stderr", handler: ProcessStderrEventHandler): void;
     removeListener(type: Events, handler: EventHandlers): void {
         this.offImpl(type, handler);
     }
 
-    emit(type: Events & "finished", event: ProcessFinishedEvent): void;
     emit(type: Events & "stdout", event: ProcessStdoutEvent): void;
     emit(type: Events & "stderr", event: ProcessStderrEvent): void;
     emit(type: Events, event: ProcessFinishedEvent | ProcessStdoutEvent | ProcessStderrEvent): boolean {
         let ret = false;
         switch (type) {
-            case "finished":
-                this.finishedHandlers.forEach((x: ProcessFinishedEventHandler) => {
-                    assert(event.type === "finished");
-                    ret = true;
-                    try {
-                        x(event);
-                    } catch (err: unknown) {
-                        error("Error in event handler", err);
-                    }
-                });
-                break;
             case "stdout":
                 this.stdoutHandlers.forEach((x: ProcessStdoutEventHandler) => {
                     assert(event.type === "stdout");
@@ -156,33 +134,26 @@ export class Process {
                 commandOrArgs = splitCommand(commandOrArgs);
             }
 
-            const data: ProcessData = {
-                name: commandOrArgs[0] || "",
-                process: this,
-                stdout: [],
-                stderr: [],
-                finish: (exitCode: number, errorString?: string): void => {
-                    const stderr = data.stderr ? concatArrayBuffers(data.stderr) : undefined;
-                    const stdout = data.stdout ? concatArrayBuffers(data.stdout) : undefined;
-                    if (exitCode === 0) {
-                        resolve({ exitCode, stdout, stderr });
-                    } else {
-                        reject(new Error(`Process ${data.name} exited with exit code: ${exitCode}${errorString ? "\n" + errorString : ""}`));
-                    }
-                    this.emit("finished", { type: "finished", exitCode, stdout, stderr, error: errorString });
-                },
-            };
+            const data = new ProcessData(commandOrArgs[0] || "", this, resolve, reject);
 
-            this.processId = startProcess(commandOrArgs, options?.stdin ?? true, options?.stdout ?? true, options?.stderr ?? true);
+            let flags: ProcessFlags = ProcessFlags.None;
+            if (options?.stderr) {
+                flags |= ProcessFlags.Stderr;
+            }
+            if (options?.stdout) {
+                flags |= ProcessFlags.Stdout;
+            }
+            if (options?.strings) {
+                flags |= ProcessFlags.Strings;
+            }
+
+            this.processId = startProcess(commandOrArgs, options?.stdin, flags);
             processes.set(this.processId, data);
         });
     }
 
     private onImpl(type: Events, handler: EventHandlers): void {
         switch (type) {
-            case "finished":
-                this.finishedHandlers.push(handler as ProcessFinishedEventHandler);
-                break;
             case "stdout":
                 this.stdoutHandlers.push(handler as ProcessStdoutEventHandler);
                 break;
@@ -196,14 +167,6 @@ export class Process {
 
     private offImpl(type: Events, handler: EventHandlers): void {
         switch (type) {
-            case "finished": {
-                const idx = this.finishedHandlers.indexOf(handler as ProcessFinishedEventHandler);
-                if (idx === -1) {
-                    break;
-                }
-                this.finishedHandlers.splice(idx, 1);
-                break; }
-
             case "stdout": {
                 // const idx = this.stderr
                 this.stdoutHandlers.push(handler as ProcessStdoutEventHandler);
@@ -240,13 +203,13 @@ setProcessHandler((event: NativeProcessFinishedEvent | NativeProcessStdoutEvent 
             data.process.emit("stdout", event);
             // ### maybe not add it if there's listeners? This API is getting a little weird
             if (event.data) {
-                data.stdout.push(event.data);
+                data.add(event.type, event.data);
             }
             break;
         case "stderr":
             data.process.emit("stderr", event);
             if (event.data) {
-                data.stderr.push(event.data);
+                data.add(event.type, event.data);
             }
             break;
     }

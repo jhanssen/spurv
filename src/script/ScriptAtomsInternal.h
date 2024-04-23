@@ -1,2 +1,3 @@
 #define FOREACH_SCRIPTATOM(ScriptAtom)          \
-    ScriptAtom(length)
+    ScriptAtom(length)                          \
+    ScriptAtom(message)

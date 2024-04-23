@@ -1,5 +1,5 @@
 export interface ProcessStdoutEvent {
     type: "stdout";
-    data?: ArrayBuffer;
+    data?: ArrayBuffer | string;
     end: boolean;
 }

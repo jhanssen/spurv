@@ -1341,10 +1341,10 @@ bool Renderer::recreateSwapchain()
     textPipelineInfo.pVertexAttributeDescriptions = textVertexAttributeDescriptions.data();
     auto maybeTextPipeline = createGraphicsPipeline(mImpl->device, textPipelineInfo);
     if (maybeTextPipeline.hasError()) {
-        spdlog::critical("Failed to create graphics pipeline: {}", std::get<Error>(maybeTextPipeline.data).message);
+        spdlog::critical("Failed to create graphics pipeline: {}", std::move(maybeTextPipeline).error().message);
         abort();
     }
-    mImpl->textPipeline = std::get<VkPipeline>(maybeTextPipeline.data);
+    mImpl->textPipeline = std::move(maybeTextPipeline).data();
 
     GraphicsPipelineCreateInfo boxPipelineInfo = {};
     boxPipelineInfo.vertexShader = "bin/shaders/box-vs.spv";
@@ -1354,10 +1354,10 @@ bool Renderer::recreateSwapchain()
     boxPipelineInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
     auto maybeBoxPipeline = createGraphicsPipeline(mImpl->device, boxPipelineInfo);
     if (maybeBoxPipeline.hasError()) {
-        spdlog::critical("Failed to create graphics pipeline: {}", std::get<Error>(maybeBoxPipeline.data).message);
+        spdlog::critical("Failed to create graphics pipeline: {}", std::move(maybeBoxPipeline).error().message);
         abort();
     }
-    mImpl->boxPipeline = std::get<VkPipeline>(maybeBoxPipeline.data);
+    mImpl->boxPipeline = std::move(maybeBoxPipeline).data();
 
     mImpl->swapchainFramebuffers.resize(mImpl->imageViews.size());
     for (std::size_t viewIdx = 0; viewIdx < mImpl->imageViews.size(); ++viewIdx) {

@@ -28,9 +28,23 @@ ScriptValue::ScriptValue(double value)
     : mValue(JS_NewFloat64(ScriptEngine::scriptEngine()->context(), value))
 {
 }
-
 ScriptValue::ScriptValue(const std::string &str)
-    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), str.c_str(), str.size()))
+    : ScriptValue(str.c_str(), str.size())
+{
+}
+
+ScriptValue::ScriptValue(const char *str, size_t len)
+    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), str, len))
+{
+}
+
+ScriptValue::ScriptValue(const std::u8string &str)
+    : ScriptValue(str.c_str(), str.size())
+{
+}
+
+ScriptValue::ScriptValue(const char8_t *str, size_t len)
+    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), reinterpret_cast<const char *>(str), len))
 {
 }
 
@@ -78,15 +92,29 @@ ScriptValue ScriptValue::clone() const
     return ret;
 }
 
-ScriptValue ScriptValue::makeError(std::string /*message*/)
+ScriptValue ScriptValue::makeError(std::string message)
 {
-   // ### gotta implement
-    return {};
+    auto engine = ScriptEngine::scriptEngine();
+    auto context = engine->context();
+    JSValue val = JS_NewError(context);
+    ScriptValue msg(message);
+    JS_SetProperty(context, val, engine->atoms().message, *msg);
+    return ScriptValue(val);
+}
+
+ScriptValue ScriptValue::makeArrayBuffer(const void *data, size_t byteLength)
+{
+    return ScriptValue(JS_NewArrayBufferCopy(ScriptEngine::scriptEngine()->context(), reinterpret_cast<const unsigned char *>(data), byteLength));
 }
 
 ScriptValue ScriptValue::undefined()
 {
     return ScriptValue(JSValue { {}, JS_TAG_UNDEFINED });
+}
+
+ScriptValue ScriptValue::null()
+{
+    return ScriptValue(JSValue { {}, JS_TAG_NULL });
 }
 
 JSValue ScriptValue::operator*() const
