@@ -8,7 +8,7 @@ using namespace spurv;
 TextVBO::TextVBO(TextVBO&& other) noexcept
     : mMemory(std::move(other.mMemory)), mOffset(other.mOffset), mSize(other.mSize),
       mAllocator(other.mAllocator), mAllocation(other.mAllocation),
-      mBuffer(other.mBuffer), mView(other.mView)
+      mBuffer(other.mBuffer), mView(other.mView), mProperty(std::move(other.mProperty))
 {
     other.mAllocator = VK_NULL_HANDLE;
     other.mAllocation = VK_NULL_HANDLE;
@@ -43,6 +43,7 @@ TextVBO& TextVBO::operator=(TextVBO&& other) noexcept
     mAllocation = other.mAllocation;
     mBuffer = other.mBuffer;
     mView = other.mView;
+    mProperty = other.mProperty;
     other.mAllocator = VK_NULL_HANDLE;
     other.mAllocation = VK_NULL_HANDLE;
     other.mBuffer = VK_NULL_HANDLE;

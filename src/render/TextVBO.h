@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Geometry.h>
+#include <TextProperty.h>
 #include <msdf-atlas-gen/msdf-atlas-gen.h>
 #include <volk.h>
 #include <vk_mem_alloc.h>
@@ -19,11 +20,15 @@ public:
 
     void add(const RectF& rect, const msdf_atlas::GlyphBox& glyph);
     void generate(VmaAllocator allocator, VkCommandBuffer cmdbuffer);
-    void setView(VkImageView view);
 
-    VkImageView view() const;
+    void setView(VkImageView view);
+    void setProperty(const TextProperty& property);
+
     VkBuffer buffer() const;
     uint32_t size() const;
+
+    VkImageView view() const;
+    const TextProperty& property() const;
 
 private:
     TextVBO(const TextVBO&) = delete;
@@ -36,11 +41,27 @@ private:
     VmaAllocation mAllocation = VK_NULL_HANDLE;
     VkBuffer mBuffer = VK_NULL_HANDLE;
     VkImageView mView = VK_NULL_HANDLE;
+    TextProperty mProperty = {};
 };
 
 inline void TextVBO::setView(VkImageView view)
 {
     mView = view;
+}
+
+inline VkImageView TextVBO::view() const
+{
+    return mView;
+}
+
+inline void TextVBO::setProperty(const TextProperty& property)
+{
+    mProperty = property;
+}
+
+inline const TextProperty& TextVBO::property() const
+{
+    return mProperty;
 }
 
 inline VkBuffer TextVBO::buffer() const
@@ -53,9 +74,5 @@ inline uint32_t TextVBO::size() const
     return mSize;
 }
 
-inline VkImageView TextVBO::view() const
-{
-    return mView;
-}
 
 } // namespace spurv

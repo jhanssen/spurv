@@ -7,6 +7,15 @@ namespace spurv {
 struct Color
 {
     float r, g, b, a;
+
+    bool operator==(const Color& other) const
+    {
+        // ### should do something for float compare
+        return r == other.r
+            && g == other.g
+            && b == other.b
+            && a == other.a;
+    }
 };
 
 Color parseColor(const std::string& color);
