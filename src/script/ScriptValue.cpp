@@ -8,6 +8,57 @@ ScriptValue::ScriptValue(JSValue value)
     : mValue(value)
 {}
 
+ScriptValue::ScriptValue(bool value)
+    : mValue(JS_NewBool(ScriptEngine::scriptEngine()->context(), value))
+{
+}
+
+ScriptValue::ScriptValue(int32_t value)
+    : mValue(JS_NewInt32(ScriptEngine::scriptEngine()->context(), value))
+{
+}
+
+ScriptValue::ScriptValue(uint32_t value)
+    : mValue(JS_NewUint32(ScriptEngine::scriptEngine()->context(), value))
+{
+}
+
+ScriptValue::ScriptValue(double value)
+    : mValue(JS_NewFloat64(ScriptEngine::scriptEngine()->context(), value))
+{
+}
+
+ScriptValue::ScriptValue(const std::string &str)
+    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), str.c_str(), str.size()))
+{
+}
+
+ScriptValue::ScriptValue(const std::vector<ScriptValue> &array)
+{
+    auto engine = ScriptEngine::scriptEngine();
+    auto context = engine->context();
+    JSValue v = JS_NewArray(context);
+    ScriptValue len(static_cast<uint32_t>(array.size()));
+    JS_SetProperty(context, v, engine->atoms().length, *len);
+    uint32_t i = 0;
+    for (const ScriptValue &value : array) {
+        JS_SetPropertyUint32(context, v, i++, *value);
+    }
+    mValue = v;
+}
+
+ScriptValue::ScriptValue(const std::vector<std::pair<std::string, ScriptValue>> &object)
+{
+    auto engine = ScriptEngine::scriptEngine();
+    auto context = engine->context();
+    JSValue v = JS_NewObject(context);
+    for (const std::pair<std::string, ScriptValue> &value : object) {
+        JS_SetPropertyStr(context, v, value.first.c_str(), *value.second);
+    }
+    mValue = v;
+}
+
+
 ScriptValue::~ScriptValue()
 {
     if (mValue) {
@@ -28,10 +79,16 @@ ScriptValue ScriptValue::clone() const
 
 ScriptValue ScriptValue::makeError(std::string /*message*/)
 {
+   // ### gotta implement
     return {};
 }
 
-JSValue ScriptValue::operator*()
+ScriptValue ScriptValue::undefined()
+{
+    return ScriptValue(JSValue { {}, JS_TAG_UNDEFINED });
+}
+
+JSValue ScriptValue::operator*() const
 {
     return *mValue;
 }
@@ -41,15 +98,20 @@ bool ScriptValue::operator!() const
     return !mValue.has_value();
 }
 
+ScriptValue::operator bool() const
+{
+    return mValue.has_value();
+}
+
 void ScriptValue::forEach(std::function<void(const ScriptValue &value, int idx)> function)
 {
     ScriptEngine *engine = ScriptEngine::scriptEngine();
     auto ctx = engine->context();
-    ScriptValue length = JS_GetProperty(ctx, *mValue, engine->atoms().length);
+    ScriptValue length(JS_GetProperty(ctx, *mValue, engine->atoms().length));
     int len;
     JS_ToInt32(ctx, &len, *length);
     for (int i = 0; i < len; ++i) {
-        ScriptValue item = JS_GetPropertyUint32(ctx, *mValue, i);
+        ScriptValue item(JS_GetPropertyUint32(ctx, *mValue, i));
         function(item, i);
     }
 }
@@ -120,7 +182,7 @@ unsigned char *ScriptValue::arrayBufferData(size_t *length, bool *ok) const
     case Type::TypedArray: {
         auto context = ScriptEngine::scriptEngine()->context();
         size_t byteOffset, byteLen;
-        ScriptValue buffer = JS_GetTypedArrayBuffer(context, *mValue, &byteOffset, &byteLen, nullptr);
+        ScriptValue buffer(JS_GetTypedArrayBuffer(context, *mValue, &byteOffset, &byteLen, nullptr));
         size_t p;
         unsigned char *ret = JS_GetArrayBuffer(context, &p, *mValue);
         if (ret) {
@@ -148,7 +210,7 @@ unsigned char *ScriptValue::arrayBufferData(size_t *length, bool *ok) const
 ScriptValue ScriptValue::typedArrayBuffer(bool *ok) const
 {
     auto context = ScriptEngine::scriptEngine()->context();
-    ScriptValue buffer = JS_GetTypedArrayBuffer(context, *mValue, nullptr, nullptr, nullptr);
+    ScriptValue buffer(JS_GetTypedArrayBuffer(context, *mValue, nullptr, nullptr, nullptr));
     if (buffer.type() == Type::ArrayBuffer) {
         if (ok)
             *ok = true;
@@ -174,7 +236,7 @@ size_t ScriptValue::length(bool *ok) const
         break; }
     case Type::Array:
     case Type::String: {
-        ScriptValue length = JS_GetProperty(engine->context(), *mValue, engine->atoms().length);
+        ScriptValue length(JS_GetProperty(engine->context(), *mValue, engine->atoms().length));
         int len;
         JS_ToInt32(engine->context(), &len, *length);
         if (ok)
@@ -182,7 +244,7 @@ size_t ScriptValue::length(bool *ok) const
         return len; }
     case Type::TypedArray: {
         size_t byteLen;
-        ScriptValue buffer = JS_GetTypedArrayBuffer(engine->context(), *mValue, nullptr, &byteLen, nullptr);
+        ScriptValue buffer(JS_GetTypedArrayBuffer(engine->context(), *mValue, nullptr, &byteLen, nullptr));
         if (buffer.type() == Type::ArrayBuffer) {
             if (ok)
                 *ok = true;
@@ -291,14 +353,48 @@ std::vector<ScriptValue> ScriptValue::toVector(bool *ok) const
 
     auto engine = ScriptEngine::scriptEngine();
     auto ctx = engine->context();
-    ScriptValue length = JS_GetProperty(ctx, *mValue, engine->atoms().length);
+    ScriptValue length(JS_GetProperty(ctx, *mValue, engine->atoms().length));
     int len;
     JS_ToInt32(ctx, &len, *length);
     std::vector<ScriptValue> ret(len);
     for (int i = 0; i < len; ++i) {
-        ret[i] = JS_GetPropertyUint32(ctx, *mValue, i);
+        ret[i] = ScriptValue(JS_GetPropertyUint32(ctx, *mValue, i));
     }
     return ret;
+}
+
+std::vector<std::pair<std::string, ScriptValue>> ScriptValue::toObject(bool *ok) const
+{
+    // // ### need magic enums
+    // if (!(static_cast<unsigned>(type()) & static_cast<unsigned>(Type::Object))) {
+    //     if (ok)
+    //         *ok = false;
+    //     return {};
+    // }
+    // if (ok)
+    //     *ok = true;
+
+    // auto engine = ScriptEngine::scriptEngine();
+    // auto ctx = engine->context();
+    // ScriptValue length(JS_GetProperty(ctx, *mValue, engine->atoms().length));
+    // int len;
+    // JS_ToInt32(ctx, &len, *length);
+    // std::vector<ScriptValue> ret(len);
+    // for (int i = 0; i < len; ++i) {
+    //     ret[i] = ScriptValue(JS_GetPropertyUint32(ctx, *mValue, i));
+    // }
+    // return ret;
+
+    if (ok)
+        *ok = false;
+    return {};
+}
+
+std::unordered_map<std::string, ScriptValue> ScriptValue::toMap(bool *ok) const
+{
+    if (ok)
+        *ok = false;
+    return {};
 }
 } // namespace spurv
 

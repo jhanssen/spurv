@@ -113,7 +113,7 @@ ScriptEngine::~ScriptEngine()
 
 void ScriptEngine::setProcessHandler(JSValue value)
 {
-    mProcessHandler = value;
+    mProcessHandler = ScriptValue(value);
 }
 
 ScriptValue ScriptEngine::eval(const std::filesystem::path &file)
@@ -128,6 +128,37 @@ ScriptValue ScriptEngine::eval(const std::filesystem::path &file)
 
 ScriptValue ScriptEngine::eval(const std::string &url, const std::string &source)
 {
-    return JS_Eval(mContext, source.c_str(), source.size(), url.c_str(), JS_EVAL_TYPE_MODULE);
+    return ScriptValue(JS_Eval(mContext, source.c_str(), source.size(), url.c_str(), JS_EVAL_TYPE_MODULE));
+}
+
+void ScriptEngine::bindFunction(const std::string &name, std::function<ScriptValue(std::vector<ScriptValue> &&args)> &&function)
+{
+    const int magic = ++mMagic;
+    FunctionData data = {
+        ScriptValue(JS_NewCFunctionData(mContext, bindHelper, 0, magic, 0, nullptr)),
+        std::move(function)
+    };
+    JS_SetPropertyStr(mContext, mGlobal, name.c_str(), *data.value);
+    mFunctions[magic] = std::move(data);
+}
+
+JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int magic, JSValue *)
+{
+    ScriptEngine *that = ScriptEngine::scriptEngine();
+    auto it = that->mFunctions.find(magic);
+    if (it == that->mFunctions.end()) {
+        return JS_ThrowTypeError(ctx, "Function can't be found");
+    }
+
+    std::vector<ScriptValue> args(argc);
+    for (int i=0; i<argc; ++i) {
+        args[i] = ScriptValue(argv[i]);
+    }
+
+    ScriptValue ret = it->second.function(std::move(args));
+    if (ret) {
+        return *ret;
+    }
+    return *ScriptValue::undefined();
 }
 } // namespace spurv

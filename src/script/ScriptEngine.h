@@ -1,6 +1,8 @@
 #pragma once
 
 #include <memory>
+#include <unordered_map>
+#include <functional>
 #include <filesystem>
 #include <quickjs.h>
 
@@ -25,9 +27,19 @@ public:
     JSContext *context() const { return mContext; }
 
     const ScriptAtoms &atoms() { return mAtoms; }
-    // void bindFunction(const std::string &name, std::function<ScriptValue(std::vector<ScriptValue> &&args)> &&function);
+    // could do some nicer template stuff
+    void bindFunction(const std::string &name, std::function<ScriptValue(std::vector<ScriptValue> &&args)> &&function);
 private:
+    static JSValue bindHelper(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *);
+
     thread_local static ScriptEngine *tScriptEngine;
+    int mMagic { 0 };
+    struct FunctionData {
+        ScriptValue value; // Do we need this for it to stay alive?
+        std::function<ScriptValue(std::vector<ScriptValue> &&args)> function;
+    };
+
+    std::unordered_map<int, FunctionData> mFunctions;
 
     JSRuntime *mRuntime = nullptr;
     JSContext *mContext = nullptr;

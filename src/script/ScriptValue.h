@@ -11,7 +11,14 @@ class ScriptValue
 public:
     ScriptValue() = default;
     ScriptValue(ScriptValue &&other) = default;
-    ScriptValue(JSValue value);
+    explicit ScriptValue(JSValue value);
+    explicit ScriptValue(bool value);
+    explicit ScriptValue(int32_t value);
+    explicit ScriptValue(uint32_t value);
+    explicit ScriptValue(double value);
+    explicit ScriptValue(const std::string &str);
+    explicit ScriptValue(const std::vector<ScriptValue> &array);
+    explicit ScriptValue(const std::vector<std::pair<std::string, ScriptValue>> &object);
     ~ScriptValue();
 
     ScriptValue clone() const;
@@ -41,12 +48,15 @@ public:
     ScriptValue &operator=(ScriptValue &&other) = default;
 
     static ScriptValue makeError(std::string message);
+    static ScriptValue undefined();
+    static ScriptValue null();
 
     Type type() const;
 
     bool operator!() const;
+    operator bool() const;
 
-    JSValue operator*();
+    JSValue operator*() const;
 
     ScriptValue typedArrayBuffer(bool *ok = nullptr) const;
     unsigned char *arrayBufferData(size_t *length = nullptr, bool *ok = nullptr) const;
@@ -57,6 +67,8 @@ public:
     int32_t toInt(bool *ok = nullptr) const;
     uint32_t toUint(bool *ok = nullptr) const;
     std::vector<ScriptValue> toVector(bool *ok = nullptr) const;
+    std::vector<std::pair<std::string, ScriptValue>> toObject(bool *ok = nullptr) const;
+    std::unordered_map<std::string, ScriptValue> toMap(bool *ok = nullptr) const;
 
     void forEach(std::function<void(const ScriptValue &value, int idx)> function);
 
