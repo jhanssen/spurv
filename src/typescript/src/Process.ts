@@ -173,12 +173,7 @@ export class Process {
                 },
             };
 
-            this.processId = startProcess({
-                arguments: commandOrArgs,
-                stdin: options?.stdin,
-                stdout: options?.stdout,
-                stderr: options?.stderr
-            });
+            this.processId = startProcess(commandOrArgs, options?.stdin ?? true, options?.stdout ?? true, options?.stderr ?? true);
             processes.set(this.processId, data);
         });
     }

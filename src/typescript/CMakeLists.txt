@@ -5,7 +5,7 @@ set(TS_DEPS
     src/ProcessData.ts
     src/ProcessFinishedEvent.ts
     src/ProcessOptions.ts
-    src/ProcessResult.ts)
+    src/ProcessResult.ts
     src/ProcessStderrEvent.ts
     src/ProcessStdoutEvent.ts
     src/assert.ts
@@ -15,7 +15,7 @@ set(TS_DEPS
     src/splitCommand.ts
     src/spurv.ts
     src/types.d.ts
-    tsconfig.json
+    tsconfig.json)
 
 add_custom_target(spurv_js ALL COMMAND node ${CMAKE_CURRENT_LIST_DIR}/build.js)
 

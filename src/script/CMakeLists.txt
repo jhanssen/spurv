@@ -1,4 +1,5 @@
 set(SOURCES
+    JSExtra.cpp
     ScriptEngine.cpp
     ScriptValue.cpp
 )

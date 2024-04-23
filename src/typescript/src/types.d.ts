@@ -11,13 +11,6 @@ declare const enum LogLevel {
 declare function log(level: LogLevel, message: string): void;
 
 // process
-declare interface NativeProcessParameters {
-    arguments: string[];
-    stdin?: ArrayBuffer | false;
-    stdout?: boolean;
-    stderr?: boolean;
-}
-
 declare interface NativeProcessFinishedEvent {
     type: "finished";
     pid: number;
@@ -47,7 +40,7 @@ declare interface NativeSynchronousProcessResult {
 }
 
 declare function setProcessHandler(handler: (event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => void): void;
-declare function startProcess(parameters: NativeProcessParameters): number;
-declare function execProcess(parameters: NativeProcessParameters): NativeSynchronousProcessResult;
+declare function startProcess(arguments: string[], stdin: ArrayBuffer | boolean, stdout: boolean, stderr: boolean): number;
+declare function execProcess(arguments: string[], stdin: ArrayBuffer | boolean, stdout: boolean, stderr: boolean): NativeSynchronousProcessResult;
 declare function writeToProcessStdin(id: number, data: ArrayBuffer | string): void;
 declare function closeProcessStdin(id: number): void;
