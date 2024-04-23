@@ -2,6 +2,7 @@
 #include "ScriptEngine.h"
 #include "JSExtra.h"
 #include <cassert>
+#include <unordered_set>
 
 namespace spurv {
 ScriptValue::ScriptValue(JSValue value)
@@ -168,69 +169,48 @@ ScriptValue::Type ScriptValue::type() const
     return *mType;
 }
 
-unsigned char *ScriptValue::arrayBufferData(size_t *length, bool *ok) const
+Result<std::pair<unsigned char *, std::size_t>> ScriptValue::arrayBufferData() const
 {
     switch (type()) {
     case Type::ArrayBuffer: {
-        size_t p;
+        std::size_t p;
         unsigned char *ret = JS_GetArrayBuffer(ScriptEngine::scriptEngine()->context(), &p, *mValue);
-        if (ok)
-            *ok = true;
-        if (length)
-            *length = p;
-        return ret; }
+        return std::make_pair(ret, p); }
     case Type::TypedArray: {
         auto context = ScriptEngine::scriptEngine()->context();
-        size_t byteOffset, byteLen;
+        std::size_t byteOffset, byteLen;
         ScriptValue buffer(JS_GetTypedArrayBuffer(context, *mValue, &byteOffset, &byteLen, nullptr));
-        size_t p;
+        std::size_t p;
         unsigned char *ret = JS_GetArrayBuffer(context, &p, *mValue);
         if (ret) {
-            if (ok)
-                *ok = true;
-            if (length)
-                *length = byteLen;
-            return ret + byteOffset;
+            return std::make_pair(ret + byteOffset, p);
         }
-        if (ok)
-            *ok = false;
-        if (length)
-            *length = 0;
-        return nullptr; }
+        return spurv::makeError("Can't get typed array data"); }
     default:
         break;
     }
-    if (ok)
-        *ok = false;
-    if (length)
-        *length = 0;
-    return nullptr;
+
+    return spurv::makeError("Invalid type for arrayBufferData");
 }
 
-ScriptValue ScriptValue::typedArrayBuffer(bool *ok) const
+Result<ScriptValue> ScriptValue::typedArrayBuffer() const
 {
     auto context = ScriptEngine::scriptEngine()->context();
     ScriptValue buffer(JS_GetTypedArrayBuffer(context, *mValue, nullptr, nullptr, nullptr));
     if (buffer.type() == Type::ArrayBuffer) {
-        if (ok)
-            *ok = true;
         return buffer;
     }
 
-    if (ok)
-        *ok = false;
-    return ScriptValue();
+    return spurv::makeError("Invalid type for typedArrayBuffer");
 }
 
-size_t ScriptValue::length(bool *ok) const
+Result<std::size_t> ScriptValue::length() const
 {
     ScriptEngine *engine = ScriptEngine::scriptEngine();
     switch (type()) {
     case Type::ArrayBuffer: {
-        size_t p;
+        std::size_t p;
         if (JS_GetArrayBuffer(engine->context(), &p, *mValue)) {
-            if (ok)
-                *ok = true;
             return p;
         }
         break; }
@@ -239,117 +219,82 @@ size_t ScriptValue::length(bool *ok) const
         ScriptValue length(JS_GetProperty(engine->context(), *mValue, engine->atoms().length));
         int len;
         JS_ToInt32(engine->context(), &len, *length);
-        if (ok)
-            *ok = true;
         return len; }
     case Type::TypedArray: {
-        size_t byteLen;
+        std::size_t byteLen;
         ScriptValue buffer(JS_GetTypedArrayBuffer(engine->context(), *mValue, nullptr, &byteLen, nullptr));
         if (buffer.type() == Type::ArrayBuffer) {
-            if (ok)
-                *ok = true;
             return byteLen;
         }
         break; }
     default:
         break;
     }
-    if (ok)
-        *ok = false;
-    return 0;
+    return spurv::makeError("Invalid type for length");
 }
 
-bool ScriptValue::toBool(bool *ok) const
+Result<bool> ScriptValue::toBool() const
 {
     if (mValue) {
-        if (ok)
-            *ok = true;
         // ### this will cast to bool, is that right?
         return JS_ToBool(ScriptEngine::scriptEngine()->context(), *mValue);
     }
-    if (ok)
-        *ok = false;
-    return false;
+    return spurv::makeError("Invalid type for toBool");
 }
 
-std::string ScriptValue::toString(bool *ok) const
+Result<std::string> ScriptValue::toString() const
 {
     if (mValue) {
-        if (ok)
-            *ok = true;
         auto context = ScriptEngine::scriptEngine()->context();
-        size_t len;
+        std::size_t len;
         const char *str = JS_ToCStringLen(context, &len, *mValue);
-        if (!str) {
-            if (ok)
-                *ok = false;
-            return std::string();
+        if (str) {
+            std::string ret(str, len);
+            JS_FreeCString(context, str);
+            return ret;
         }
-        std::string ret(str, len);
-        JS_FreeCString(context, str);
-        if (ok)
-            *ok = true;
-        return ret;
     }
-    if (ok)
-        *ok = false;
-    return std::string();
+    return spurv::makeError("Invalid type for toString");
 }
 
-double ScriptValue::toDouble(bool *ok) const
+Result<double> ScriptValue::toDouble() const
 {
     if (mValue) {
         double ret;
         if (!JS_ToFloat64(ScriptEngine::scriptEngine()->context(), &ret, *mValue)) {
-            if (ok)
-                *ok = true;
             return ret;
         }
     }
-    if (ok)
-        *ok = false;
-    return 0;
+    return spurv::makeError("Invalid type for toDouble");
 }
 
-int32_t ScriptValue::toInt(bool *ok) const
+Result<int32_t> ScriptValue::toInt() const
 {
     if (mValue) {
         int32_t ret;
         if (!JS_ToInt32(ScriptEngine::scriptEngine()->context(), &ret, *mValue)) {
-            if (ok)
-                *ok = true;
             return ret;
         }
     }
-    if (ok)
-        *ok = false;
-    return 0;
+    return spurv::makeError("Invalid type for toInt");
 }
 
-uint32_t ScriptValue::toUint(bool *ok) const
+Result<uint32_t> ScriptValue::toUint() const
 {
     if (mValue) {
         uint32_t ret;
         if (!JS_ToUint32(ScriptEngine::scriptEngine()->context(), &ret, *mValue)) {
-            if (ok)
-                *ok = true;
             return ret;
         }
     }
-    if (ok)
-        *ok = false;
-    return 0;
+    return spurv::makeError("Invalid type for toUint");
 }
 
-std::vector<ScriptValue> ScriptValue::toVector(bool *ok) const
+Result<std::vector<ScriptValue>> ScriptValue::toVector() const
 {
     if (type() != Type::Array) {
-        if (ok)
-            *ok = false;
-        return std::vector<ScriptValue>();
+        return spurv::makeError("Invalid type for toVector");
     }
-    if (ok)
-        *ok = true;
 
     auto engine = ScriptEngine::scriptEngine();
     auto ctx = engine->context();
@@ -363,38 +308,68 @@ std::vector<ScriptValue> ScriptValue::toVector(bool *ok) const
     return ret;
 }
 
-std::vector<std::pair<std::string, ScriptValue>> ScriptValue::toObject(bool *ok) const
+namespace {
+template <typename T>
+void forEachProperty(const ScriptValue &value, const T &t)
 {
-    // // ### need magic enums
-    // if (!(static_cast<unsigned>(type()) & static_cast<unsigned>(Type::Object))) {
-    //     if (ok)
-    //         *ok = false;
-    //     return {};
-    // }
-    // if (ok)
-    //     *ok = true;
+    auto context = ScriptEngine::scriptEngine()->context();
+    JSPropertyEnum *properties;
+    uint32_t len;
+    std::unordered_set<std::string> seen;
+    if (!JS_GetOwnPropertyNames(context, &properties, &len, *value, 0)) {
+        for (uint32_t i=0; i<len; ++i) {
+            std::string name = JS_AtomToCString(context, properties[i].atom);
+            if (!seen.insert(name).second) {
+                t(std::move(name), ScriptValue(JS_GetProperty(context, *value, properties[i].atom)));
+            }
+        }
+    }
 
-    // auto engine = ScriptEngine::scriptEngine();
-    // auto ctx = engine->context();
-    // ScriptValue length(JS_GetProperty(ctx, *mValue, engine->atoms().length));
-    // int len;
-    // JS_ToInt32(ctx, &len, *length);
-    // std::vector<ScriptValue> ret(len);
-    // for (int i = 0; i < len; ++i) {
-    //     ret[i] = ScriptValue(JS_GetPropertyUint32(ctx, *mValue, i));
-    // }
-    // return ret;
+    ScriptValue proto(JS_GetPrototype(context, *value));
+    while (true) {
+        ScriptValue next(JS_GetPrototype(context, *proto));
+        if (next.type() == ScriptValue::Type::Null) {
+            break;
+        }
 
-    if (ok)
-        *ok = false;
-    return {};
+        if (!JS_GetOwnPropertyNames(context, &properties, &len, *proto, 0)) {
+            for (uint32_t i=0; i<len; ++i) {
+                std::string name = JS_AtomToCString(context, properties[i].atom);
+                if (!seen.insert(name).second) {
+                    t(std::move(name), ScriptValue(JS_GetProperty(context, *value, properties[i].atom)));
+                }
+            }
+        }
+
+        proto = std::move(next);
+    }
+}
+} // anonymous namespace
+
+Result<std::vector<std::pair<std::string, ScriptValue>>> ScriptValue::toObject() const
+{
+    if (!(type() & Type::Object)) {
+        return spurv::makeError("Invalid type for toObject");
+    }
+
+    std::vector<std::pair<std::string, ScriptValue>> ret;
+    forEachProperty(*this, [&ret](std::string &&name, ScriptValue &&value) -> void {
+        ret.emplace_back(std::move(name), std::move(value));
+    });
+    return ret;
 }
 
-std::unordered_map<std::string, ScriptValue> ScriptValue::toMap(bool *ok) const
+Result<std::unordered_map<std::string, ScriptValue>> ScriptValue::toMap() const
 {
-    if (ok)
-        *ok = false;
-    return {};
+    if (!(type() & Type::Object)) {
+        return spurv::makeError("Invalid type for toMap");
+    }
+
+    std::unordered_map<std::string, ScriptValue> ret;
+    forEachProperty(*this, [&ret](std::string &&name, ScriptValue &&value) -> void {
+        ret[std::move(name)] = std::move(value);
+    });
+    return ret;
 }
 } // namespace spurv
 

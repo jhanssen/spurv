@@ -3,6 +3,9 @@
 #include <quickjs.h>
 
 struct ScriptAtoms {
-    // ### this should be some macro craziness
-    JSAtom length;
+#define ScriptAtom(atom)                       \
+    JSAtom atom;
+#include "ScriptAtomsInternal.h"
+    FOREACH_SCRIPTATOM(ScriptAtom)
+#undef ScriptAtom
 };

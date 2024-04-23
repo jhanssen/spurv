@@ -4,6 +4,8 @@
 #include <quickjs.h>
 #include <optional>
 #include <functional>
+#include <EnumClassBitmask.h>
+#include <Result.h>
 
 namespace spurv {
 class ScriptValue
@@ -58,17 +60,17 @@ public:
 
     JSValue operator*() const;
 
-    ScriptValue typedArrayBuffer(bool *ok = nullptr) const;
-    unsigned char *arrayBufferData(size_t *length = nullptr, bool *ok = nullptr) const;
-    size_t length(bool *ok = nullptr) const;
-    bool toBool(bool *ok = nullptr) const;
-    std::string toString(bool *ok = nullptr) const;
-    double toDouble(bool *ok = nullptr) const;
-    int32_t toInt(bool *ok = nullptr) const;
-    uint32_t toUint(bool *ok = nullptr) const;
-    std::vector<ScriptValue> toVector(bool *ok = nullptr) const;
-    std::vector<std::pair<std::string, ScriptValue>> toObject(bool *ok = nullptr) const;
-    std::unordered_map<std::string, ScriptValue> toMap(bool *ok = nullptr) const;
+    Result<ScriptValue> typedArrayBuffer() const;
+    Result<std::pair<unsigned char *, std::size_t>> arrayBufferData() const;
+    Result<std::size_t> length() const;
+    Result<bool> toBool() const;
+    Result<std::string> toString() const;
+    Result<double> toDouble() const;
+    Result<int32_t> toInt() const;
+    Result<uint32_t> toUint() const;
+    Result<std::vector<ScriptValue>> toVector() const;
+    Result<std::vector<std::pair<std::string, ScriptValue>>> toObject() const;
+    Result<std::unordered_map<std::string, ScriptValue>> toMap() const;
 
     void forEach(std::function<void(const ScriptValue &value, int idx)> function);
 
@@ -77,4 +79,8 @@ private:
     mutable std::optional<Type> mType;
 };
 
+template<>
+struct IsEnumBitmask<ScriptValue::Type> {
+    static constexpr bool enable = true;
+};
 } // namespace spurv

@@ -22,7 +22,7 @@ JSValue log(JSContext *ctx, JSValueConst /*this_val*/, int argc, JSValueConst *a
     }
 
 
-    size_t len;
+    std::size_t len;
     const char *ret = JS_ToCStringLen(ctx, &len, argv[1]);
 
     spdlog::log({}, static_cast<spdlog::level::level_enum>(level), "{}", ret);
@@ -87,7 +87,11 @@ ScriptEngine::ScriptEngine()
 {
     mGlobal = JS_GetGlobalObject(mContext);
 
-    mAtoms.length = JS_NewAtom(mContext, "length");
+#define ScriptAtom(atom)                        \
+    mAtoms.atom = JS_NewAtom(mContext, #atom);
+#include "ScriptAtomsInternal.h"
+        FOREACH_SCRIPTATOM(ScriptAtom)
+#undef ScriptAtom
 
     JS_SetPropertyStr(mContext, mGlobal, "log", JS_NewCFunction(mContext, log, "log", 2));
     JS_SetPropertyStr(mContext, mGlobal, "setProcessHandler", JS_NewCFunction(mContext, spurv::setProcessHandler, "setProcessHandler", 1));

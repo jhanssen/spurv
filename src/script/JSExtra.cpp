@@ -1,9 +1,10 @@
 #include "JSExtra.h"
+#include <cstddef>
 
 // ### this includes SharedArrayBuffer
 bool JS_IsArrayBuffer(JSContext *ctx, JSValueConst obj)
 {
-    size_t p;
+    std::size_t p;
     return JS_GetArrayBuffer(ctx, &p, obj);
 }
 
