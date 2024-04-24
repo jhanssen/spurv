@@ -97,7 +97,8 @@ export class Process {
         return ret;
     }
 
-    writeToStdin(data: ArrayBuffer | string): void { // expose buffering innards?
+    writeToStdin(data: ArrayBuffer | string): void {
+        // expose buffering innards?
         if (this.processId === undefined) {
             throw new Error("Process is not active");
         }
@@ -106,7 +107,7 @@ export class Process {
             throw new Error("Stdin is closed");
         }
 
-        writeToProcessStdin(this.processId, data);
+        spurv.writeToProcessStdin(this.processId, data);
     }
 
     closeStdin(): void {
@@ -119,7 +120,7 @@ export class Process {
         }
 
         this.stdinClosed = true;
-        closeProcessStdin(this.processId);
+        spurv.closeProcessStdin(this.processId);
     }
 
     start(command: string, options?: ProcessOptions): Promise<ProcessResult>;
@@ -136,18 +137,18 @@ export class Process {
 
             const data = new ProcessData(commandOrArgs[0] || "", this, resolve, reject);
 
-            let flags: ProcessFlags = ProcessFlags.None;
+            let flags: spurv.ProcessFlags = spurv.ProcessFlags.None;
             if (options?.stderr) {
-                flags |= ProcessFlags.Stderr;
+                flags |= spurv.ProcessFlags.Stderr;
             }
             if (options?.stdout) {
-                flags |= ProcessFlags.Stdout;
+                flags |= spurv.ProcessFlags.Stdout;
             }
             if (options?.strings) {
-                flags |= ProcessFlags.Strings;
+                flags |= spurv.ProcessFlags.Strings;
             }
 
-            this.processId = startProcess(commandOrArgs, options?.stdin, flags);
+            this.processId = spurv.startProcess(commandOrArgs, options?.stdin, flags);
             processes.set(this.processId, data);
         });
     }
@@ -170,7 +171,8 @@ export class Process {
             case "stdout": {
                 // const idx = this.stderr
                 this.stdoutHandlers.push(handler as ProcessStdoutEventHandler);
-                break; }
+                break;
+            }
             case "stderr":
                 this.stderrHandlers.push(handler as ProcessStderrEventHandler);
                 break;
@@ -188,31 +190,31 @@ export class Process {
     // }
 }
 
-// setProcessHandler((event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => {
-//     const data = processes.get(event.pid);
-//     if (!data) {
-//         error("Got event for unknown pid", event);
-//         return;
-//     }
+spurv.setProcessHandler(
+    (event: spurv.NativeProcessFinishedEvent | spurv.NativeProcessStdoutEvent | spurv.NativeProcessStderrEvent) => {
+        const data = processes.get(event.pid);
+        if (!data) {
+            error("Got event for unknown pid", event);
+            return;
+        }
 
-//     switch (event.type) {
-//         case "finished":
-//             data.finish(event.exitCode, event.error);
-//             break;
-//         case "stdout":
-//             data.process.emit("stdout", event);
-//             // ### maybe not add it if there's listeners? This API is getting a little weird
-//             if (event.data) {
-//                 data.add(event.type, event.data);
-//             }
-//             break;
-//         case "stderr":
-//             data.process.emit("stderr", event);
-//             if (event.data) {
-//                 data.add(event.type, event.data);
-//             }
-//             break;
-//     }
-// });
-
-
+        switch (event.type) {
+            case "finished":
+                data.finish(event.exitCode, event.error);
+                break;
+            case "stdout":
+                data.process.emit("stdout", event);
+                // ### maybe not add it if there's listeners? This API is getting a little weird
+                if (event.data) {
+                    data.add(event.type, event.data);
+                }
+                break;
+            case "stderr":
+                data.process.emit("stderr", event);
+                if (event.data) {
+                    data.add(event.type, event.data);
+                }
+                break;
+        }
+    }
+);

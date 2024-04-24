@@ -17,22 +17,22 @@ ScriptValue::ScriptValue(ScriptValue &&other)
 }
 
 ScriptValue::ScriptValue(bool value)
-    : mValue(JS_NewBool(ScriptEngine::scriptEngine()->context(), value))
+    : mValue(JS_NewBool(ScriptEngine::scriptEngine()->context(), value)), mType(Type::Boolean)
 {
 }
 
 ScriptValue::ScriptValue(int32_t value)
-    : mValue(JS_NewInt32(ScriptEngine::scriptEngine()->context(), value))
+    : mValue(JS_NewInt32(ScriptEngine::scriptEngine()->context(), value)), mType(Type::Int)
 {
 }
 
 ScriptValue::ScriptValue(uint32_t value)
-    : mValue(JS_NewUint32(ScriptEngine::scriptEngine()->context(), value))
+    : mValue(JS_NewUint32(ScriptEngine::scriptEngine()->context(), value)), mType(Type::Int)
 {
 }
 
 ScriptValue::ScriptValue(double value)
-    : mValue(JS_NewFloat64(ScriptEngine::scriptEngine()->context(), value))
+    : mValue(JS_NewFloat64(ScriptEngine::scriptEngine()->context(), value)), mType(Type::Double)
 {
 }
 ScriptValue::ScriptValue(const std::string &str)
@@ -41,7 +41,7 @@ ScriptValue::ScriptValue(const std::string &str)
 }
 
 ScriptValue::ScriptValue(const char *str, size_t len)
-    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), str, len))
+    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), str, len)), mType(Type::String)
 {
 }
 
@@ -51,11 +51,13 @@ ScriptValue::ScriptValue(const std::u8string &str)
 }
 
 ScriptValue::ScriptValue(const char8_t *str, size_t len)
-    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), reinterpret_cast<const char *>(str), len))
+    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), reinterpret_cast<const char *>(str), len)), mType(Type::String)
+
 {
 }
 
 ScriptValue::ScriptValue(const std::vector<ScriptValue> &array)
+    : mType(Type::Array)
 {
     auto engine = ScriptEngine::scriptEngine();
     auto context = engine->context();
@@ -70,6 +72,7 @@ ScriptValue::ScriptValue(const std::vector<ScriptValue> &array)
 }
 
 ScriptValue::ScriptValue(const std::vector<std::pair<std::string, ScriptValue>> &object)
+    : mType(Type::Object)
 {
     auto engine = ScriptEngine::scriptEngine();
     auto context = engine->context();
@@ -78,6 +81,13 @@ ScriptValue::ScriptValue(const std::vector<std::pair<std::string, ScriptValue>> 
         JS_SetPropertyStr(context, v, value.first.c_str(), *value.second);
     }
     mValue = v;
+}
+
+ScriptValue::ScriptValue(Function &&function)
+    : mType(Type::Function)
+{
+    auto engine = ScriptEngine::scriptEngine();
+    mValue = engine->bindFunction(std::move(function)).acquire();
 }
 
 ScriptValue::~ScriptValue()
@@ -177,6 +187,42 @@ void ScriptValue::forEach(std::function<void(const ScriptValue &value, int idx)>
         ScriptValue item(JS_GetPropertyUint32(ctx, *mValue, i));
         function(item, i);
     }
+}
+
+ScriptValue ScriptValue::getProperty(const std::string &name) const
+{
+    if (type() & Type::Object) {
+        return ScriptValue(JS_GetPropertyStr(ScriptEngine::scriptEngine()->context(), *mValue, name.c_str()));
+    }
+    return ScriptValue();
+}
+
+ScriptValue ScriptValue::getProperty(uint32_t value) const
+{
+    if (type() & Type::Object) {
+        return ScriptValue(JS_GetPropertyUint32(ScriptEngine::scriptEngine()->context(), *mValue, value));
+    }
+    return ScriptValue();
+}
+
+bool ScriptValue::setProperty(const std::string &name, const ScriptValue &value)
+{
+    if (type() & Type::Object && value) {
+        ScriptEngine *engine = ScriptEngine::scriptEngine();
+        auto ctx = engine->context();
+        return JS_SetPropertyStr(ctx, *mValue, name.c_str(), *value.clone()) == 0; // ### is this right?
+    }
+    return false;
+}
+
+bool ScriptValue::setProperty(uint32_t idx, const ScriptValue &value)
+{
+    if (type() & Type::Array && value) {
+        ScriptEngine *engine = ScriptEngine::scriptEngine();
+        auto ctx = engine->context();
+        return JS_SetProperty(ctx, *mValue, idx, *value.clone()) == 0; // ### is this right?
+    }
+    return false;
 }
 
 ScriptValue::Type ScriptValue::type() const

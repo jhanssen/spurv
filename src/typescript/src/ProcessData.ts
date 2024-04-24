@@ -9,9 +9,12 @@ export class ProcessData {
     private stdoutStrings: string[];
     private stdoutArrayBuffers: ArrayBuffer[];
 
-    constructor(readonly name: string, readonly process: Process,
+    constructor(
+        readonly name: string,
+        readonly process: Process,
         readonly resolve: (result: ProcessResult) => void,
-        readonly reject: (error: Error) => void) {
+        readonly reject: (error: Error) => void
+    ) {
         this.stdoutStrings = [];
         this.stdoutArrayBuffers = [];
         this.stderrStrings = [];
@@ -36,7 +39,9 @@ export class ProcessData {
         if (exitCode === 0) {
             this.resolve({ exitCode, stdout, stderr });
         } else {
-            this.reject(new Error(`Process ${this.name} exited with exit code: ${exitCode}${error ? "\n" + error : ""}`));
+            this.reject(
+                new Error(`Process ${this.name} exited with exit code: ${exitCode}${error ? "\n" + error : ""}`)
+            );
         }
     }
 
@@ -61,5 +66,3 @@ export class ProcessData {
         }
     }
 }
-
-

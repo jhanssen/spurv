@@ -15,13 +15,15 @@ ScriptEngine::ScriptEngine(const std::filesystem::path &appPath)
 {
     assert(!tScriptEngine);
     tScriptEngine = this;
-    mGlobal = JS_GetGlobalObject(mContext);
-
 #define ScriptAtom(atom)                        \
     mAtoms.atom = JS_NewAtom(mContext, #atom);
 #include "ScriptAtomsInternal.h"
     FOREACH_SCRIPTATOM(ScriptAtom);
 #undef ScriptAtom
+
+    mGlobal = ScriptValue(JS_GetGlobalObject(mContext));
+    mSpurv = ScriptValue(std::vector<std::pair<std::string, ScriptValue>>());
+    mGlobal.setProperty("spurv", mSpurv);
 
     bindFunction("log", &Builtins::log);
     bindFunction("setProcessHandler", &Builtins::setProcessHandler);
@@ -45,7 +47,6 @@ ScriptEngine::ScriptEngine(const std::filesystem::path &appPath)
 ScriptEngine::~ScriptEngine()
 {
     JS_FreeAtom(mContext, mAtoms.length);
-    JS_FreeValue(mContext, mGlobal);
     JS_FreeContext(mContext);
     JS_RunGC(mRuntime);
     JS_FreeRuntime(mRuntime);
@@ -73,14 +74,21 @@ bool ScriptEngine::eval(const std::string &url, const std::string &source)
     return ScriptValue(JS_Eval(mContext, source.c_str(), source.size(), url.c_str(), JS_EVAL_TYPE_MODULE)).type() != ScriptValue::Type::Error;
 }
 
-void ScriptEngine::bindFunction(const std::string &name, std::function<ScriptValue(std::vector<ScriptValue> &&args)> &&function)
+ScriptValue ScriptEngine::bindFunction(ScriptValue::Function &&function)
 {
     const int magic = ++mMagic;
     std::unique_ptr<FunctionData> data = std::make_unique<FunctionData>();
     data->value = ScriptValue(JS_NewCFunctionData(mContext, bindHelper, 0, magic, 0, nullptr));
     data->function = std::move(function);
-    JS_SetPropertyStr(mContext, mGlobal, name.c_str(), *data->value);
+    auto ret = data->value.clone();
     mFunctions[magic] = std::move(data);
+    return ret;
+}
+
+void ScriptEngine::bindFunction(const std::string &name, ScriptValue::Function &&function)
+{
+    ScriptValue func = bindFunction(std::move(function));
+    JS_SetPropertyStr(mContext, *mSpurv, name.c_str(), *func);
 }
 
 JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int magic, JSValue *)

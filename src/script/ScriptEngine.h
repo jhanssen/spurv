@@ -27,8 +27,8 @@ public:
     JSContext *context() const { return mContext; }
 
     const ScriptAtoms &atoms() { return mAtoms; }
-    // could do some nicer template stuff
-    void bindFunction(const std::string &name, std::function<ScriptValue(std::vector<ScriptValue> &&args)> &&function);
+    ScriptValue bindFunction(ScriptValue::Function &&function);
+    void bindFunction(const std::string &name, ScriptValue::Function &&function);
 private:
     static JSValue bindHelper(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *);
 
@@ -36,7 +36,7 @@ private:
     int mMagic { 0 };
     struct FunctionData {
         ScriptValue value; // Do we need this for it to stay alive?
-        std::function<ScriptValue(std::vector<ScriptValue> &&args)> function;
+        ScriptValue::Function function;
     };
 
     std::unordered_map<int, std::unique_ptr<FunctionData>> mFunctions;
@@ -45,7 +45,7 @@ private:
     JSContext *mContext = nullptr;
     const std::filesystem::path mAppPath;
     ScriptAtoms mAtoms;
-    JSValue mGlobal {};
+    ScriptValue mGlobal, mSpurv;
     ScriptValue mProcessHandler;
 };
 } // namespace spurv

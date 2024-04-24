@@ -3,6 +3,7 @@
 #include <string>
 #include <quickjs.h>
 #include <optional>
+#include <vector>
 #include <functional>
 #include <EnumClassBitmask.h>
 #include <Result.h>
@@ -11,6 +12,8 @@ namespace spurv {
 class ScriptValue
 {
 public:
+    using Function = std::function<ScriptValue(std::vector<ScriptValue> &&args)>;
+
     ScriptValue() = default;
     ScriptValue(ScriptValue &&other);
     explicit ScriptValue(JSValue value);
@@ -24,6 +27,7 @@ public:
     explicit ScriptValue(const char8_t *str, size_t len);
     explicit ScriptValue(const std::vector<ScriptValue> &array);
     explicit ScriptValue(const std::vector<std::pair<std::string, ScriptValue>> &object);
+    explicit ScriptValue(Function &&function);
     ~ScriptValue();
 
     void ref();
@@ -44,15 +48,37 @@ public:
         Object            = 0x000200,
         Array             = 0x000400 | Object,
         ArrayBuffer       = 0x000800 | Object,
-        DataView          = 0x001000 | Object,
-        TypedArray        = 0x002000 | Object,
-        Symbol            = 0x004000,
-        BigNum            = 0x008000,
-        BigInt            = 0x010000 | BigNum,
-        BigFloat          = 0x020000 | BigNum,
-        BigDecimal        = 0x040000 | BigNum,
-        Function          = 0x080000
+        TypedArray        = 0x001000 | Object,
+        Symbol            = 0x002000,
+        BigNum            = 0x004000,
+        BigInt            = 0x008000 | BigNum,
+        BigFloat          = 0x010000 | BigNum,
+        BigDecimal        = 0x020000 | BigNum,
+        Function          = 0x040000
     };
+
+    bool isInvalid() const;
+    bool isValid() const;
+    bool isNull() const;
+    bool isNullOrUndefined() const;
+    bool isString() const;
+    bool isBoolean() const;
+    bool isNumber() const;
+    bool isDouble() const;
+    bool isInt() const;
+    bool isError() const;
+    bool isException() const;
+    bool isObject() const;
+    bool isStrictObject() const;
+    bool isArray() const;
+    bool isArrayBuffer() const;
+    bool isTypedArray() const;
+    bool isSymbol() const;
+    bool isBigNum() const;
+    bool isBigInt() const;
+    bool isBigFloat() const;
+    bool isBigDecimal() const;
+    bool isFunction() const;
 
     ScriptValue &operator=(ScriptValue &&other);
 
@@ -82,13 +108,137 @@ public:
 
     void forEach(std::function<void(const ScriptValue &value, int idx)> function);
 
+    ScriptValue getProperty(const std::string &name) const;
+    ScriptValue getProperty(uint32_t value) const;
+    bool setProperty(const std::string &name, const ScriptValue &value);
+    bool setProperty(uint32_t idx, const ScriptValue &value);
+
 private:
     std::optional<JSValue> mValue;
     mutable std::optional<Type> mType;
 };
 
+
 template<>
 struct IsEnumBitmask<ScriptValue::Type> {
     static constexpr bool enable = true;
 };
+
+
+inline bool ScriptValue::isInvalid() const
+{
+    return type() == Type::Invalid;
+}
+
+inline bool ScriptValue::isValid() const
+{
+    return mValue.has_value();
+}
+
+inline bool ScriptValue::isNull() const
+{
+    return type() == Type::Null;
+}
+
+inline bool ScriptValue::isNullOrUndefined() const
+{
+    switch (type()) {
+    case Type::Null:
+    case Type::Undefined:
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+
+inline bool ScriptValue::isString() const
+{
+    return type() == Type::String;
+}
+
+inline bool ScriptValue::isBoolean() const
+{
+    return type() == Type::Boolean;
+}
+
+inline bool ScriptValue::isNumber() const
+{
+    return type() & Type::Number;
+}
+
+inline bool ScriptValue::isDouble() const
+{
+    return type() == Type::Double;
+}
+
+inline bool ScriptValue::isInt() const
+{
+    return type() == Type::Int;
+}
+
+inline bool ScriptValue::isError() const
+{
+    return type() == Type::Error;
+}
+
+inline bool ScriptValue::isException() const
+{
+    return type() == Type::Exception;
+}
+
+inline bool ScriptValue::isObject() const
+{
+    return type() & Type::Object;
+}
+
+inline bool ScriptValue::isStrictObject() const
+{
+    return type() == Type::Object;
+}
+
+inline bool ScriptValue::isArray() const
+{
+    return type() == Type::Array;
+}
+
+inline bool ScriptValue::isArrayBuffer() const
+{
+    return type() == Type::ArrayBuffer;
+}
+
+inline bool ScriptValue::isTypedArray() const
+{
+    return type() == Type::TypedArray;
+}
+
+inline bool ScriptValue::isSymbol() const
+{
+    return type() == Type::Symbol;
+}
+
+inline bool ScriptValue::isBigNum() const
+{
+    return type() & Type::BigNum;
+}
+
+inline bool ScriptValue::isBigInt() const
+{
+    return type() == Type::BigInt;
+}
+
+inline bool ScriptValue::isBigFloat() const
+{
+    return type() == Type::BigFloat;
+}
+
+inline bool ScriptValue::isBigDecimal() const
+{
+    return type() == Type::BigDecimal;
+}
+
+inline bool ScriptValue::isFunction() const
+{
+    return type() == Type::Function;
+}
 } // namespace spurv
