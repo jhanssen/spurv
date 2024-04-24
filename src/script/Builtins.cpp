@@ -7,7 +7,7 @@ namespace spurv {
 namespace Builtins {
 ScriptValue log(std::vector<ScriptValue> &&args)
 {
-    if (args.size() < 2 || args[0].type() & ScriptValue::Type::Number) {
+    if (args.size() < 2 || !(args[0].type() & ScriptValue::Type::Number)) {
         return ScriptValue::makeError("Invalid arguments");
     }
 

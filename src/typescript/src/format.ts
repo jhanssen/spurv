@@ -38,7 +38,7 @@ export function format(...args: unknown[]): string {
         }
 
         const last = ret[ret.length - 1];
-        if (last !== " " && last !== "\n") {
+        if (ret && last !== " " && last !== "\n") {
             ret += " ";
         }
         ret += str!;
