@@ -128,12 +128,10 @@ private:
     mutable std::optional<Type> mType;
 };
 
-
 template<>
 struct IsEnumBitmask<ScriptValue::Type> {
     static constexpr bool enable = true;
 };
-
 
 inline bool ScriptValue::isInvalid() const
 {
