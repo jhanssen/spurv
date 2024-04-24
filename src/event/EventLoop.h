@@ -48,9 +48,9 @@ public:
         SingleShot,
         Repeat
     };
-    uint64_t startTimer(std::function<void(uint64_t)>&& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
-    virtual uint64_t startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
-    virtual void stopTimer(uint64_t id);
+    uint32_t startTimer(std::function<void(uint32_t)>&& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
+    virtual uint32_t startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
+    virtual void stopTimer(uint32_t id);
 
     bool isMainEventLoop() const;
     static EventLoop* mainEventLoop();
@@ -70,8 +70,8 @@ private:
     void run_internal();
     void post_internal(std::unique_ptr<Event>&& event);
     void stop_internal();
-    uint64_t startTimer_internal(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode);
-    void stopTimer_internal(uint64_t id);
+    uint32_t startTimer_internal(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode);
+    void stopTimer_internal(uint32_t id);
     bool processEvents();
 
 private:
@@ -81,13 +81,13 @@ private:
 
     struct Timer
     {
-        uint64_t id;
+        uint32_t id;
         uint64_t timeout;
         TimerMode mode;
         std::shared_ptr<Event> event;
     };
     std::vector<Timer> mTimers;
-    uint64_t mNextTimerId = 0;
+    uint32_t mNextTimerId = 0;
 
     bool mStopped = false;
 

@@ -21,7 +21,7 @@ struct EventLoopImplUv
     uv_async_t uvpost;
     struct UvTimer
     {
-        uint64_t id;
+        uint32_t id;
         // holds the event shared_ptr alive for as long as
         // the uv_timer_t holds the raw pointer
         std::shared_ptr<EventLoop::Event> event;
@@ -78,7 +78,7 @@ private:
 class TimerEvent : public EventLoop::Event
 {
 public:
-    TimerEvent(std::function<void(uint64_t)>&& func)
+    TimerEvent(std::function<void(uint32_t)>&& func)
         : mFunc(std::move(func))
     {
     }
@@ -86,7 +86,7 @@ public:
     TimerEvent(TimerEvent&&) = default;
     TimerEvent& operator=(TimerEvent&&) = default;
 
-    void setId(uint64_t id)
+    void setId(uint32_t id)
     {
         mId = id;
     }
@@ -97,8 +97,8 @@ protected:
         mFunc(mId);
     }
 private:
-    std::function<void(uint64_t)> mFunc;
-    uint64_t mId { 0 };
+    std::function<void(uint32_t)> mFunc;
+    uint32_t mId { 0 };
 };
 
 EventLoop::EventLoop()
@@ -156,20 +156,20 @@ void EventLoop::post(std::function<void()>&& event)
     post(std::make_unique<FunctionEvent>(std::move(event)));
 }
 
-uint64_t EventLoop::startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode)
+uint32_t EventLoop::startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode)
 {
     return startTimer_internal(event, timeout, mode);
 }
 
-uint64_t EventLoop::startTimer(std::function<void(uint64_t)>&& event, uint64_t timeout, TimerMode mode)
+uint32_t EventLoop::startTimer(std::function<void(uint32_t)>&& event, uint64_t timeout, TimerMode mode)
 {
     const auto ev = std::make_shared<TimerEvent>(std::move(event));
-    const uint64_t id = startTimer(ev, timeout, mode);
+    const uint32_t id = startTimer(ev, timeout, mode);
     ev->setId(id);
     return id;
 }
 
-void EventLoop::stopTimer(uint64_t id)
+void EventLoop::stopTimer(uint32_t id)
 {
     stopTimer_internal(id);
 }
@@ -194,7 +194,7 @@ void EventLoop::post_internal(std::unique_ptr<Event>&& event)
     }
 }
 
-uint64_t EventLoop::startTimer_internal(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode)
+uint32_t EventLoop::startTimer_internal(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode)
 {
     auto id = ++mNextTimerId;
     std::lock_guard lock(mMutex);
@@ -217,7 +217,7 @@ uint64_t EventLoop::startTimer_internal(const std::shared_ptr<Event>& event, uin
     return id;
 }
 
-void EventLoop::stopTimer_internal(uint64_t id)
+void EventLoop::stopTimer_internal(uint32_t id)
 {
     std::lock_guard lock(mMutex);
     auto it = mTimers.begin();
