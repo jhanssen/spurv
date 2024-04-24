@@ -75,6 +75,32 @@ private:
     std::function<void()> mFunc;
 };
 
+class TimerEvent : public EventLoop::Event
+{
+public:
+    TimerEvent(std::function<void(uint64_t)>&& func)
+        : mFunc(std::move(func))
+    {
+    }
+
+    TimerEvent(TimerEvent&&) = default;
+    TimerEvent& operator=(TimerEvent&&) = default;
+
+    void setId(uint64_t id)
+    {
+        mId = id;
+    }
+
+protected:
+    virtual void execute() override
+    {
+        mFunc(mId);
+    }
+private:
+    std::function<void(uint64_t)> mFunc;
+    uint64_t mId { 0 };
+};
+
 EventLoop::EventLoop()
 {
 }
@@ -135,9 +161,12 @@ uint64_t EventLoop::startTimer(const std::shared_ptr<Event>& event, uint64_t tim
     return startTimer_internal(event, timeout, mode);
 }
 
-uint64_t EventLoop::startTimer(std::function<void()>&& event, uint64_t timeout, TimerMode mode)
+uint64_t EventLoop::startTimer(std::function<void(uint64_t)>&& event, uint64_t timeout, TimerMode mode)
 {
-    return startTimer(std::make_shared<FunctionEvent>(std::move(event)), timeout, mode);
+    const auto ev = std::make_shared<TimerEvent>(std::move(event));
+    const uint64_t id = startTimer(ev, timeout, mode);
+    ev->setId(id);
+    return id;
 }
 
 void EventLoop::stopTimer(uint64_t id)

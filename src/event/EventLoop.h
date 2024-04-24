@@ -48,7 +48,7 @@ public:
         SingleShot,
         Repeat
     };
-    uint64_t startTimer(std::function<void()>&& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
+    uint64_t startTimer(std::function<void(uint64_t)>&& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
     virtual uint64_t startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
     virtual void stopTimer(uint64_t id);
 
