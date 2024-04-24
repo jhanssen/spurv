@@ -32,7 +32,7 @@ const plugins = [
         : [])
 ];
 const builds = [{
-    input: "./src/spurv.ts",
+    input: "./src/index.ts",
     plugins,
     external: [],
     output: {

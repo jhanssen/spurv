@@ -11,10 +11,10 @@ set(TS_DEPS
     src/assert.ts
     src/concatArrayBuffers.ts
     src/format.ts
+    src/index.ts
     src/log.ts
     src/splitCommand.ts
-    src/spurv.ts
-    src/types.d.ts
+    src/spurv.d.ts
     tsconfig.json)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dist/spurv.js COMMAND node ${CMAKE_CURRENT_LIST_DIR}/build.js DEPENDS ${TS_DEPS})
