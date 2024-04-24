@@ -167,7 +167,7 @@ void MainEventLoop::post(std::unique_ptr<Event>&& event)
     glfwPostEmptyEvent();
 }
 
-uint64_t MainEventLoop::startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode)
+uint32_t MainEventLoop::startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode)
 {
     assert(isMainEventLoop());
 
@@ -195,7 +195,7 @@ uint64_t MainEventLoop::startTimer(const std::shared_ptr<Event>& event, uint64_t
     return id;
 }
 
-void MainEventLoop::stopTimer(uint64_t id)
+void MainEventLoop::stopTimer(uint32_t id)
 {
     assert(isMainEventLoop());
 

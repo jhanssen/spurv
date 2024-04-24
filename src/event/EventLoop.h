@@ -43,7 +43,7 @@ public:
     void post(std::function<void()>&& event);
     virtual void post(std::unique_ptr<Event>&& event);
 
-    enum TimerMode
+    enum class TimerMode
     {
         SingleShot,
         Repeat

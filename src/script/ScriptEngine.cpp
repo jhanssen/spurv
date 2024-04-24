@@ -10,8 +10,8 @@
 
 namespace spurv {
 thread_local ScriptEngine *ScriptEngine::tScriptEngine;
-ScriptEngine::ScriptEngine(const std::filesystem::path &appPath)
-    : mRuntime(JS_NewRuntime()), mContext(JS_NewContext(mRuntime)), mAppPath(appPath)
+ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &appPath)
+    : mEventLoop(eventLoop), mRuntime(JS_NewRuntime()), mContext(JS_NewContext(mRuntime)), mAppPath(appPath)
 {
     assert(!tScriptEngine);
     tScriptEngine = this;
@@ -150,19 +150,48 @@ JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValue
     return *ScriptValue::undefined();
 }
 
-ScriptValue ScriptEngine::setTimeout(std::vector<ScriptValue> &&args)
+ScriptValue ScriptEngine::setTimeoutImpl(EventLoop::TimerMode mode, std::vector<ScriptValue> &&args)
 {
     if (args.empty() || !args[0].isFunction()) {
         return ScriptValue::makeError("First argument must be a function");
     }
 
-    double ms = 0;
+    unsigned int ms = 0;
     if (args.size() > 1) {
-        auto ret = args[1].toDouble();
+        auto ret = args[1].toUint();
         if (ret.ok()) {
-            ms = std::max<double>(0, ms);
+            ms = *ret;
         }
     }
-    return {};
+    ScriptValue callback = std::move(args[0]);
+    args.erase(args.begin(), args.begin() + 2);
+
+    std::unique_ptr<TimerData> timerData = std::make_unique<TimerData>();
+    timerData->timerMode = mode;
+    timerData->args = std::move(args);
+    timerData->callback = std::move(callback);
+    const uint32_t id = mEventLoop->startTimer([this](uint32_t timerId) {
+        const auto it = mTimers.find(timerId);
+        if (it == mTimers.end()) {
+            spdlog::error("Couldn't find timer with id {}", timerId);
+            return;
+        }
+        auto data = std::move(it->second);
+        mTimers.erase(it);
+        data->callback.call(data->args);
+    }, ms, mode);
+    mTimers[id] = std::move(timerData);
+    return ScriptValue(id);
 }
+
+ScriptValue ScriptEngine::setTimeout(std::vector<ScriptValue> &&args)
+{
+    return setTimeoutImpl(EventLoop::TimerMode::SingleShot, std::move(args));
+}
+
+ScriptValue ScriptEngine::setInterval(std::vector<ScriptValue> &&args)
+{
+    return setTimeoutImpl(EventLoop::TimerMode::Repeat, std::move(args));
+}
+
 } // namespace spurv

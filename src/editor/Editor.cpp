@@ -43,8 +43,8 @@ void Editor::thread_internal()
             mInitialized = true;
         }
 
-        mScriptEngine = std::make_unique<ScriptEngine>(mImpl->appPath);
         auto loop = static_cast<MainEventLoop*>(EventLoop::mainEventLoop());
+        mScriptEngine = std::make_unique<ScriptEngine>(loop, mImpl->appPath);
         loop->post([editor = this]() {
             editor->mOnReady.emit();
         });

@@ -14,7 +14,7 @@ namespace spurv {
 class ScriptEngine
 {
 public:
-    ScriptEngine(const std::filesystem::path &appPath);
+    ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &appPath);
     ~ScriptEngine();
 
     Result<void> eval(const std::filesystem::path &file);
@@ -35,7 +35,9 @@ public:
     void bindFunction(const std::string &name, ScriptValue::Function &&function);
 private:
     // setTimeout(callback: (...args: unknown[]) => void, ms: number, ...args: unknown[]): number;
+    ScriptValue setTimeoutImpl(EventLoop::TimerMode mode, std::vector<ScriptValue> &&args);
     ScriptValue setTimeout(std::vector<ScriptValue> &&args);
+    ScriptValue setInterval(std::vector<ScriptValue> &&args);
     // clearTimeout(timeoutId: number): void;
     // setInterval(callback: (...args: unknown[]) => void, ms: number, ...args: unknown[]): number;
     // clearInterval(intervalId: number): void;
@@ -44,6 +46,7 @@ private:
     static JSValue bindHelper(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *);
 
     thread_local static ScriptEngine *tScriptEngine;
+    EventLoop *mEventLoop;
     int mMagic { 0 };
     struct FunctionData {
         ScriptValue value; // Do we need this for it to stay alive?
@@ -52,12 +55,13 @@ private:
 
     std::unordered_map<int, std::unique_ptr<FunctionData>> mFunctions;
 
-    struct Timers {
-        EventLoop::TimerMode timerMode { EventLoop::SingleShot };
+    struct TimerData {
+        EventLoop::TimerMode timerMode;
         ScriptValue callback;
+        std::vector<ScriptValue> args;
     };
 
-    std::unordered_map<uint64_t, std::unique_ptr<Timers>> mTimers;
+    std::unordered_map<uint32_t, std::unique_ptr<TimerData>> mTimers;
 
     JSRuntime *mRuntime = nullptr;
     JSContext *mContext = nullptr;
