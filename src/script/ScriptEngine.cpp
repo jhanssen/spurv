@@ -25,19 +25,23 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
     mSpurv = ScriptValue(std::vector<std::pair<std::string, ScriptValue>>());
     mGlobal.setProperty("spurv", mSpurv);
 
-    bindFunction("log", &Builtins::log);
-    bindFunction("setProcessHandler", &Builtins::setProcessHandler);
-    bindFunction("utf8tostring", &Builtins::utf8tostring);
-    bindFunction("utf16tostring", &Builtins::utf16tostring);
-    bindFunction("utf16letostring", &Builtins::utf16letostring);
-    bindFunction("utf16betostring", &Builtins::utf16betostring);
-    bindFunction("utf32tostring", &Builtins::utf32tostring);
-    bindFunction("stringtoutf8", &Builtins::stringtoutf8);
-    bindFunction("stringtoutf16", &Builtins::stringtoutf16);
-    bindFunction("stringtoutf16le", &Builtins::stringtoutf16le);
-    bindFunction("stringtoutf16be", &Builtins::stringtoutf16be);
-    bindFunction("stringtoutf32", &Builtins::stringtoutf32);
-    bindFunction("setKeyEventHandler", &Builtins::setKeyEventHandler);
+    bindSpurvFunction("log", &Builtins::log);
+    bindSpurvFunction("setProcessHandler", &Builtins::setProcessHandler);
+    bindSpurvFunction("utf8tostring", &Builtins::utf8tostring);
+    bindSpurvFunction("utf16tostring", &Builtins::utf16tostring);
+    bindSpurvFunction("utf16letostring", &Builtins::utf16letostring);
+    bindSpurvFunction("utf16betostring", &Builtins::utf16betostring);
+    bindSpurvFunction("utf32tostring", &Builtins::utf32tostring);
+    bindSpurvFunction("stringtoutf8", &Builtins::stringtoutf8);
+    bindSpurvFunction("stringtoutf16", &Builtins::stringtoutf16);
+    bindSpurvFunction("stringtoutf16le", &Builtins::stringtoutf16le);
+    bindSpurvFunction("stringtoutf16be", &Builtins::stringtoutf16be);
+    bindSpurvFunction("stringtoutf32", &Builtins::stringtoutf32);
+    bindSpurvFunction("setKeyEventHandler", &Builtins::setKeyEventHandler);
+    bindGlobalFunction("setTimeout", std::bind(&ScriptEngine::setTimeout, this, std::placeholders::_1));
+    bindGlobalFunction("setInterval", std::bind(&ScriptEngine::setInterval, this, std::placeholders::_1));
+    bindGlobalFunction("clearTimeout", std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
+    bindGlobalFunction("clearInterval", std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
 
     const std::filesystem::path file = mAppPath / "../src/typescript/dist/spurv.js";
     auto ret = eval(file);
@@ -120,10 +124,16 @@ ScriptValue ScriptEngine::bindFunction(ScriptValue::Function &&function)
     return ret;
 }
 
-void ScriptEngine::bindFunction(const std::string &name, ScriptValue::Function &&function)
+void ScriptEngine::bindSpurvFunction(const std::string &name, ScriptValue::Function &&function)
 {
     ScriptValue func = bindFunction(std::move(function));
     JS_SetPropertyStr(mContext, *mSpurv, name.c_str(), *func);
+}
+
+void ScriptEngine::bindGlobalFunction(const std::string &name, ScriptValue::Function &&function)
+{
+    ScriptValue func = bindFunction(std::move(function));
+    JS_SetPropertyStr(mContext, *mGlobal, name.c_str(), *func);
 }
 
 JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int magic, JSValue *)
@@ -192,6 +202,21 @@ ScriptValue ScriptEngine::setTimeout(std::vector<ScriptValue> &&args)
 ScriptValue ScriptEngine::setInterval(std::vector<ScriptValue> &&args)
 {
     return setTimeoutImpl(EventLoop::TimerMode::Repeat, std::move(args));
+}
+
+ScriptValue ScriptEngine::clearTimeout(std::vector<ScriptValue> &&args)
+{
+    if (!args.empty()) {
+        const auto id = args[0].toUint();
+        if (id.ok()) {
+            auto it = mTimers.find(*id);
+            if (it != mTimers.end()) {
+                mTimers.erase(it);
+                mEventLoop->stopTimer(*id);
+            }
+        }
+    }
+    return ScriptValue();
 }
 
 } // namespace spurv

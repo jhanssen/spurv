@@ -32,15 +32,17 @@ public:
 
     const ScriptAtoms &atoms() { return mAtoms; }
     ScriptValue bindFunction(ScriptValue::Function &&function);
-    void bindFunction(const std::string &name, ScriptValue::Function &&function);
+    void bindSpurvFunction(const std::string &name, ScriptValue::Function &&function);
+    void bindGlobalFunction(const std::string &name, ScriptValue::Function &&function);
 private:
     // setTimeout(callback: (...args: unknown[]) => void, ms: number, ...args: unknown[]): number;
     ScriptValue setTimeoutImpl(EventLoop::TimerMode mode, std::vector<ScriptValue> &&args);
     ScriptValue setTimeout(std::vector<ScriptValue> &&args);
+    // setInterval(callback: (...args: unknown[]) => void, ms: number, ...args: unknown[]): number;
     ScriptValue setInterval(std::vector<ScriptValue> &&args);
     // clearTimeout(timeoutId: number): void;
-    // setInterval(callback: (...args: unknown[]) => void, ms: number, ...args: unknown[]): number;
     // clearInterval(intervalId: number): void;
+    ScriptValue clearTimeout(std::vector<ScriptValue> &&args);
     // queueMicrotask(callback: () => void): void;
 
     static JSValue bindHelper(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *);
