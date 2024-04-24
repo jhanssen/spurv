@@ -149,5 +149,20 @@ JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValue
     }
     return *ScriptValue::undefined();
 }
-} // namespace spurv
 
+ScriptValue ScriptEngine::setTimeout(std::vector<ScriptValue> &&args)
+{
+    if (args.empty() || !args[0].isFunction()) {
+        return ScriptValue::makeError("First argument must be a function");
+    }
+
+    double ms = 0;
+    if (args.size() > 1) {
+        auto ret = args[1].toDouble();
+        if (ret.ok()) {
+            ms = std::max<double>(0, ms);
+        }
+    }
+    return {};
+}
+} // namespace spurv

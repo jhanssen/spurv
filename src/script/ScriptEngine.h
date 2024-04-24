@@ -5,6 +5,7 @@
 #include <functional>
 #include <filesystem>
 #include <quickjs.h>
+#include <EventLoop.h>
 
 #include "ScriptValue.h"
 #include "ScriptAtoms.h"
@@ -33,6 +34,13 @@ public:
     ScriptValue bindFunction(ScriptValue::Function &&function);
     void bindFunction(const std::string &name, ScriptValue::Function &&function);
 private:
+    // setTimeout(callback: (...args: unknown[]) => void, ms: number, ...args: unknown[]): number;
+    ScriptValue setTimeout(std::vector<ScriptValue> &&args);
+    // clearTimeout(timeoutId: number): void;
+    // setInterval(callback: (...args: unknown[]) => void, ms: number, ...args: unknown[]): number;
+    // clearInterval(intervalId: number): void;
+    // queueMicrotask(callback: () => void): void;
+
     static JSValue bindHelper(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *);
 
     thread_local static ScriptEngine *tScriptEngine;
@@ -43,6 +51,13 @@ private:
     };
 
     std::unordered_map<int, std::unique_ptr<FunctionData>> mFunctions;
+
+    struct Timers {
+        EventLoop::TimerMode timerMode { EventLoop::SingleShot };
+        ScriptValue callback;
+    };
+
+    std::unordered_map<uint64_t, std::unique_ptr<Timers>> mTimers;
 
     JSRuntime *mRuntime = nullptr;
     JSContext *mContext = nullptr;
