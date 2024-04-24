@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Color.h>
+#include <Result.h>
 #include <Unicode.h>
 #include <fmt/core.h>
 #include <fmt/color.h>
@@ -39,6 +40,20 @@ public:
     template <typename Context>
     constexpr auto format (spurv::Linebreak lb, Context& ctx) const {
         return format_to(ctx.out(), "LB idx={} uc={:#06x}", lb.first, static_cast<uint32_t>(lb.second));
+    }
+};
+
+template<typename T>
+struct fmt::formatter<spurv::Result<T>>
+{
+public:
+    constexpr auto parse (format_parse_context& ctx) { return ctx.begin(); }
+    template <typename Context>
+    constexpr auto format (spurv::Result<T> r, Context& ctx) const {
+        if (r.ok()) {
+            return format_to(ctx.out(), "{}", *r);
+        }
+        return format_to(ctx.out(), "Error {}", r.error().message);
     }
 };
 

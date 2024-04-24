@@ -14,6 +14,11 @@ class ScriptValue
 public:
     using Function = std::function<ScriptValue(std::vector<ScriptValue> &&args)>;
 
+    enum Tag {
+        Object,
+        Array
+    };
+
     ScriptValue() = default;
     ScriptValue(ScriptValue &&other);
     explicit ScriptValue(JSValue value);
@@ -28,9 +33,13 @@ public:
     explicit ScriptValue(const std::vector<ScriptValue> &array);
     explicit ScriptValue(const std::vector<std::pair<std::string, ScriptValue>> &object);
     explicit ScriptValue(Function &&function);
+    explicit ScriptValue(Tag tag);
     ~ScriptValue();
 
     void ref();
+
+    ScriptValue call(const std::vector<ScriptValue> &args);
+    ScriptValue call(const ScriptValue &arg);
 
     ScriptValue clone() const;
     JSValue acquire();
@@ -68,6 +77,7 @@ public:
     bool isInt() const;
     bool isError() const;
     bool isException() const;
+    bool isExceptionOrError() const;
     bool isObject() const;
     bool isStrictObject() const;
     bool isArray() const;
@@ -110,8 +120,8 @@ public:
 
     ScriptValue getProperty(const std::string &name) const;
     ScriptValue getProperty(uint32_t value) const;
-    bool setProperty(const std::string &name, const ScriptValue &value);
-    bool setProperty(uint32_t idx, const ScriptValue &value);
+    Result<void> setProperty(const std::string &name, const ScriptValue &value);
+    Result<void> setProperty(uint32_t idx, const ScriptValue &value);
 
 private:
     std::optional<JSValue> mValue;
@@ -185,6 +195,18 @@ inline bool ScriptValue::isError() const
 inline bool ScriptValue::isException() const
 {
     return type() == Type::Exception;
+}
+
+inline bool ScriptValue::isExceptionOrError() const
+{
+    switch (type()) {
+    case Type::Exception:
+    case Type::Error:
+        return true;
+    default:
+        break;
+    }
+    return false;
 }
 
 inline bool ScriptValue::isObject() const

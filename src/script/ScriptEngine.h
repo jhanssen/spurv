@@ -16,8 +16,8 @@ public:
     ScriptEngine(const std::filesystem::path &appPath);
     ~ScriptEngine();
 
-    bool eval(const std::filesystem::path &file);
-    bool eval(const std::string &url, const std::string &source);
+    Result<void> eval(const std::filesystem::path &file);
+    Result<void> eval(const std::string &url, const std::string &source);
 
     void setProcessHandler(ScriptValue &&value);
     void setKeyEventHandler(ScriptValue &&value);

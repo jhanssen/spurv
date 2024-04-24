@@ -40,14 +40,19 @@ ScriptEngine::ScriptEngine(const std::filesystem::path &appPath)
     bindFunction("setKeyEventHandler", &Builtins::setKeyEventHandler);
 
     const std::filesystem::path file = mAppPath / "../src/typescript/dist/spurv.js";
-    if (!eval(file)) {
-        spdlog::critical("Failed to eval file {}", file);
+    auto ret = eval(file);
+    if (ret.hasError()) {
+        spdlog::critical("{}", ret.error().message);
     }
 }
 
 ScriptEngine::~ScriptEngine()
 {
-    JS_FreeAtom(mContext, mAtoms.length);
+#define ScriptAtom(atom)                        \
+    JS_FreeAtom(mContext, mAtoms.atom);
+#include "ScriptAtomsInternal.h"
+    FOREACH_SCRIPTATOM(ScriptAtom);
+#undef ScriptAtom
     JS_FreeContext(mContext);
     JS_RunGC(mRuntime);
     JS_FreeRuntime(mRuntime);
@@ -62,28 +67,46 @@ void ScriptEngine::setProcessHandler(ScriptValue &&value)
 
 void ScriptEngine::setKeyEventHandler(ScriptValue &&value)
 {
+    spdlog::error("Set key event handler", value.isFunction());
     mKeyHandler = std::move(value);
 }
 
 void ScriptEngine::onKey(int key, int scancode, int action, int mods)
 {
-    spdlog::error("Got key key: {} scancode: {} action: {} mods: {}\n",
-                  key, scancode, action, mods);
+    if (!mKeyHandler.isFunction()) {
+        spdlog::error("Got key but no key handler key: {} scancode: {} action: {} mods: {}\n",
+                      key, scancode, action, mods);
+        return;
+    }
+    ScriptValue object(ScriptValue::Object);
+    object.setProperty("key", ScriptValue(key));
+    object.setProperty("scancode", ScriptValue(scancode));
+    object.setProperty("action", ScriptValue(action));
+    object.setProperty("mods", ScriptValue(mods));
+    mKeyHandler.call(object);
 }
 
-bool ScriptEngine::eval(const std::filesystem::path &file)
+Result<void> ScriptEngine::eval(const std::filesystem::path &file)
 {
     bool ok;
     std::string contents = readFile(file, &ok);
     if (!ok) {
-        return false;
+        return makeError(fmt::format("Unable to read file {}", file));
     }
     return eval(file.string(), contents);
 }
 
-bool ScriptEngine::eval(const std::string &url, const std::string &source)
+Result<void> ScriptEngine::eval(const std::string &url, const std::string &source)
 {
-    return ScriptValue(JS_Eval(mContext, source.c_str(), source.size(), url.c_str(), JS_EVAL_TYPE_MODULE)).type() != ScriptValue::Type::Error;
+    ScriptValue ret(JS_Eval(mContext, source.c_str(), source.size(), url.c_str(), JS_EVAL_TYPE_GLOBAL));
+
+    if (ret.isException()) {
+        ScriptValue exception(JS_GetException(mContext));
+        ScriptValue stack = exception.getProperty("stack");
+        return makeError(fmt::format("Failed to eval {}\n{}\n{}",
+                                     url, exception.toString(), stack.toString()));
+    }
+    return {};
 }
 
 ScriptValue ScriptEngine::bindFunction(ScriptValue::Function &&function)
@@ -119,6 +142,9 @@ JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValue
 
     ScriptValue ret = it->second->function(std::move(args));
     if (ret) {
+        if (ret.isError()) {
+            return JS_Throw(that->mContext, ret.acquire());
+        }
         return ret.acquire();
     }
     return *ScriptValue::undefined();

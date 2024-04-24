@@ -30,6 +30,7 @@ ScriptValue setProcessHandler(std::vector<ScriptValue> &&args)
     if (args.empty() || args[0].type() == ScriptValue::Type::Function) {
         return ScriptValue::makeError("Invalid arguments");
     }
+
     ScriptEngine::scriptEngine()->setProcessHandler(std::move(args[0]));
     return {};
 }
@@ -168,6 +169,7 @@ ScriptValue stringtoutf16(std::vector<ScriptValue> &&args)
     if (data.hasError()) {
         return ScriptValue::makeError(std::move(data).error().message);
     }
+
     size_t len = simdutf::utf16_length_from_utf8(data->c_str(), data->size());
     std::vector<char16_t> vector(len);
     const size_t converted = simdutf::convert_valid_utf8_to_utf16(data->c_str(), data->size(), vector.data());
@@ -184,6 +186,7 @@ ScriptValue stringtoutf16le(std::vector<ScriptValue> &&args)
     if (data.hasError()) {
         return ScriptValue::makeError(std::move(data).error().message);
     }
+
     size_t len = simdutf::utf16_length_from_utf8(data->c_str(), data->size());
     std::vector<char16_t> vector(len);
     const size_t converted = simdutf::convert_valid_utf8_to_utf16le(data->c_str(), data->size(), vector.data());
@@ -200,6 +203,7 @@ ScriptValue stringtoutf16be(std::vector<ScriptValue> &&args)
     if (data.hasError()) {
         return ScriptValue::makeError(std::move(data).error().message);
     }
+
     size_t len = simdutf::utf16_length_from_utf8(data->c_str(), data->size());
     std::vector<char16_t> vector(len);
     const size_t converted = simdutf::convert_valid_utf8_to_utf16be(data->c_str(), data->size(), vector.data());
@@ -216,6 +220,7 @@ ScriptValue stringtoutf32(std::vector<ScriptValue> &&args)
     if (data.hasError()) {
         return ScriptValue::makeError(std::move(data).error().message);
     }
+
     size_t len = simdutf::utf32_length_from_utf8(data->c_str(), data->size());
     std::vector<char32_t> vector(len);
     const size_t converted = simdutf::convert_valid_utf8_to_utf32(data->c_str(), data->size(), vector.data());
@@ -224,12 +229,12 @@ ScriptValue stringtoutf32(std::vector<ScriptValue> &&args)
 
 ScriptValue setKeyEventHandler(std::vector<ScriptValue> &&args)
 {
-    if (args.empty() || args[0].type() == ScriptValue::Type::Function) {
+    if (args.empty() || args[0].type() != ScriptValue::Type::Function) {
         return ScriptValue::makeError("Invalid arguments");
     }
+
     ScriptEngine::scriptEngine()->setKeyEventHandler(std::move(args[0]));
     return {};
 }
-
 } // namespace Builtins
 } // namespace spurv

@@ -3,6 +3,7 @@
 #include "JSExtra.h"
 #include <cassert>
 #include <unordered_set>
+#include <fmt/core.h>
 
 namespace spurv {
 ScriptValue::ScriptValue(JSValue value)
@@ -90,6 +91,17 @@ ScriptValue::ScriptValue(Function &&function)
     mValue = engine->bindFunction(std::move(function)).acquire();
 }
 
+ScriptValue::ScriptValue(Tag tag)
+{
+    auto engine = ScriptEngine::scriptEngine();
+    auto context = engine->context();
+    if (tag == Object) {
+        mValue = JS_NewObject(context);
+    } else {
+        mValue = JS_NewArray(context);
+    }
+}
+
 ScriptValue::~ScriptValue()
 {
     if (mValue) {
@@ -114,6 +126,33 @@ void ScriptValue::ref()
     if (mValue) {
         mValue = JS_DupValue(ScriptEngine::scriptEngine()->context(), *mValue);
     }
+}
+
+ScriptValue ScriptValue::call(const std::vector<ScriptValue> &args)
+{
+    if (isFunction()) {
+        std::vector<JSValue> argv(args.size());
+        size_t i = 0;
+        for (const ScriptValue &val : args) {
+            argv[i++] = *val;
+        }
+        return ScriptValue(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(),
+                                   argv.size(), argv.data()));
+    }
+    return ScriptValue::makeError("Not a function");
+}
+
+ScriptValue ScriptValue::call(const ScriptValue &arg)
+{
+    if (isFunction()) {
+        if (arg.isValid()) {
+            JSValue value = *arg;
+            return ScriptValue(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(),
+                                       1, &value));
+        }
+        return ScriptValue(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(), 0, nullptr));
+    }
+    return ScriptValue::makeError("Not a function");
 }
 
 ScriptValue ScriptValue::clone() const
@@ -205,24 +244,30 @@ ScriptValue ScriptValue::getProperty(uint32_t value) const
     return ScriptValue();
 }
 
-bool ScriptValue::setProperty(const std::string &name, const ScriptValue &value)
+Result<void> ScriptValue::setProperty(const std::string &name, const ScriptValue &value)
 {
     if (type() & Type::Object && value) {
         ScriptEngine *engine = ScriptEngine::scriptEngine();
         auto ctx = engine->context();
-        return JS_SetPropertyStr(ctx, *mValue, name.c_str(), *value.clone()) == 0; // ### is this right?
+        if (JS_SetPropertyStr(ctx, *mValue, name.c_str(), *value.clone()) == 0) {
+            return {};
+        }
+        return spurv::makeError(fmt::format("Failed to set property {}", name));
     }
-    return false;
+    return spurv::makeError(fmt::format("Failed to set property {}, value is not an object", name));
 }
 
-bool ScriptValue::setProperty(uint32_t idx, const ScriptValue &value)
+Result<void> ScriptValue::setProperty(uint32_t idx, const ScriptValue &value)
 {
     if (type() & Type::Array && value) {
         ScriptEngine *engine = ScriptEngine::scriptEngine();
         auto ctx = engine->context();
-        return JS_SetProperty(ctx, *mValue, idx, *value.clone()) == 0; // ### is this right?
+        if (JS_SetProperty(ctx, *mValue, idx, *value.clone()) == 0) {
+            return {};
+        }
+        return spurv::makeError(fmt::format("Failed to set property {}", idx));
     }
-    return false;
+    return spurv::makeError(fmt::format("Failed to set property {}, value is not an array", idx));
 }
 
 ScriptValue::Type ScriptValue::type() const
@@ -364,7 +409,7 @@ Result<std::string> ScriptValue::toString() const
             return ret;
         }
     }
-    return spurv::makeError("Invalid type for toString");
+    return spurv::makeError(fmt::format("Invalid type for toString {}", static_cast<int>(type())));
 }
 
 Result<double> ScriptValue::toDouble() const
@@ -481,5 +526,5 @@ Result<std::unordered_map<std::string, ScriptValue>> ScriptValue::toMap() const
     });
     return ret;
 }
-} // namespace spurv
 
+} // namespace spurv
