@@ -48,6 +48,9 @@ void Editor::thread_internal()
         loop->post([editor = this]() {
             editor->mOnReady.emit();
         });
+        loop->onKey().connect([this](int key, int scancode, int action, int mods) {
+            mScriptEngine->onKey(key, scancode, action, mods);
+        });
         loop->onUnicode().connect([this](uint32_t uc) {
             spdlog::error("editor uc {}", uc);
             if (mCurrentDoc) {

@@ -71,6 +71,11 @@ void MainEventLoop::run()
         eventLoop->mOnUnicode.emit(codepoint);
     });
 
+    glfwSetKeyCallback(mainWindow, [](GLFWwindow* win, int key, int scancode, int action, int mods) {
+        auto eventLoop = GlfwUserData::get<1, MainEventLoop>(win);
+        eventLoop->mOnKey.emit(key, scancode, action, mods);
+    });
+
     for (;;) {
         if (!processEvents())
             break;

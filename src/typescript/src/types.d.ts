@@ -47,6 +47,20 @@ declare namespace spurv {
         Strings = 0x4
     }
 
+    export function setProcessHandler(
+        handler: (event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => void
+    ): void;
+    export function startProcess(arguments: string[], stdin: ArrayBuffer | string | undefined, flags: number): number;
+    export function execProcess(
+        arguments: string[],
+        stdin: ArrayBuffer | string | undefined,
+        flags: number
+    ): NativeSynchronousProcessResult;
+    export function writeToProcessStdin(id: number, data: ArrayBuffer | string): void;
+    export function closeProcessStdin(id: number): void;
+
+    // unicode/buffers
+
     export function utf8tostring(buffer: ArrayBuffer): string;
 
     export function utf16tostring(buffer: ArrayBuffer): string;
@@ -63,15 +77,13 @@ declare namespace spurv {
 
     export function stringtoutf32(str: string): ArrayBuffer;
 
-    export function setProcessHandler(
-        handler: (event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => void
-    ): void;
-    export function startProcess(arguments: string[], stdin: ArrayBuffer | string | undefined, flags: number): number;
-    export function execProcess(
-        arguments: string[],
-        stdin: ArrayBuffer | string | undefined,
-        flags: number
-    ): NativeSynchronousProcessResult;
-    export function writeToProcessStdin(id: number, data: ArrayBuffer | string): void;
-    export function closeProcessStdin(id: number): void;
+    // events
+
+    export interface KeyEvent {
+        key: number;
+        scancode: number;
+        action: number;
+        mods: number;
+    }
+    export function setKeyEventHandler(handler: (event: KeyEvent) => void): void;
 }

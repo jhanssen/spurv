@@ -20,6 +20,9 @@ public:
     bool eval(const std::string &url, const std::string &source);
 
     void setProcessHandler(ScriptValue &&value);
+    void setKeyEventHandler(ScriptValue &&value);
+
+    void onKey(int key, int scancode, int action, int mods);
 
     static ScriptEngine *scriptEngine() { return tScriptEngine; }
 
@@ -45,7 +48,9 @@ private:
     JSContext *mContext = nullptr;
     const std::filesystem::path mAppPath;
     ScriptAtoms mAtoms;
-    ScriptValue mGlobal, mSpurv;
+    ScriptValue mGlobal;
+    ScriptValue mSpurv;
     ScriptValue mProcessHandler;
+    ScriptValue mKeyHandler;
 };
 } // namespace spurv

@@ -37,6 +37,7 @@ ScriptEngine::ScriptEngine(const std::filesystem::path &appPath)
     bindFunction("stringtoutf16le", &Builtins::stringtoutf16le);
     bindFunction("stringtoutf16be", &Builtins::stringtoutf16be);
     bindFunction("stringtoutf32", &Builtins::stringtoutf32);
+    bindFunction("setKeyEventHandler", &Builtins::setKeyEventHandler);
 
     const std::filesystem::path file = mAppPath / "../src/typescript/dist/spurv.js";
     if (!eval(file)) {
@@ -57,6 +58,17 @@ ScriptEngine::~ScriptEngine()
 void ScriptEngine::setProcessHandler(ScriptValue &&value)
 {
     mProcessHandler = std::move(value);
+}
+
+void ScriptEngine::setKeyEventHandler(ScriptValue &&value)
+{
+    mKeyHandler = std::move(value);
+}
+
+void ScriptEngine::onKey(int key, int scancode, int action, int mods)
+{
+    spdlog::error("Got key key: {} scancode: {} action: {} mods: {}\n",
+                  key, scancode, action, mods);
 }
 
 bool ScriptEngine::eval(const std::filesystem::path &file)
@@ -112,3 +124,4 @@ JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValue
     return *ScriptValue::undefined();
 }
 } // namespace spurv
+
