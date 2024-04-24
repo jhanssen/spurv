@@ -26,6 +26,8 @@ public:
     explicit ScriptValue(const std::vector<std::pair<std::string, ScriptValue>> &object);
     ~ScriptValue();
 
+    void ref();
+
     ScriptValue clone() const;
     JSValue acquire();
     enum class Type {

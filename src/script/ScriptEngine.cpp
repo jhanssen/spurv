@@ -37,9 +37,9 @@ ScriptEngine::ScriptEngine(const std::filesystem::path &appPath)
     bindFunction("stringtoutf32", &Builtins::stringtoutf32);
 
     const std::filesystem::path file = mAppPath / "../src/typescript/dist/spurv.js";
-    // if (!eval(file)) {
-    //     spdlog::critical("Failed to eval file {}", file);
-    // }
+    if (!eval(file)) {
+        spdlog::critical("Failed to eval file {}", file);
+    }
 }
 
 ScriptEngine::~ScriptEngine()
@@ -94,12 +94,13 @@ JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValue
     std::vector<ScriptValue> args(argc);
     for (int i=0; i<argc; ++i) {
         args[i] = ScriptValue(argv[i]);
+        args[i].ref();
     }
 
     ScriptValue ret = it->second->function(std::move(args));
     if (ret) {
         return ret.acquire();
     }
-    return ScriptValue::undefined().acquire();
+    return *ScriptValue::undefined();
 }
 } // namespace spurv

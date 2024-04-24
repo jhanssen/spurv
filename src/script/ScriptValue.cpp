@@ -99,6 +99,13 @@ ScriptValue &ScriptValue::operator=(ScriptValue &&other)
     return *this;
 }
 
+void ScriptValue::ref()
+{
+    if (mValue) {
+        mValue = JS_DupValue(ScriptEngine::scriptEngine()->context(), *mValue);
+    }
+}
+
 ScriptValue ScriptValue::clone() const
 {
     if (!mValue) {
@@ -125,7 +132,7 @@ ScriptValue ScriptValue::makeError(std::string message)
     auto context = engine->context();
     JSValue val = JS_NewError(context);
     ScriptValue msg(message);
-    JS_SetProperty(context, val, engine->atoms().message, *msg);
+    JS_SetProperty(context, val, engine->atoms().message, msg.acquire());
     return ScriptValue(val);
 }
 
