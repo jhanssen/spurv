@@ -15,10 +15,16 @@ struct EventLoopUv::Data {
         // the uv_timer_t holds the raw pointer
         std::shared_ptr<EventLoop::Event> event;
         uv_timer_t timer;
+        struct EarlyData {
+            uint64_t timeout;
+            EventLoop::TimerMode mode;
+        };
+        std::optional<EarlyData> earlyData;
     };
     std::vector<Timer> timers;
     int32_t exitCode = 0;
     uint32_t nextTimer = 0;
+    bool started = false;
 };
 
 EventLoopUv::EventLoopUv()
@@ -43,6 +49,19 @@ int32_t EventLoopUv::run()
     // give events a chance to run
     processEvents();
 
+    bool repost;
+    {
+        std::lock_guard lock(mData->mutex);
+        mData->started = true;
+        repost = !mData->timers.empty();
+    }
+
+    if (repost) {
+        post([this]() {
+            repostEarlyTimers();
+        });
+    }
+
     uv_run(&mData->uvloop, UV_RUN_DEFAULT);
     return mData->exitCode;
 }
@@ -63,18 +82,24 @@ void *EventLoopUv::handle() const
 void EventLoopUv::post(std::unique_ptr<Event>&& event)
 {
     EventLoop::post(std::move(event));
-    uv_async_send(&mData->uvpost);
+    if (mData->started) {
+        uv_async_send(&mData->uvpost);
+    }
 }
 
 uint32_t EventLoopUv::startTimer(const std::shared_ptr<EventLoop::Event>& event, uint64_t timeout, EventLoop::TimerMode mode)
 {
     std::lock_guard lock(mData->mutex);
     const uint32_t id = ++mData->nextTimer;
-    mData->timers.push_back(Data::Timer { id, event, {} });
-    auto timer = &mData->timers.back().timer;
-    uv_timer_init(&mData->uvloop, timer);
-    timer->data = event.get();
-    uv_timer_start(timer, EventLoopUv::processTimer, timeout, mode == EventLoop::TimerMode::SingleShot ? 0 : 1);
+    if (mData->started) {
+        mData->timers.push_back(Data::Timer { id, event, {}, {} });
+        auto timer = &mData->timers.back().timer;
+        uv_timer_init(&mData->uvloop, timer);
+        timer->data = event.get();
+        uv_timer_start(timer, EventLoopUv::processTimer, timeout, mode == EventLoop::TimerMode::SingleShot ? 0 : 1);
+    } else {
+        mData->timers.push_back(Data::Timer { id, event, {}, Data::Timer::EarlyData { timeout, mode } });
+    }
     return id;
 }
 
@@ -86,12 +111,30 @@ void EventLoopUv::stopTimer(uint32_t id)
     const auto uvend = mData->timers.end();
     while (uvit != uvend) {
         if (uvit->id == id) {
-            uv_timer_stop(&uvit->timer);
-            uv_close(reinterpret_cast<uv_handle_t*>(&uvit->timer), nullptr);
+            if (!uvit->earlyData) {
+                uv_timer_stop(&uvit->timer);
+                uv_close(reinterpret_cast<uv_handle_t*>(&uvit->timer), nullptr);
+            }
             mData->timers.erase(uvit);
             break;
         }
         ++uvit;
+    }
+}
+
+void EventLoopUv::repostEarlyTimers()
+{
+    std::lock_guard lock(mData->mutex);
+    assert(mData->started);
+    for (const auto &ref : mData->timers) {
+        if (ref.earlyData) {
+            auto timer = &mData->timers.back().timer;
+            uv_timer_init(&mData->uvloop, timer);
+            timer->data = ref.event.get();
+            uv_timer_start(timer, EventLoopUv::processTimer, ref.earlyData->timeout, ref.earlyData->mode == EventLoop::TimerMode::SingleShot ? 0 : 1);
+        } else {
+            break;
+        }
     }
 }
 
@@ -108,4 +151,5 @@ void EventLoopUv::processTimer(uv_timer_t* handle)
 }
 
 } // namespace spurv
+
 

@@ -22,6 +22,7 @@ public:
     virtual void stop(int32_t exitCode) override;
 
 private:
+    void repostEarlyTimers();
     static void processPost(uv_async_t* handle);
     static void processTimer(uv_timer_t* handle);
     struct Data;
