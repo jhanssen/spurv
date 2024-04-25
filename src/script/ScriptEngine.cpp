@@ -23,8 +23,6 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
 
     mGlobal = ScriptValue(JS_GetGlobalObject(mContext));
     mSpurv = ScriptValue(std::vector<std::pair<std::string, ScriptValue>>());
-    // ### why is this needed?
-    mSpurv.ref();
     mGlobal.setProperty("spurv", mSpurv.clone());
 
     bindSpurvFunction("log", &Builtins::log);
@@ -129,9 +127,7 @@ ScriptValue ScriptEngine::bindFunction(ScriptValue::Function &&function)
     std::unique_ptr<FunctionData> data = std::make_unique<FunctionData>();
     data->value = ScriptValue(JS_NewCFunctionData(mContext, bindHelper, 0, magic, 0, nullptr));
     data->function = std::move(function);
-    auto ret = data->value.clone();
-    // why is this needed?
-    ret.ref();
+    ScriptValue ret = data->value.clone();
     mFunctions[magic] = std::move(data);
     return ret;
 }

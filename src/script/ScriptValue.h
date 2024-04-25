@@ -30,8 +30,8 @@ public:
     explicit ScriptValue(const char *str, size_t len);
     explicit ScriptValue(const std::u8string &str);
     explicit ScriptValue(const char8_t *str, size_t len);
-    explicit ScriptValue(const std::vector<ScriptValue> &array);
-    explicit ScriptValue(const std::vector<std::pair<std::string, ScriptValue>> &object);
+    explicit ScriptValue(std::vector<ScriptValue> &&array);
+    explicit ScriptValue(std::vector<std::pair<std::string, ScriptValue>> &&object);
     explicit ScriptValue(Function &&function);
     explicit ScriptValue(Tag tag);
     ~ScriptValue();

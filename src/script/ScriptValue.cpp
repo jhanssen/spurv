@@ -57,7 +57,7 @@ ScriptValue::ScriptValue(const char8_t *str, size_t len)
 {
 }
 
-ScriptValue::ScriptValue(const std::vector<ScriptValue> &array)
+ScriptValue::ScriptValue(std::vector<ScriptValue> &&array)
     : mType(Type::Array)
 {
     auto engine = ScriptEngine::scriptEngine();
@@ -66,20 +66,20 @@ ScriptValue::ScriptValue(const std::vector<ScriptValue> &array)
     ScriptValue len(static_cast<uint32_t>(array.size()));
     JS_SetProperty(context, v, engine->atoms().length, *len);
     uint32_t i = 0;
-    for (const ScriptValue &value : array) {
-        JS_SetPropertyUint32(context, v, i++, *value);
+    for (ScriptValue &value : array) {
+        JS_SetPropertyUint32(context, v, i++, value.leakValue());
     }
     mValue = v;
 }
 
-ScriptValue::ScriptValue(const std::vector<std::pair<std::string, ScriptValue>> &object)
+ScriptValue::ScriptValue(std::vector<std::pair<std::string, ScriptValue>> &&object)
     : mType(Type::Object)
 {
     auto engine = ScriptEngine::scriptEngine();
     auto context = engine->context();
     JSValue v = JS_NewObject(context);
-    for (const std::pair<std::string, ScriptValue> &value : object) {
-        JS_SetPropertyStr(context, v, value.first.c_str(), *value.second);
+    for (std::pair<std::string, ScriptValue> &value : object) {
+        JS_SetPropertyStr(context, v, value.first.c_str(), value.second.leakValue());
     }
     mValue = v;
 }
@@ -258,7 +258,7 @@ Result<void> ScriptValue::setProperty(const std::string &name, ScriptValue &&val
     if (type() & Type::Object && value) {
         ScriptEngine *engine = ScriptEngine::scriptEngine();
         auto ctx = engine->context();
-        if (JS_SetPropertyStr(ctx, *mValue, name.c_str(), *value) == 0) {
+        if (JS_SetPropertyStr(ctx, *mValue, name.c_str(), value.leakValue()) == 0) {
             value.leakValue();
             return {};
         }
@@ -272,7 +272,7 @@ Result<void> ScriptValue::setProperty(uint32_t idx, ScriptValue &&value)
     if (type() & Type::Array && value) {
         ScriptEngine *engine = ScriptEngine::scriptEngine();
         auto ctx = engine->context();
-        if (JS_SetProperty(ctx, *mValue, idx, *value) == 0) {
+        if (JS_SetProperty(ctx, *mValue, idx, value.leakValue()) == 0) {
             value.leakValue();
             return {};
         }
