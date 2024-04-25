@@ -11,7 +11,15 @@ public:
     MainEventLoop();
     virtual ~MainEventLoop() override;
 
-    virtual int run() override;
+    virtual void *handle() const override;
+    virtual void post(std::unique_ptr<Event>&& event) override;
+    using EventLoop::post;
+    virtual uint32_t startTimer(const std::shared_ptr<EventLoop::Event>& event, uint64_t timeout, EventLoop::TimerMode mode) override;
+    using EventLoop::startTimer;
+    virtual void stopTimer(uint32_t id) override;
+
+    virtual int32_t run() override;
+    virtual void stop(int32_t exitCode) override;
 
     EventEmitter<void(uint32_t)>& onUnicode();
     /**
@@ -21,6 +29,8 @@ public:
     EventEmitter<void(int, int, int, int)>& onKey();
 
 private:
+    struct MainEventLoopData;
+    MainEventLoopData *mData;
     EventEmitter<void(uint32_t)> mOnUnicode;
     EventEmitter<void(int, int, int, int)> mOnKey;
 };

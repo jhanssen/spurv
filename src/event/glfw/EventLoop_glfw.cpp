@@ -11,17 +11,8 @@
 using namespace spurv;
 
 namespace spurv {
-struct EventLoopImplMain : public EventLoop::EventLoopImpl
+struct MainEventLoop::MainEventLoopData
 {
-    EventLoopImplMain(EventLoop* l);
-    ~EventLoopImplMain();
-
-    virtual void *handle() override;
-    virtual void post() override;
-    virtual void startTimer(uint32_t id, const std::shared_ptr<EventLoop::Event>& event, uint64_t timeout, EventLoop::TimerMode mode) override;
-    virtual void stopTimer(uint32_t id) override;
-    virtual void stop() override;
-
     struct Timer
     {
         uint64_t id;
@@ -31,73 +22,22 @@ struct EventLoopImplMain : public EventLoop::EventLoopImpl
         std::shared_ptr<MainEventLoop::Event> event;
         bool repeats;
     };
+    std::mutex mutex;
     std::vector<Timer> timers;
+    std::optional<int32_t> exitCode;
+    uint32_t nextTimer = 0;
+
+    bool isStopped();
 };
 
-EventLoopImplMain::EventLoopImplMain(EventLoop* loop)
-    : EventLoopImpl(loop)
+bool MainEventLoop::MainEventLoopData::isStopped()
 {
+    std::unique_lock lock(mutex);
+    return exitCode.has_value();
 }
-
-EventLoopImplMain::~EventLoopImplMain()
-{
-}
-
-void *EventLoopImplMain::handle()
-{
-    return nullptr;
-}
-
-void EventLoopImplMain::post()
-{
-    assert(eventLoop->isMainEventLoop());
-    glfwPostEmptyEvent();
-}
-
-void EventLoopImplMain::startTimer(uint32_t id, const std::shared_ptr<EventLoop::Event>& event, uint64_t timeout, EventLoop::TimerMode mode)
-{
-    assert(eventLoop->isMainEventLoop());
-    const auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-    std::lock_guard lock(eventLoop->mMutex);
-    timers.push_back(EventLoopImplMain::Timer {
-            id,
-            now,
-            now + timeout,
-            timeout,
-            event,
-            mode == EventLoop::TimerMode::Repeat
-        });
-    // ###  optimize this by using std::lower_bound to insert the timer at the correct location
-    std::sort(timers.begin(), timers.end(), [](EventLoopImplMain::Timer& t1, EventLoopImplMain::Timer& t2) {
-        return t1.next < t2.next;
-    });
-    glfwPostEmptyEvent();
-}
-
-void EventLoopImplMain::stopTimer(uint32_t id)
-{
-    assert(eventLoop->isMainEventLoop());
-    std::lock_guard lock(eventLoop->mMutex);
-    auto it = timers.begin();
-    const auto end = timers.end();
-    while (it != end) {
-        if (it->id == id) {
-            timers.erase(it);
-            break;
-        }
-        ++it;
-    }
-}
-
-void EventLoopImplMain::stop()
-{
-    assert(eventLoop->isMainEventLoop());
-    glfwPostEmptyEvent();
-}
-} // namespace spurv
 
 MainEventLoop::MainEventLoop()
-    : EventLoop()
+    : mData(new MainEventLoopData)
 {
     assert(sMainEventLoop == nullptr);
     sMainEventLoop = this;
@@ -106,16 +46,69 @@ MainEventLoop::MainEventLoop()
 
 MainEventLoop::~MainEventLoop()
 {
-    mImpl.reset();
+    delete mData;
+}
+
+void *MainEventLoop::handle() const
+{
+    return nullptr;
+}
+
+void MainEventLoop::post(std::unique_ptr<Event>&& event)
+{
+    assert(isMainEventLoop());
+    EventLoop::post(std::move(event));
+    glfwPostEmptyEvent();
+}
+
+uint32_t MainEventLoop::startTimer(const std::shared_ptr<EventLoop::Event>& event, uint64_t timeout, EventLoop::TimerMode mode)
+{
+    const uint32_t id = ++mData->nextTimer;
+    assert(isMainEventLoop());
+    const auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+    std::lock_guard lock(mData->mutex);
+    mData->timers.push_back(MainEventLoopData::Timer {
+            id,
+            now,
+            now + timeout,
+            timeout,
+            event,
+            mode == EventLoop::TimerMode::Repeat
+        });
+    // ###  optimize this by using std::lower_bound to insert the timer at the correct location
+    std::sort(mData->timers.begin(), mData->timers.end(), [](MainEventLoopData::Timer& t1, MainEventLoopData::Timer& t2) {
+        return t1.next < t2.next;
+    });
+    glfwPostEmptyEvent();
+    return id;
+}
+
+void MainEventLoop::stopTimer(uint32_t id)
+{
+    assert(isMainEventLoop());
+    std::lock_guard lock(mData->mutex);
+    auto it = mData->timers.begin();
+    const auto end = mData->timers.end();
+    while (it != end) {
+        if (it->id == id) {
+            mData->timers.erase(it);
+            break;
+        }
+        ++it;
+    }
+}
+
+void MainEventLoop::stop(int32_t exitCode)
+{
+    assert(isMainEventLoop());
+    std::lock_guard lock(mData->mutex);
+    mData->exitCode = exitCode;
+    glfwPostEmptyEvent();
 }
 
 int32_t MainEventLoop::run()
 {
     assert(isMainEventLoop());
-
-    assert(!mImpl);
-    EventLoopImplMain* mainImpl = new EventLoopImplMain(this);
-    mImpl.reset(mainImpl);
 
     auto mainWindow = Window::mainWindow()->glfwWindow();
     if (!mainWindow)
@@ -133,11 +126,12 @@ int32_t MainEventLoop::run()
         eventLoop->mOnKey.emit(key, scancode, action, mods);
     });
 
-    for (;;) {
-        if (!processEvents())
+    while (!mData->isStopped()) {
+        processEvents();
+        if (mData->isStopped())
             break;
-        std::unique_lock lock(mMutex);
-        auto& timers = mainImpl->timers;
+        std::unique_lock lock(mData->mutex);
+        auto& timers = mData->timers;
         if (timers.empty()) {
             lock.unlock();
 
@@ -179,7 +173,7 @@ int32_t MainEventLoop::run()
             if (needsResort) {
                 // ### possibly optimize this by removing the timer and reinserting it using std::lower_bound
                 // I'm not 100% sure that would be better though
-                std::sort(timers.begin(), timers.end(), [](EventLoopImplMain::Timer& t1, EventLoopImplMain::Timer& t2) {
+                std::sort(timers.begin(), timers.end(), [](MainEventLoopData::Timer& t1, MainEventLoopData::Timer& t2) {
                     return t1.next < t2.next;
                 });
             }
@@ -188,7 +182,7 @@ int32_t MainEventLoop::run()
             lock.unlock();
 
             for (const auto& ev : tofire) {
-                ev->execute();
+                executeEvent(ev.get());
             }
 
             if (next > 0) {
@@ -205,5 +199,8 @@ int32_t MainEventLoop::run()
             lock.lock();
         }
     }
-    return mExitCode;
+    assert(mData->exitCode.has_value());
+    return *mData->exitCode;
 }
+} // namespace spurv
+
