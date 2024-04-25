@@ -44,28 +44,6 @@ public:
 
     ScriptValue clone() const;
     JSValue leakValue();
-    enum class Type {
-        Invalid           = 0x000000,
-        Undefined         = 0x000001,
-        Null              = 0x000002,
-        String            = 0x000004,
-        Boolean           = 0x000008,
-        Number            = 0x000010,
-        Double            = 0x000020 | Number,
-        Int               = 0x000040 | Number,
-        Error             = 0x000080, // not sure how these are different
-        Exception         = 0x000100,
-        Object            = 0x000200,
-        Array             = 0x000400 | Object,
-        ArrayBuffer       = 0x000800 | Object,
-        TypedArray        = 0x001000 | Object,
-        Symbol            = 0x002000,
-        BigNum            = 0x004000,
-        BigInt            = 0x008000 | BigNum,
-        BigFloat          = 0x010000 | BigNum,
-        BigDecimal        = 0x020000 | BigNum,
-        Function          = 0x040000
-    };
 
     bool isInvalid() const;
     bool isValid() const;
@@ -98,8 +76,6 @@ public:
     static ScriptValue undefined();
     static ScriptValue null();
 
-    Type type() const;
-
     bool operator!() const;
     operator bool() const;
 
@@ -126,17 +102,11 @@ public:
 
 private:
     std::optional<JSValue> mValue;
-    mutable std::optional<Type> mType;
-};
-
-template<>
-struct IsEnumBitmask<ScriptValue::Type> {
-    static constexpr bool enable = true;
 };
 
 inline bool ScriptValue::isInvalid() const
 {
-    return type() == Type::Invalid;
+    return !mValue;
 }
 
 inline bool ScriptValue::isValid() const
@@ -146,120 +116,67 @@ inline bool ScriptValue::isValid() const
 
 inline bool ScriptValue::isNull() const
 {
-    return type() == Type::Null;
+    return mValue && JS_IsNull(*mValue);
 }
 
 inline bool ScriptValue::isNullOrUndefined() const
 {
-    switch (type()) {
-    case Type::Null:
-    case Type::Undefined:
-        return true;
-    default:
-        break;
-    }
-    return false;
+    return mValue && (JS_IsUndefined(*mValue) || JS_IsNull(*mValue));
 }
 
 inline bool ScriptValue::isString() const
 {
-    return type() == Type::String;
+    return mValue && JS_IsString(*mValue);
 }
 
 inline bool ScriptValue::isBoolean() const
 {
-    return type() == Type::Boolean;
+    return mValue && JS_IsBool(*mValue);
 }
 
 inline bool ScriptValue::isNumber() const
 {
-    return type() & Type::Number;
+    return mValue && JS_IsNumber(*mValue);
 }
 
 inline bool ScriptValue::isDouble() const
 {
-    return type() == Type::Double;
+    return isNumber() && !isInt();
 }
 
 inline bool ScriptValue::isInt() const
 {
-    return type() == Type::Int;
-}
-
-inline bool ScriptValue::isError() const
-{
-    return type() == Type::Error;
+    return mValue && JS_VALUE_GET_TAG(*mValue) == JS_TAG_INT;
 }
 
 inline bool ScriptValue::isException() const
 {
-    return type() == Type::Exception;
-}
-
-inline bool ScriptValue::isExceptionOrError() const
-{
-    switch (type()) {
-    case Type::Exception:
-    case Type::Error:
-        return true;
-    default:
-        break;
-    }
-    return false;
+    return mValue && JS_IsException(*mValue);
 }
 
 inline bool ScriptValue::isObject() const
 {
-    return type() & Type::Object;
-}
-
-inline bool ScriptValue::isStrictObject() const
-{
-    return type() == Type::Object;
-}
-
-inline bool ScriptValue::isArray() const
-{
-    return type() == Type::Array;
-}
-
-inline bool ScriptValue::isArrayBuffer() const
-{
-    return type() == Type::ArrayBuffer;
-}
-
-inline bool ScriptValue::isTypedArray() const
-{
-    return type() == Type::TypedArray;
+    return mValue && JS_IsObject(*mValue);
 }
 
 inline bool ScriptValue::isSymbol() const
 {
-    return type() == Type::Symbol;
-}
-
-inline bool ScriptValue::isBigNum() const
-{
-    return type() & Type::BigNum;
-}
-
-inline bool ScriptValue::isBigInt() const
-{
-    return type() == Type::BigInt;
+    return mValue && JS_IsSymbol(*mValue);
 }
 
 inline bool ScriptValue::isBigFloat() const
 {
-    return type() == Type::BigFloat;
+    return mValue && JS_IsBigFloat(*mValue);
 }
 
 inline bool ScriptValue::isBigDecimal() const
 {
-    return type() == Type::BigDecimal;
+    return mValue && JS_IsBigDecimal(*mValue);
 }
 
-inline bool ScriptValue::isFunction() const
+inline bool ScriptValue::isExceptionOrError() const
 {
-    return type() == Type::Function;
+    return isException() || isError();
 }
+
 } // namespace spurv

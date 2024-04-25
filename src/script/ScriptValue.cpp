@@ -11,29 +11,28 @@ ScriptValue::ScriptValue(JSValue value)
 {}
 
 ScriptValue::ScriptValue(ScriptValue &&other)
-    : mValue(std::move(other.mValue)), mType(std::move(other.mType))
+    : mValue(std::move(other.mValue))
 {
     other.mValue = {};
-    other.mType = {};
 }
 
 ScriptValue::ScriptValue(bool value)
-    : mValue(JS_NewBool(ScriptEngine::scriptEngine()->context(), value)), mType(Type::Boolean)
+    : mValue(JS_NewBool(ScriptEngine::scriptEngine()->context(), value))
 {
 }
 
 ScriptValue::ScriptValue(int32_t value)
-    : mValue(JS_NewInt32(ScriptEngine::scriptEngine()->context(), value)), mType(Type::Int)
+    : mValue(JS_NewInt32(ScriptEngine::scriptEngine()->context(), value))
 {
 }
 
 ScriptValue::ScriptValue(uint32_t value)
-    : mValue(JS_NewUint32(ScriptEngine::scriptEngine()->context(), value)), mType(Type::Int)
+    : mValue(JS_NewUint32(ScriptEngine::scriptEngine()->context(), value))
 {
 }
 
 ScriptValue::ScriptValue(double value)
-    : mValue(JS_NewFloat64(ScriptEngine::scriptEngine()->context(), value)), mType(Type::Double)
+    : mValue(JS_NewFloat64(ScriptEngine::scriptEngine()->context(), value))
 {
 }
 ScriptValue::ScriptValue(const std::string &str)
@@ -42,7 +41,7 @@ ScriptValue::ScriptValue(const std::string &str)
 }
 
 ScriptValue::ScriptValue(const char *str, size_t len)
-    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), str, len)), mType(Type::String)
+    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), str, len))
 {
 }
 
@@ -52,13 +51,12 @@ ScriptValue::ScriptValue(const std::u8string &str)
 }
 
 ScriptValue::ScriptValue(const char8_t *str, size_t len)
-    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), reinterpret_cast<const char *>(str), len)), mType(Type::String)
+    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), reinterpret_cast<const char *>(str), len))
 
 {
 }
 
 ScriptValue::ScriptValue(std::vector<ScriptValue> &&array)
-    : mType(Type::Array)
 {
     auto engine = ScriptEngine::scriptEngine();
     auto context = engine->context();
@@ -73,7 +71,6 @@ ScriptValue::ScriptValue(std::vector<ScriptValue> &&array)
 }
 
 ScriptValue::ScriptValue(std::vector<std::pair<std::string, ScriptValue>> &&object)
-    : mType(Type::Object)
 {
     auto engine = ScriptEngine::scriptEngine();
     auto context = engine->context();
@@ -85,7 +82,6 @@ ScriptValue::ScriptValue(std::vector<std::pair<std::string, ScriptValue>> &&obje
 }
 
 ScriptValue::ScriptValue(Function &&function)
-    : mType(Type::Function)
 {
     auto engine = ScriptEngine::scriptEngine();
     mValue = engine->bindFunction(std::move(function)).leakValue();
@@ -115,9 +111,7 @@ ScriptValue &ScriptValue::operator=(ScriptValue &&other)
         JS_FreeValue(ScriptEngine::scriptEngine()->context(), *mValue);
     }
     mValue = std::move(other.mValue);
-    mType = std::move(other.mType);
     other.mValue = {};
-    other.mType = {};
     return *this;
 }
 
@@ -134,7 +128,6 @@ void ScriptValue::clear()
         JS_FreeValue(ScriptEngine::scriptEngine()->context(), *mValue);
     }
     mValue = std::nullopt;
-    mType = std::nullopt;
 }
 
 ScriptValue ScriptValue::call(const std::vector<ScriptValue> &args)
@@ -171,7 +164,6 @@ ScriptValue ScriptValue::clone() const
     }
 
     ScriptValue ret(JS_DupValue(ScriptEngine::scriptEngine()->context(), *mValue));
-    ret.mType = mType;
     return ret;
 }
 
@@ -180,7 +172,6 @@ JSValue ScriptValue::leakValue()
     assert(mValue);
     JSValue ret = *mValue;
     mValue = {};
-    mType = {};
     return ret;
 }
 
@@ -239,7 +230,7 @@ void ScriptValue::forEach(std::function<void(const ScriptValue &value, int idx)>
 
 ScriptValue ScriptValue::getProperty(const std::string &name) const
 {
-    if (type() & Type::Object) {
+    if (isObject()) {
         return ScriptValue(JS_GetPropertyStr(ScriptEngine::scriptEngine()->context(), *mValue, name.c_str()));
     }
     return ScriptValue();
@@ -247,7 +238,7 @@ ScriptValue ScriptValue::getProperty(const std::string &name) const
 
 ScriptValue ScriptValue::getProperty(uint32_t value) const
 {
-    if (type() & Type::Object) {
+    if (isObject()) {
         return ScriptValue(JS_GetPropertyUint32(ScriptEngine::scriptEngine()->context(), *mValue, value));
     }
     return ScriptValue();
@@ -255,10 +246,10 @@ ScriptValue ScriptValue::getProperty(uint32_t value) const
 
 Result<void> ScriptValue::setProperty(const std::string &name, ScriptValue &&value)
 {
-    if (type() & Type::Object && value) {
+    if (value && isObject()) {
         ScriptEngine *engine = ScriptEngine::scriptEngine();
         auto ctx = engine->context();
-        if (JS_SetPropertyStr(ctx, *mValue, name.c_str(), value.leakValue()) == 0) {
+        if (JS_SetPropertyStr(ctx, *mValue, name.c_str(), *value) == 0) {
             value.leakValue();
             return {};
         }
@@ -269,10 +260,10 @@ Result<void> ScriptValue::setProperty(const std::string &name, ScriptValue &&val
 
 Result<void> ScriptValue::setProperty(uint32_t idx, ScriptValue &&value)
 {
-    if (type() & Type::Array && value) {
+    if (value && isArray()) {
         ScriptEngine *engine = ScriptEngine::scriptEngine();
         auto ctx = engine->context();
-        if (JS_SetProperty(ctx, *mValue, idx, value.leakValue()) == 0) {
+        if (JS_SetProperty(ctx, *mValue, idx, *value) == 0) {
             value.leakValue();
             return {};
         }
@@ -281,68 +272,55 @@ Result<void> ScriptValue::setProperty(uint32_t idx, ScriptValue &&value)
     return spurv::makeError(fmt::format("Failed to set property {}, value is not an array", idx));
 }
 
-ScriptValue::Type ScriptValue::type() const
+bool ScriptValue::isStrictObject() const
 {
-    if (!mType) {
-        if (!mValue) {
-            mType = Type::Invalid;
-            return *mType;
-        }
+    return isObject() && !isArray() && !isFunction() && !isArrayBuffer() && !isTypedArray() && !isError() && !isException();
+}
 
-        auto ctx = ScriptEngine::scriptEngine()->context();
+bool ScriptValue::isArray() const
+{
+    return mValue && JS_IsArray(ScriptEngine::scriptEngine()->context(), *mValue);
+}
 
-        if (JS_IsString(*mValue)) {
-            mType = Type::String;
-        } else if (JS_IsNumber(*mValue)) {
-            if (JS_VALUE_GET_TAG(*mValue) == JS_TAG_INT) {
-                mType = Type::Int;
-            } else {
-                mType = Type::Double;
-            }
-        } else if (JS_IsBool(*mValue)) {
-            mType = Type::Boolean;
-        } else if (JS_IsUndefined(*mValue)) {
-            mType = Type::Undefined;
-        } else if (JS_IsArray(ctx, *mValue)) {
-            mType = Type::Array;
-        } else if (JS_IsNull(*mValue)) {
-            mType = Type::Null;
-        } else if (JS_IsArrayBuffer(ctx, *mValue)) {
-            mType = Type::ArrayBuffer;
-        } else if (JS_IsTypedArray(ctx, *mValue)) {
-            mType = Type::TypedArray;
-        } else if (JS_IsFunction(ctx, *mValue)) {
-            mType = Type::Function;
-        } else if (JS_IsError(ctx, *mValue)) {
-            mType = Type::Error;
-        } else if (JS_IsException(*mValue)) {
-            mType = Type::Exception;
-        } else if (JS_IsObject(*mValue)) {
-            mType = Type::Object;
-        } else if (JS_IsSymbol(*mValue)) {
-            mType = Type::Symbol;
-        } else if (JS_IsBigInt(ctx, *mValue)) {
-            mType = Type::BigInt;
-        } else if (JS_IsBigFloat(*mValue)) {
-            mType = Type::BigFloat;
-        } else if (JS_IsBigDecimal(*mValue)) {
-            mType = Type::BigDecimal;
-        } else {
-            assert(false);
-            mType = Type::Invalid;
-        }
-    }
-    return *mType;
+bool ScriptValue::isArrayBuffer() const
+{
+    return mValue && JS_IsArrayBuffer(ScriptEngine::scriptEngine()->context(), *mValue);
+}
+
+bool ScriptValue::isTypedArray() const
+{
+    return mValue && JS_IsTypedArray(ScriptEngine::scriptEngine()->context(), *mValue);
+}
+
+bool ScriptValue::isBigNum() const
+{
+    return isBigInt() || isBigFloat() || isBigDecimal();
+}
+
+bool ScriptValue::isBigInt() const
+{
+    return mValue && JS_IsBigInt(ScriptEngine::scriptEngine()->context(), *mValue);
+}
+
+bool ScriptValue::isFunction() const
+{
+    return mValue && JS_IsFunction(ScriptEngine::scriptEngine()->context(), *mValue);
+}
+
+bool ScriptValue::isError() const
+{
+    return mValue && JS_IsError(ScriptEngine::scriptEngine()->context(), *mValue);
 }
 
 Result<std::pair<unsigned char *, std::size_t>> ScriptValue::arrayBufferData() const
 {
-    switch (type()) {
-    case Type::ArrayBuffer: {
+    if (isArrayBuffer()) {
         std::size_t p;
         unsigned char *ret = JS_GetArrayBuffer(ScriptEngine::scriptEngine()->context(), &p, *mValue);
-        return std::make_pair(ret, p); }
-    case Type::TypedArray: {
+        return std::make_pair(ret, p);
+    }
+
+    if (isTypedArray()) {
         auto context = ScriptEngine::scriptEngine()->context();
         std::size_t byteOffset, byteLen;
         ScriptValue buffer(JS_GetTypedArrayBuffer(context, *mValue, &byteOffset, &byteLen, nullptr));
@@ -351,9 +329,7 @@ Result<std::pair<unsigned char *, std::size_t>> ScriptValue::arrayBufferData() c
         if (ret) {
             return std::make_pair(ret + byteOffset, p);
         }
-        return spurv::makeError("Can't get typed array data"); }
-    default:
-        break;
+        return spurv::makeError("Can't get typed array data");
     }
 
     return spurv::makeError("Invalid type for arrayBufferData");
@@ -361,10 +337,12 @@ Result<std::pair<unsigned char *, std::size_t>> ScriptValue::arrayBufferData() c
 
 Result<ScriptValue> ScriptValue::typedArrayBuffer() const
 {
-    auto context = ScriptEngine::scriptEngine()->context();
-    ScriptValue buffer(JS_GetTypedArrayBuffer(context, *mValue, nullptr, nullptr, nullptr));
-    if (buffer.type() == Type::ArrayBuffer) {
-        return buffer;
+    if (isTypedArray()) {
+        auto context = ScriptEngine::scriptEngine()->context();
+        ScriptValue buffer(JS_GetTypedArrayBuffer(context, *mValue, nullptr, nullptr, nullptr));
+        if (buffer.isArrayBuffer()) {
+            return buffer;
+        }
     }
 
     return spurv::makeError("Invalid type for typedArrayBuffer");
@@ -373,28 +351,16 @@ Result<ScriptValue> ScriptValue::typedArrayBuffer() const
 Result<std::size_t> ScriptValue::length() const
 {
     ScriptEngine *engine = ScriptEngine::scriptEngine();
-    switch (type()) {
-    case Type::ArrayBuffer: {
-        std::size_t p;
-        if (JS_GetArrayBuffer(engine->context(), &p, *mValue)) {
-            return p;
-        }
-        break; }
-    case Type::Array:
-    case Type::String: {
+    if (isArray() || isString()) {
         ScriptValue length(JS_GetProperty(engine->context(), *mValue, engine->atoms().length));
         int len;
         JS_ToInt32(engine->context(), &len, *length);
-        return len; }
-    case Type::TypedArray: {
-        std::size_t byteLen;
-        ScriptValue buffer(JS_GetTypedArrayBuffer(engine->context(), *mValue, nullptr, &byteLen, nullptr));
-        if (buffer.type() == Type::ArrayBuffer) {
-            return byteLen;
-        }
-        break; }
-    default:
-        break;
+        return len;
+    } else if (isArrayBuffer() || isTypedArray()) {
+        ScriptValue length(JS_GetProperty(engine->context(), *mValue, engine->atoms().byteLength));
+        int len;
+        JS_ToInt32(engine->context(), &len, *length);
+        return len;
     }
     return spurv::makeError("Invalid type for length");
 }
@@ -420,7 +386,7 @@ Result<std::string> ScriptValue::toString() const
             return ret;
         }
     }
-    return spurv::makeError(fmt::format("Invalid type for toString {}", static_cast<int>(type())));
+    return spurv::makeError("Invalid type for toString");
 }
 
 Result<double> ScriptValue::toDouble() const
@@ -458,7 +424,7 @@ Result<uint32_t> ScriptValue::toUint() const
 
 Result<std::vector<ScriptValue>> ScriptValue::toVector() const
 {
-    if (type() != Type::Array) {
+    if (!isArray()) {
         return spurv::makeError("Invalid type for toVector");
     }
 
@@ -494,7 +460,7 @@ void forEachProperty(const ScriptValue &value, const T &t)
     ScriptValue proto(JS_GetPrototype(context, *value));
     while (true) {
         ScriptValue next(JS_GetPrototype(context, *proto));
-        if (next.type() == ScriptValue::Type::Null) {
+        if (next.isNull()) {
             break;
         }
 
@@ -514,7 +480,7 @@ void forEachProperty(const ScriptValue &value, const T &t)
 
 Result<std::vector<std::pair<std::string, ScriptValue>>> ScriptValue::toObject() const
 {
-    if (!(type() & Type::Object)) {
+    if (!(isObject())) {
         return spurv::makeError("Invalid type for toObject");
     }
 
@@ -527,9 +493,9 @@ Result<std::vector<std::pair<std::string, ScriptValue>>> ScriptValue::toObject()
 
 Result<std::unordered_map<std::string, ScriptValue>> ScriptValue::toMap() const
 {
-    if (!(type() & Type::Object)) {
+    if (!(isObject())) {
         return spurv::makeError("Invalid type for toMap");
-    }
+ }
 
     std::unordered_map<std::string, ScriptValue> ret;
     forEachProperty(*this, [&ret](std::string &&name, ScriptValue &&value) -> void {

@@ -7,7 +7,7 @@ namespace spurv {
 namespace Builtins {
 ScriptValue log(std::vector<ScriptValue> &&args)
 {
-    if (args.size() < 2 || !(args[0].type() & ScriptValue::Type::Number)) {
+    if (args.size() < 2 || !args[0].isNumber()) {
         return ScriptValue::makeError("Invalid arguments");
     }
 
@@ -27,7 +27,7 @@ ScriptValue log(std::vector<ScriptValue> &&args)
 
 ScriptValue setProcessHandler(std::vector<ScriptValue> &&args)
 {
-    if (args.empty() || args[0].type() == ScriptValue::Type::Function) {
+    if (args.empty() || args[0].isFunction()) {
         return ScriptValue::makeError("Invalid arguments");
     }
 
@@ -229,7 +229,7 @@ ScriptValue stringtoutf32(std::vector<ScriptValue> &&args)
 
 ScriptValue setKeyEventHandler(std::vector<ScriptValue> &&args)
 {
-    if (args.empty() || args[0].type() != ScriptValue::Type::Function) {
+    if (args.empty() || !args[0].isFunction()) {
         return ScriptValue::makeError("Invalid arguments");
     }
 
