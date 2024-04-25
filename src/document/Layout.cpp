@@ -73,6 +73,7 @@ void LayoutJob::runJob(std::shared_ptr<LayoutJob> job, std::size_t prevProcessed
                 auto nextLinebreak = currentLinebreak;
                 while (nextLinebreak < job->linebreaks.size()) {
                     if (job->linebreaks[nextLinebreak++].first >= processed) {
+                        --nextLinebreak;
                         break;
                     }
                 }
