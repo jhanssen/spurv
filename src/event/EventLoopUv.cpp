@@ -46,15 +46,15 @@ int32_t EventLoopUv::run()
     uv_async_init(&mData->uvloop, &mData->uvpost, &processPost);
     mData->uvpost.data = this;
 
-    // give events a chance to run
-    processEvents();
-
     bool repost;
     {
         std::lock_guard lock(mData->mutex);
         mData->started = true;
         repost = !mData->timers.empty();
     }
+
+    // give events a chance to run
+    processEvents();
 
     if (repost) {
         post([this]() {
