@@ -1,5 +1,6 @@
 set(SOURCES
     EventLoop.cpp
+    EventLoopUv.cpp
 )
 
 if (USE_GLFW)

@@ -3,6 +3,7 @@
 #include <MainEventLoop.h>
 #include <Renderer.h>
 #include <ScriptEngine.h>
+#include <EventLoopUv.h>
 #include <fmt/core.h>
 #include <uv.h>
 
@@ -19,7 +20,7 @@ struct EditorImpl
 std::unique_ptr<Editor> Editor::sInstance = {};
 
 Editor::Editor(const std::filesystem::path &appPath)
-    : mEventLoop(new EventLoop())
+    : mEventLoop(new EventLoopUv())
 {
     mImpl = new EditorImpl();
     mImpl->appPath = appPath;

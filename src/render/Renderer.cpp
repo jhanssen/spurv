@@ -8,6 +8,7 @@
 #include <Logger.h>
 #include <VulkanCommon.h>
 #include <Window.h>
+#include <EventLoopUv.h>
 #include <uv.h>
 #include <VkBootstrap.h>
 #include <fmt/core.h>
@@ -769,7 +770,7 @@ inline VkBool32 VKAPI_CALL vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBi
 }
 
 Renderer::Renderer(const std::filesystem::path &appPath)
-    : mEventLoop(new EventLoop)
+    : mEventLoop(new EventLoopUv)
 {
     mImpl = new RendererImpl;
     mImpl->appPath = appPath;
