@@ -15,6 +15,9 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
 {
     assert(!tScriptEngine);
     tScriptEngine = this;
+
+    JS_SetMaxStackSize(mRuntime, 0);
+
 #define ScriptAtom(atom)                        \
     mAtoms.atom = JS_NewAtom(mContext, #atom);
 #include "ScriptAtomsInternal.h"
