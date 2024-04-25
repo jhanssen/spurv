@@ -74,5 +74,7 @@ int main(int argc, char** argv, char** envp)
                     { 0.3, 0.0, 0.3, 0.3 }
                 }
             } });
-    loop.run();
+    const int32_t ret = loop.run();
+    Editor::destroy();
+    return ret;
 }

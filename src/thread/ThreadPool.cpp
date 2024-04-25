@@ -5,7 +5,7 @@ using namespace spurv;
 std::unique_ptr<ThreadPool> ThreadPool::sMainThreadPool = {};
 
 ThreadPool::ThreadPool()
-    : ThreadPool(std::thread::hardware_concurrency())
+    : ThreadPool(std::min<uint32_t>(4, std::thread::hardware_concurrency()))
 {
 }
 
@@ -31,7 +31,7 @@ ThreadPool::~ThreadPool()
 
 void ThreadPool::initializeMainThreadPool(uint32_t numThreads)
 {
-    sMainThreadPool = std::make_unique<ThreadPool>(numThreads > 0 ? numThreads : std::thread::hardware_concurrency());
+    sMainThreadPool = std::make_unique<ThreadPool>(numThreads > 0 ? numThreads : std::min<uint32_t>(4, std::thread::hardware_concurrency()));
 }
 
 void ThreadPool::destroyMainThreadPool()

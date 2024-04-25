@@ -9,3 +9,8 @@ spurv.setKeyEventHandler((event: spurv.KeyEvent) => {
 
 error("testing");
 error("testing2");
+
+setTimeout(() => {
+    error("about to exit");
+    exit(10);
+}, 2000);

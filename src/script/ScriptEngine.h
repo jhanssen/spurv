@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <quickjs.h>
 #include <EventLoop.h>
+#include <EventEmitter.h>
 
 #include "ScriptValue.h"
 #include "ScriptAtoms.h"
@@ -34,6 +35,9 @@ public:
     ScriptValue bindFunction(ScriptValue::Function &&function);
     void bindSpurvFunction(const std::string &name, ScriptValue::Function &&function);
     void bindGlobalFunction(const std::string &name, ScriptValue::Function &&function);
+
+    EventEmitter<void(int)>& onExit();
+
 private:
     // setTimeout(callback: (...args: unknown[]) => void, ms: number, ...args: unknown[]): number;
     ScriptValue setTimeoutImpl(EventLoop::TimerMode mode, std::vector<ScriptValue> &&args);
@@ -44,11 +48,14 @@ private:
     // clearInterval(intervalId: number): void;
     ScriptValue clearTimeout(std::vector<ScriptValue> &&args);
     // queueMicrotask(callback: () => void): void;
+    ScriptValue exit(std::vector<ScriptValue> &&args);
 
     static JSValue bindHelper(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *);
 
     thread_local static ScriptEngine *tScriptEngine;
     EventLoop *mEventLoop;
+    EventEmitter<void(int)> mOnExit;
+
     int mMagic { 0 };
     struct FunctionData {
         ScriptValue value; // Do we need this for it to stay alive?

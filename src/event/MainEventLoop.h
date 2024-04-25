@@ -11,8 +11,8 @@ public:
     MainEventLoop();
     virtual ~MainEventLoop() override;
 
-    virtual void run() override;
-    virtual void stop() override;
+    virtual int run() override;
+    virtual void stop(int exitCode) override;
 
     using EventLoop::post;
     virtual void post(std::unique_ptr<Event>&& event) override;

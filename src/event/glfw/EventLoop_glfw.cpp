@@ -50,9 +50,11 @@ MainEventLoop::MainEventLoop()
 
 MainEventLoop::~MainEventLoop()
 {
+    delete std::get<EventLoopImplMain*>(mImpl);
+    mImpl = std::nullopt;
 }
 
-void MainEventLoop::run()
+int32_t MainEventLoop::run()
 {
     assert(isMainEventLoop());
 
@@ -62,7 +64,7 @@ void MainEventLoop::run()
 
     auto mainWindow = Window::mainWindow()->glfwWindow();
     if (!mainWindow)
-        return;
+        return -1;
 
     GlfwUserData::set<1>(mainWindow, this);
 
@@ -148,15 +150,15 @@ void MainEventLoop::run()
             lock.lock();
         }
     }
+    return mExitCode;
 }
 
-void MainEventLoop::stop()
+void MainEventLoop::stop(int32_t exitCode)
 {
+    assert(tEventLoop == this);
     assert(isMainEventLoop());
+    mExitCode = exitCode;
     stop_internal();
-
-    delete std::get<EventLoopImplMain*>(mImpl);
-    mImpl = std::nullopt;
     glfwPostEmptyEvent();
 }
 

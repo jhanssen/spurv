@@ -21,3 +21,8 @@ target_compile_options(quickjs PRIVATE -DCONFIG_VERSION=\"2024-02-14\" -DCONFIG_
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_compile_options(quickjs PRIVATE -D_GNU_SOURCE)
 endif ()
+
+if (QUICKJS_DETECT_LEAKS)
+    target_compile_options(quickjs PRIVATE -DDUMP_GC_FREE -DDUMP_LEAKS -DDUMP_MEM -DDUMP_OBJECTS -DDUMP_ATOMS -DDUMP_SHAPES)
+endif ()
+# target_compile_options(quickjs PRIVATE -DNDEBUG)

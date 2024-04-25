@@ -43,15 +43,21 @@ void Editor::thread_internal()
             mInitialized = true;
         }
 
-        auto loop = static_cast<MainEventLoop*>(EventLoop::mainEventLoop());
-        mScriptEngine = std::make_unique<ScriptEngine>(loop, mImpl->appPath);
-        loop->post([editor = this]() {
+        auto mainEventLoop = static_cast<MainEventLoop*>(EventLoop::mainEventLoop());
+        mScriptEngine = std::make_unique<ScriptEngine>(mEventLoop.get(), mImpl->appPath);
+        mScriptEngine->onExit().connect([this, mainEventLoop](int exitCode) {
+            mEventLoop->stop(0);
+            mainEventLoop->post([mainEventLoop, exitCode]() {
+                mainEventLoop->stop(exitCode);
+            });
+        });
+        mainEventLoop->post([editor = this]() {
             editor->mOnReady.emit();
         });
-        loop->onKey().connect([this](int key, int scancode, int action, int mods) {
+        mainEventLoop->onKey().connect([this](int key, int scancode, int action, int mods) {
             mScriptEngine->onKey(key, scancode, action, mods);
         });
-        loop->onUnicode().connect([this](uint32_t uc) {
+        mainEventLoop->onUnicode().connect([this](uint32_t uc) {
             spdlog::error("editor uc {}", uc);
             if (mCurrentDoc) {
                 mCurrentDoc->insert(static_cast<char32_t>(uc));
@@ -60,6 +66,11 @@ void Editor::thread_internal()
 
     });
     mEventLoop->run();
+    mEventLoop->uninstall();
+    mEventLoop.reset();
+    mScriptEngine.reset();
+    mDocuments.clear();
+    mCurrentDoc = nullptr;
 }
 
 void Editor::stop()
@@ -68,7 +79,7 @@ void Editor::stop()
         std::unique_lock lock(mMutex);
         assert(mInitialized);
     }
-    mEventLoop->stop();
+    assert(!mEventLoop);
     mThread.join();
 }
 

@@ -1398,7 +1398,7 @@ void Renderer::stop()
         assert(mInitialized);
     }
     // ### should possibly ensure that mImpl->idle has been stopped at this point
-    mEventLoop->stop();
+    mEventLoop->stop(0);
     mThread.join();
 }
 

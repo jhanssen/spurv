@@ -36,9 +36,10 @@ public:
     virtual ~EventLoop();
 
     void install();
+    void uninstall();
 
-    virtual void run();
-    virtual void stop();
+    virtual int32_t run();
+    virtual void stop(int32_t exitCode);
 
     void post(std::function<void()>&& event);
     virtual void post(std::unique_ptr<Event>&& event);
@@ -96,6 +97,7 @@ private:
 
 protected:
     static EventLoop* sMainEventLoop;
+    int32_t mExitCode = 0;
 
 private:
     thread_local static EventLoop* tEventLoop;

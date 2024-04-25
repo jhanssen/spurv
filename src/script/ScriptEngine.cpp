@@ -42,6 +42,7 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
     bindGlobalFunction("setInterval", std::bind(&ScriptEngine::setInterval, this, std::placeholders::_1));
     bindGlobalFunction("clearTimeout", std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
     bindGlobalFunction("clearInterval", std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
+    bindGlobalFunction("exit", std::bind(&ScriptEngine::exit, this, std::placeholders::_1));
 
     const std::filesystem::path file = mAppPath / "../src/typescript/dist/spurv.js";
     auto ret = eval(file);
@@ -52,13 +53,20 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
 
 ScriptEngine::~ScriptEngine()
 {
+    mTimers.clear();
+    mFunctions.clear();
+    mGlobal = ScriptValue();
+    mSpurv = ScriptValue();
+    mProcessHandler = ScriptValue();
+    mKeyHandler = ScriptValue();
+
 #define ScriptAtom(atom)                        \
     JS_FreeAtom(mContext, mAtoms.atom);
 #include "ScriptAtomsInternal.h"
     FOREACH_SCRIPTATOM(ScriptAtom);
 #undef ScriptAtom
-    JS_FreeContext(mContext);
     JS_RunGC(mRuntime);
+    JS_FreeContext(mContext);
     JS_FreeRuntime(mRuntime);
     assert(tScriptEngine = this);
     tScriptEngine = nullptr;
@@ -134,6 +142,11 @@ void ScriptEngine::bindGlobalFunction(const std::string &name, ScriptValue::Func
 {
     ScriptValue func = bindFunction(std::move(function));
     JS_SetPropertyStr(mContext, *mGlobal, name.c_str(), *func);
+}
+
+EventEmitter<void(int)>& ScriptEngine::onExit()
+{
+    return mOnExit;
 }
 
 JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int magic, JSValue *)
@@ -219,4 +232,17 @@ ScriptValue ScriptEngine::clearTimeout(std::vector<ScriptValue> &&args)
     return ScriptValue();
 }
 
+ScriptValue ScriptEngine::exit(std::vector<ScriptValue> &&args)
+{
+    int exitCode = 0;
+    if (args.size() > 0) {
+        auto val = args[0].toInt();
+        if (val.ok()) {
+            exitCode = *val;
+        }
+    }
+
+    mOnExit.emit(exitCode);
+    return {};
+}
 } // namespace spurv

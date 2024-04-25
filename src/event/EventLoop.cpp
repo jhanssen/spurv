@@ -107,11 +107,18 @@ EventLoop::EventLoop()
 
 EventLoop::~EventLoop()
 {
+    auto uvImpl = std::get_if<EventLoopImplUv*>(&mImpl);
+    if (uvImpl) {
+        delete uvImpl;
+        mImpl = std::nullopt;
+    }
+
     assert(std::holds_alternative<std::nullopt_t>(mImpl));
     if (sMainEventLoop == this) {
         sMainEventLoop = nullptr;
     }
-    assert(tEventLoop == this);
+
+    assert(tEventLoop == this || tEventLoop == nullptr);
     tEventLoop = nullptr;
 }
 
@@ -119,6 +126,12 @@ void EventLoop::install()
 {
     assert(tEventLoop == nullptr);
     tEventLoop = this;
+}
+
+void EventLoop::uninstall()
+{
+    assert(tEventLoop == this);
+    tEventLoop = nullptr;
 }
 
 bool EventLoop::processEvents()
@@ -136,13 +149,17 @@ bool EventLoop::processEvents()
     return true;
 }
 
-void EventLoop::run()
+int32_t EventLoop::run()
 {
+    assert(tEventLoop == this);
     run_internal();
+    return mExitCode;
 }
 
-void EventLoop::stop()
+void EventLoop::stop(int32_t exitCode)
 {
+    assert(tEventLoop == this || tEventLoop == nullptr);
+    mExitCode = exitCode;
     stop_internal();
 }
 
@@ -254,8 +271,6 @@ void EventLoop::stop_internal()
     if (std::holds_alternative<EventLoopImplUv*>(mImpl)) {
         auto uvImpl = std::get<EventLoopImplUv*>(mImpl);
         uv_stop(&uvImpl->uvloop);
-        delete uvImpl;
-        mImpl = std::nullopt;
     }
 }
 
