@@ -116,6 +116,7 @@ struct RendererImpl
 {
     uv_idle_t idle;
     uv_loop_t* loop = nullptr;
+    uv_async_t stop;
 
     std::filesystem::path appPath;
     Renderer::Boxes boxes;
@@ -185,7 +186,7 @@ struct RendererImpl
 
     SizeF contentScale = { 1.f, 1.f };
 
-    bool suboptimal = false;
+    bool suboptimal = false, stopped = true;
 
     void checkFence(VkFence fence);
     void checkFences();
@@ -202,12 +203,20 @@ struct RendererImpl
     VkBuffer textFragUniformBuffer(const TextProperty& prop);
 
     static void idleCallback(uv_idle_t* idle);
+    static void processStop(uv_async_t* handle);
 };
 
 void RendererImpl::idleCallback(uv_idle_t* idle)
 {
     Renderer* renderer = static_cast<Renderer*>(idle->data);
     renderer->render();
+}
+
+void RendererImpl::processStop(uv_async_t* handle)
+{
+    Renderer* renderer = static_cast<Renderer*>(handle->data);
+    uv_idle_stop(&renderer->mImpl->idle);
+    renderer->mEventLoop->stop(0);
 }
 
 void RendererImpl::runFenceCallbacks(FenceInfo& info)
@@ -1207,6 +1216,9 @@ void Renderer::thread_internal()
             mImpl->idle.data = this;
             uv_idle_start(&mImpl->idle, RendererImpl::idleCallback);
 
+            uv_async_init(mImpl->loop, &mImpl->stop, &RendererImpl::processStop);
+            mImpl->stop.data = this;
+
             onResizeKey = window->onResize().connect([this](uint32_t width, uint32_t height) {
                 spdlog::info("Window resized, recreating swapchain {}x{}", width, height);
                 mImpl->width = width;
@@ -1225,11 +1237,19 @@ void Renderer::thread_internal()
     });
 
     mEventLoop->run();
+    mEventLoop->uninstall();
 
     window->onResize().disconnect(onResizeKey);
 
+    mImpl->textVBOs.clear();
+
     mImpl->vkbSwapchain.destroy_image_views(mImpl->imageViews);
     vkb::destroy_swapchain(mImpl->vkbSwapchain);
+
+    {
+        std::unique_lock lock(mMutex);
+        mEventLoop.reset();
+    }
 }
 
 bool Renderer::recreateSwapchain()
@@ -1400,9 +1420,9 @@ void Renderer::stop()
     {
         std::unique_lock lock(mMutex);
         assert(mInitialized);
+        uv_async_send(&mImpl->stop);
     }
     // ### should possibly ensure that mImpl->idle has been stopped at this point
-    mEventLoop->stop(0);
     mThread.join();
 }
 
