@@ -39,10 +39,10 @@ public:
     void uninstall();
 
     virtual int32_t run();
-    virtual void stop(int32_t exitCode);
+    void stop(int32_t exitCode);
 
     void post(std::function<void()>&& event);
-    virtual void post(std::unique_ptr<Event>&& event);
+    void post(std::unique_ptr<Event>&& event);
 
     enum class TimerMode
     {
@@ -50,8 +50,8 @@ public:
         Repeat
     };
     uint32_t startTimer(std::function<void(uint32_t)>&& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
-    virtual uint32_t startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
-    virtual void stopTimer(uint32_t id);
+    uint32_t startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot);
+    void stopTimer(uint32_t id);
 
     bool isMainEventLoop() const;
     static EventLoop* mainEventLoop();
@@ -65,19 +65,23 @@ public:
     };
     using ConnectKey = uint32_t;
 
-    virtual void* handle() const;
+    void* handle() const;
 
 private:
-    void run_internal();
-    void post_internal(std::unique_ptr<Event>&& event);
-    void stop_internal();
-    uint32_t startTimer_internal(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode);
-    void stopTimer_internal(uint32_t id);
-    bool processEvents();
+    struct EventLoopImpl
+    {
+        EventLoopImpl(EventLoop *loop)
+            : eventLoop(loop)
+        {}
+        virtual ~EventLoopImpl() = default;
+        virtual void *handle() = 0;
+        virtual void post() = 0;
+        virtual void startTimer(uint32_t /*id*/, const std::shared_ptr<Event>& /*event*/, uint64_t /*ms*/, TimerMode /*mode*/) = 0;
+        virtual void stopTimer(uint32_t /*id*/) = 0;
+        virtual void stop() = 0;
 
-private:
-    std::mutex mMutex;
-
+        EventLoop *const eventLoop;
+    };
     std::vector<std::unique_ptr<Event>> mEvents;
 
     struct Timer
@@ -92,17 +96,16 @@ private:
 
     bool mStopped = false;
 
-    // ### probably just hold two raw pointers here instead of a variant
-    std::variant<EventLoopImplMain*, EventLoopImplUv*, std::nullopt_t> mImpl = std::nullopt;
-
 protected:
+    bool processEvents();
+    std::mutex mMutex;
+    std::unique_ptr<EventLoopImpl> mImpl;
     static EventLoop* sMainEventLoop;
     int32_t mExitCode = 0;
 
 private:
     thread_local static EventLoop* tEventLoop;
 
-    friend class MainEventLoop;
     friend struct EventLoopImplMain;
     friend struct EventLoopImplUv;
 };
