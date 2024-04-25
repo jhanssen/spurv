@@ -58,7 +58,7 @@ private:
 
     int mMagic { 0 };
     struct FunctionData {
-        ScriptValue value; // Do we need this for it to stay alive?
+        ScriptValue value;
         ScriptValue::Function function;
     };
 

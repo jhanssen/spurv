@@ -23,7 +23,9 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
 
     mGlobal = ScriptValue(JS_GetGlobalObject(mContext));
     mSpurv = ScriptValue(std::vector<std::pair<std::string, ScriptValue>>());
-    mGlobal.setProperty("spurv", mSpurv);
+    // ### why is this needed?
+    mSpurv.ref();
+    mGlobal.setProperty("spurv", mSpurv.clone());
 
     bindSpurvFunction("log", &Builtins::log);
     bindSpurvFunction("setProcessHandler", &Builtins::setProcessHandler);
@@ -55,10 +57,10 @@ ScriptEngine::~ScriptEngine()
 {
     mTimers.clear();
     mFunctions.clear();
-    mGlobal = ScriptValue();
-    mSpurv = ScriptValue();
-    mProcessHandler = ScriptValue();
-    mKeyHandler = ScriptValue();
+    mSpurv.clear();
+    mGlobal.clear();
+    mProcessHandler.clear();
+    mKeyHandler.clear();
 
 #define ScriptAtom(atom)                        \
     JS_FreeAtom(mContext, mAtoms.atom);
@@ -128,6 +130,8 @@ ScriptValue ScriptEngine::bindFunction(ScriptValue::Function &&function)
     data->value = ScriptValue(JS_NewCFunctionData(mContext, bindHelper, 0, magic, 0, nullptr));
     data->function = std::move(function);
     auto ret = data->value.clone();
+    // why is this needed?
+    ret.ref();
     mFunctions[magic] = std::move(data);
     return ret;
 }
@@ -135,13 +139,13 @@ ScriptValue ScriptEngine::bindFunction(ScriptValue::Function &&function)
 void ScriptEngine::bindSpurvFunction(const std::string &name, ScriptValue::Function &&function)
 {
     ScriptValue func = bindFunction(std::move(function));
-    JS_SetPropertyStr(mContext, *mSpurv, name.c_str(), *func);
+    mSpurv.setProperty(name, std::move(func));
 }
 
 void ScriptEngine::bindGlobalFunction(const std::string &name, ScriptValue::Function &&function)
 {
     ScriptValue func = bindFunction(std::move(function));
-    JS_SetPropertyStr(mContext, *mGlobal, name.c_str(), *func);
+    mGlobal.setProperty(name, std::move(func));
 }
 
 EventEmitter<void(int)>& ScriptEngine::onExit()
@@ -159,16 +163,15 @@ JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValue
 
     std::vector<ScriptValue> args(argc);
     for (int i=0; i<argc; ++i) {
-        args[i] = ScriptValue(argv[i]);
-        args[i].ref();
+        args[i] = ScriptValue(JS_DupValue(that->mContext, argv[i]));
     }
 
     ScriptValue ret = it->second->function(std::move(args));
     if (ret) {
         if (ret.isError()) {
-            return JS_Throw(that->mContext, ret.acquire());
+            return JS_Throw(that->mContext, ret.leakValue());
         }
-        return ret.acquire();
+        return ret.leakValue();
     }
     return *ScriptValue::undefined();
 }
@@ -246,3 +249,4 @@ ScriptValue ScriptEngine::exit(std::vector<ScriptValue> &&args)
     return {};
 }
 } // namespace spurv
+

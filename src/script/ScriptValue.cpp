@@ -88,7 +88,7 @@ ScriptValue::ScriptValue(Function &&function)
     : mType(Type::Function)
 {
     auto engine = ScriptEngine::scriptEngine();
-    mValue = engine->bindFunction(std::move(function)).acquire();
+    mValue = engine->bindFunction(std::move(function)).leakValue();
 }
 
 ScriptValue::ScriptValue(Tag tag)
@@ -126,6 +126,15 @@ void ScriptValue::ref()
     if (mValue) {
         mValue = JS_DupValue(ScriptEngine::scriptEngine()->context(), *mValue);
     }
+}
+
+void ScriptValue::clear()
+{
+    if (mValue) {
+        JS_FreeValue(ScriptEngine::scriptEngine()->context(), *mValue);
+    }
+    mValue = std::nullopt;
+    mType = std::nullopt;
 }
 
 ScriptValue ScriptValue::call(const std::vector<ScriptValue> &args)
@@ -166,7 +175,7 @@ ScriptValue ScriptValue::clone() const
     return ret;
 }
 
-JSValue ScriptValue::acquire()
+JSValue ScriptValue::leakValue()
 {
     assert(mValue);
     JSValue ret = *mValue;
@@ -181,7 +190,7 @@ ScriptValue ScriptValue::makeError(std::string message)
     auto context = engine->context();
     JSValue val = JS_NewError(context);
     ScriptValue msg(message);
-    JS_SetProperty(context, val, engine->atoms().message, msg.acquire());
+    JS_SetProperty(context, val, engine->atoms().message, msg.leakValue());
     return ScriptValue(val);
 }
 
@@ -244,12 +253,13 @@ ScriptValue ScriptValue::getProperty(uint32_t value) const
     return ScriptValue();
 }
 
-Result<void> ScriptValue::setProperty(const std::string &name, const ScriptValue &value)
+Result<void> ScriptValue::setProperty(const std::string &name, ScriptValue &&value)
 {
     if (type() & Type::Object && value) {
         ScriptEngine *engine = ScriptEngine::scriptEngine();
         auto ctx = engine->context();
-        if (JS_SetPropertyStr(ctx, *mValue, name.c_str(), *value.clone()) == 0) {
+        if (JS_SetPropertyStr(ctx, *mValue, name.c_str(), *value) == 0) {
+            value.leakValue();
             return {};
         }
         return spurv::makeError(fmt::format("Failed to set property {}", name));
@@ -257,12 +267,13 @@ Result<void> ScriptValue::setProperty(const std::string &name, const ScriptValue
     return spurv::makeError(fmt::format("Failed to set property {}, value is not an object", name));
 }
 
-Result<void> ScriptValue::setProperty(uint32_t idx, const ScriptValue &value)
+Result<void> ScriptValue::setProperty(uint32_t idx, ScriptValue &&value)
 {
     if (type() & Type::Array && value) {
         ScriptEngine *engine = ScriptEngine::scriptEngine();
         auto ctx = engine->context();
-        if (JS_SetProperty(ctx, *mValue, idx, *value.clone()) == 0) {
+        if (JS_SetProperty(ctx, *mValue, idx, *value) == 0) {
+            value.leakValue();
             return {};
         }
         return spurv::makeError(fmt::format("Failed to set property {}", idx));

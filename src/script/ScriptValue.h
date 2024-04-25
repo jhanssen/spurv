@@ -37,12 +37,13 @@ public:
     ~ScriptValue();
 
     void ref();
+    void clear();
 
     ScriptValue call(const std::vector<ScriptValue> &args);
     ScriptValue call(const ScriptValue &arg);
 
     ScriptValue clone() const;
-    JSValue acquire();
+    JSValue leakValue();
     enum class Type {
         Invalid           = 0x000000,
         Undefined         = 0x000001,
@@ -120,8 +121,8 @@ public:
 
     ScriptValue getProperty(const std::string &name) const;
     ScriptValue getProperty(uint32_t value) const;
-    Result<void> setProperty(const std::string &name, const ScriptValue &value);
-    Result<void> setProperty(uint32_t idx, const ScriptValue &value);
+    Result<void> setProperty(const std::string &name, ScriptValue &&value);
+    Result<void> setProperty(uint32_t idx, ScriptValue &&value);
 
 private:
     std::optional<JSValue> mValue;
