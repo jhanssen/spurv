@@ -115,7 +115,7 @@ private:
     qss::Document mQss = {};
     std::vector<std::shared_ptr<DocumentSelectorInternal>> mSelectors = {};
 
-    bool mReady = true;
+    bool mReady = false;
     EventEmitter<void()> mOnReady;
 
     friend struct DocumentSelectorInternal;

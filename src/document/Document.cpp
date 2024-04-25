@@ -44,6 +44,8 @@ void Document::load(const std::filesystem::path& path)
 {
     mLayout.reset(Layout::Mode::Chunked);
     mLayout.onReady().connect([this]() {
+        mReady = true;
+        mDocumentLines = mLayout.numLines();
         mOnReady.emit();
     });
     mRope = Rope();
@@ -161,6 +163,8 @@ void Document::load(const std::u32string& data)
     mRope = Rope(data);
     mLayout.reset(Layout::Mode::Single);
     mLayout.onReady().connect([this]() {
+        mReady = true;
+        mDocumentLines = mLayout.numLines();
         mOnReady.emit();
     });
     mLayout.calculate(mRope.toString(), mRope.linebreaks());
@@ -173,6 +177,8 @@ void Document::load(std::u32string&& data)
     mRope = Rope(std::move(data));
     mLayout.reset(Layout::Mode::Single);
     mLayout.onReady().connect([this]() {
+        mReady = true;
+        mDocumentLines = mLayout.numLines();
         mOnReady.emit();
     });
     mLayout.calculate(mRope.toString(), mRope.linebreaks());

@@ -5,6 +5,7 @@
 #include <TextLine.h>
 #include <TextProperty.h>
 #include "Box.h"
+#include "Easing.h"
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -26,6 +27,12 @@ class Renderer
 public:
     ~Renderer();
 
+    enum class Property : uint32_t
+    {
+        FirstLine,
+        Max
+    };
+
     static void initialize(const std::filesystem::path &appPath);
     static void destroy();
     static Renderer* instance();
@@ -39,7 +46,14 @@ public:
     EventEmitter<void()>& onReady();
 
     void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
+    void clearTextLines(uint32_t box);
     void addTextProperties(uint32_t box, std::vector<TextProperty>&& lines);
+    void clearTextProperties(uint32_t box);
+
+    void setPropertyInt(uint32_t box, Property prop, int32_t value);
+    void setPropertyFloat(uint32_t box, Property prop, float value);
+    void animatePropertyInt(uint32_t box, Property prop, int32_t value, uint64_t ms, Ease ease);
+    void animatePropertyFloat(uint32_t box, Property prop, float value, uint64_t ms, Ease ease);
 
     void afterCurrentFrame(std::function<void()>&& func);
     void afterTransfer(uint64_t value, std::function<void()>&& func);

@@ -1,4 +1,5 @@
 set(SOURCES
+    Easing.cpp
     GenericPool.cpp
     GlyphAtlas.cpp
     GraphicsPipeline.cpp

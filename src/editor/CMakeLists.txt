@@ -1,5 +1,6 @@
 set(SOURCES
     Editor.cpp
+    View.cpp
 )
 
 add_library(spurv-editor OBJECT ${SOURCES})

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "View.h"
 #include <Document.h>
 #include <EventEmitter.h>
 #include <EventLoop.h>
@@ -48,9 +49,10 @@ private:
     std::condition_variable mCond;
     std::thread mThread;
     std::unique_ptr<EventLoop> mEventLoop;
-    std::vector<std::unique_ptr<Document>> mDocuments;
+    std::vector<std::shared_ptr<Document>> mDocuments;
+    std::vector<std::unique_ptr<View>> mViews;
     std::array<EventLoop::ConnectKey, 2> mConnectKeys;
-    Document* mCurrentDoc = nullptr;
+    View* mCurrentView = nullptr;
     EventEmitter<void()> mOnReady;
     EditorImpl* mImpl;
 

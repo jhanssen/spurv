@@ -1,10 +1,10 @@
 #include <MainEventLoop.h>
 #include <Logger.h>
+#include <Time.h>
 #include <window/Window.h>
 #include <window/glfw/GlfwUserData.h>
 #include <volk.h>
 #include <GLFW/glfw3.h>
-#include <chrono>
 #include <vector>
 #include <cassert>
 
@@ -65,7 +65,7 @@ uint32_t MainEventLoop::startTimer(const std::shared_ptr<EventLoop::Event>& even
 {
     const uint32_t id = ++mData->nextTimer;
     assert(isMainEventLoop());
-    const auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+    const auto now = timeNow();
     std::lock_guard lock(mData->mutex);
     mData->timers.push_back(MainEventLoopData::Timer {
             id,
@@ -140,7 +140,7 @@ int32_t MainEventLoop::run()
             lock.lock();
         } else {
             // process timers
-            auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+            auto now = timeNow();
 
             // keep track of things to fire outside of the lock later
             // this ensures that we don't iterate over the event vector
@@ -186,7 +186,7 @@ int32_t MainEventLoop::run()
             }
 
             if (next > 0) {
-                now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+                now = timeNow();
                 if (next > now) {
                     glfwWaitEventsTimeout((next - now) / 1000.0);
                 }

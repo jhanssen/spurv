@@ -202,8 +202,11 @@ void Layout::notifyLines(std::size_t processed)
 {
     ++mReceived;
     mProcessed += processed;
-    if (mMode == Mode::Single || mFinalized) {
+    if (mMode == Mode::Single) {
         mOnReady.emit();
+    } else if (mFinalized) {
+        // refinalize
+        finalize();
     }
 }
 

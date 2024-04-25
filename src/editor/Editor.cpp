@@ -60,11 +60,8 @@ void Editor::thread_internal()
         mConnectKeys[0] = mainEventLoop->onKey().connect([this](int key, int scancode, int action, int mods) {
             mScriptEngine->onKey(key, scancode, action, mods);
         });
-        mConnectKeys[1] = mainEventLoop->onUnicode().connect([this](uint32_t uc) {
+        mConnectKeys[1] = mainEventLoop->onUnicode().connect([](uint32_t uc) {
             spdlog::error("editor uc {}", uc);
-            if (mCurrentDoc) {
-                mCurrentDoc->insert(static_cast<char32_t>(uc));
-            }
         });
 
     });
@@ -82,7 +79,8 @@ void Editor::thread_internal()
         mEventLoop.reset();
         mScriptEngine.reset();
         mDocuments.clear();
-        mCurrentDoc = nullptr;
+        mViews.clear();
+        mCurrentView = nullptr;
         mCond.notify_one();
     }
 }
@@ -112,20 +110,24 @@ void Editor::load(const std::filesystem::path& path)
     }
     mEventLoop->post([this, path]() {
         if (mDocuments.empty()) {
-            assert(mCurrentDoc == nullptr);
-            mDocuments.push_back(std::make_unique<Document>());
-            mCurrentDoc = mDocuments.back().get();
+            assert(mCurrentView == nullptr);
+            mDocuments.push_back(std::make_shared<Document>());
+            mViews.push_back(std::make_unique<View>(static_cast<uint32_t>(mViews.size())));
+            mViews.back()->setDocument(mDocuments.back());
+            mCurrentView = mViews.back().get();
+            auto currentDoc = mCurrentView->document().get();
 
-            mCurrentDoc->setFont(Font("Inconsolata", 25));
+            currentDoc->setFont(Font("Inconsolata", 25));
 
-            mCurrentDoc->setStylesheet("hello1 { color: #ff4354 }\nhello4 { color: #0000ff }");
-            auto selector1 = mCurrentDoc->addSelector(50, 100, "hello1");
-            auto selector2 = mCurrentDoc->addSelector(75, 95, "hello2");
-            auto selector3 = mCurrentDoc->addSelector(75, 150, "hello3");
-            auto selector4 = mCurrentDoc->addSelector(160, 170, "hello4");
+            /*
+            currentDoc->setStylesheet("hello1 { color: #ff4354 }\nhello4 { color: #0000ff }");
+            auto selector1 = currentDoc->addSelector(50, 100, "hello1");
+            auto selector2 = currentDoc->addSelector(75, 95, "hello2");
+            auto selector3 = currentDoc->addSelector(75, 150, "hello3");
+            auto selector4 = currentDoc->addSelector(160, 170, "hello4");
 
-            mCurrentDoc->onReady().connect([
-                doc = mCurrentDoc,
+            currentDoc->onReady().connect([
+                doc = currentDoc,
                 selector1 = std::move(selector1),
                 selector2 = std::move(selector2),
                 selector3 = std::move(selector3),
@@ -142,6 +144,7 @@ void Editor::load(const std::filesystem::path& path)
                 }
                 renderer->addTextProperties(0, std::move(props));
             });
+            */
         }
         mDocuments.back()->load(path);
     });

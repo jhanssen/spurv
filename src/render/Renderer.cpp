@@ -9,10 +9,12 @@
 #include <VulkanCommon.h>
 #include <Window.h>
 #include <EventLoopUv.h>
+#include <Time.h>
 #include <uv.h>
 #include <VkBootstrap.h>
 #include <fmt/core.h>
 #include <vk_mem_alloc.h>
+#include <array>
 #include <unordered_set>
 #include <vector>
 #include <cassert>
@@ -184,15 +186,54 @@ struct RendererImpl
     VkPipelineLayout boxPipelineLayout = VK_NULL_HANDLE;
     VkPipeline boxPipeline = VK_NULL_HANDLE;
 
+    std::vector<std::vector<std::variant<int32_t, float>>> renderProperties = {};
+    struct AnimationInt
+    {
+        uint64_t tstart = 0;
+        uint64_t tend = 0;
+        uint64_t telapsed = 0;
+        int32_t vstart = 0;
+        int32_t vend = 0;
+        EasingFunction ease = nullptr;
+    };
+    struct AnimationFloat
+    {
+        uint64_t tstart = 0;
+        uint64_t tend = 0;
+        uint64_t telapsed = 0;
+        float vstart = 0.f;
+        float vend = 0.f;
+        EasingFunction ease = nullptr;
+    };
+    struct Animation
+    {
+        bool running = false;
+        std::variant<AnimationInt, AnimationFloat, std::nullopt_t> animation = std::nullopt;
+    };
+    std::vector<std::vector<Animation>> animatingProperties = {};
+    uint64_t lastRender = 0;
+
     SizeF contentScale = { 1.f, 1.f };
 
     bool suboptimal = false, stopped = true;
 
+    void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
+    void clearTextLines(uint32_t box);
+    void addTextProperties(uint32_t box, std::vector<TextProperty>&& properties);
+    void clearTextProperties(uint32_t box);
+
+    void setPropertyInt(uint32_t box, Renderer::Property, int32_t value);
+    void setPropertyFloat(uint32_t box, Renderer::Property, float value);
+    void animatePropertyInt(uint32_t box, Renderer::Property prop, int32_t value, uint64_t ms, Ease ease);
+    void animatePropertyFloat(uint32_t box, Renderer::Property prop, float value, uint64_t ms, Ease ease);
+
+    int32_t propertyInt(uint32_t box, Renderer::Property) const;
+    float propertyFloat(uint32_t box, Renderer::Property) const;
+    void updateAnimations();
+
     void checkFence(VkFence fence);
     void checkFences();
     void runFenceCallbacks(FenceInfo& info);
-    void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
-    void addTextProperties(uint32_t box, std::vector<TextProperty>&& properties);
     void generateVBOs(VkCommandBuffer cmdbuffer);
     void recreateUniformBuffers();
     void writeUniformBuffer(VkCommandBuffer cmdbuffer, VkBuffer buffer, const void* data, std::size_t size, uint32_t bufferOffset);
@@ -297,7 +338,6 @@ GlyphAtlas& RendererImpl::atlasFor(const Font& font)
 
 void RendererImpl::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
 {
-    (void)box;
     spdlog::info("Got text lines {}", lines.size());
 
     GlyphAtlas* currentAtlas = nullptr;
@@ -341,12 +381,218 @@ void RendererImpl::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
     textVBOs.clear();
 }
 
+void RendererImpl::clearTextLines(uint32_t box)
+{
+    if (box >= textLines.size()) {
+        return;
+    }
+    textLines[box] = {};
+}
+
 void RendererImpl::addTextProperties(uint32_t box, std::vector<TextProperty>&& properties)
 {
     if (box >= textProperties.size()) {
         textProperties.resize(box + 1);
     }
     textProperties[box] = std::move(properties);
+}
+
+void RendererImpl::clearTextProperties(uint32_t box)
+{
+    if (box >= textProperties.size()) {
+        return;
+    }
+    textProperties[box] = {};
+}
+
+void RendererImpl::setPropertyInt(uint32_t box, Renderer::Property prop, int32_t value)
+{
+    if (box >= renderProperties.size()) {
+        renderProperties.resize(box + 1);
+        animatingProperties.resize(box + 1);
+    }
+    auto& props = renderProperties[box];
+    auto& anims = animatingProperties[box];
+    if (static_cast<std::underlying_type_t<Renderer::Property>>(prop) >= props.size()) {
+        props.resize(static_cast<std::underlying_type_t<Renderer::Property>>(prop) + 1);
+        anims.resize(static_cast<std::underlying_type_t<Renderer::Property>>(prop) + 1);
+    }
+    props[static_cast<std::underlying_type_t<Renderer::Property>>(prop)] = value;
+}
+
+void RendererImpl::setPropertyFloat(uint32_t box, Renderer::Property prop, float value)
+{
+    if (box >= renderProperties.size()) {
+        renderProperties.resize(box + 1);
+        animatingProperties.resize(box + 1);
+    }
+    auto& props = renderProperties[box];
+    auto& anims = animatingProperties[box];
+    if (static_cast<std::underlying_type_t<Renderer::Property>>(prop) >= props.size()) {
+        props.resize(static_cast<std::underlying_type_t<Renderer::Property>>(prop) + 1);
+        anims.resize(static_cast<std::underlying_type_t<Renderer::Property>>(prop) + 1);
+    }
+    props[static_cast<std::underlying_type_t<Renderer::Property>>(prop)] = value;
+}
+
+void RendererImpl::animatePropertyInt(uint32_t box, Renderer::Property property, int32_t value, uint64_t ms, Ease ease)
+{
+    assert(box < renderProperties.size() && box < animatingProperties.size());
+
+    const auto propNo = static_cast<std::underlying_type_t<Renderer::Property>>(property);
+
+    auto& props = renderProperties[box];
+    auto& anims = animatingProperties[box];
+
+    assert(propNo < props.size() && propNo < anims.size());
+    auto& prop = props[propNo];
+    assert(std::holds_alternative<int32_t>(prop));
+    auto& anim = anims[propNo];
+    AnimationInt* intAnim;
+    if (std::holds_alternative<std::nullopt_t>(anim.animation)) {
+        anim.animation = AnimationInt {};
+        intAnim = &std::get<AnimationInt>(anim.animation);
+    } else {
+        assert(std::holds_alternative<AnimationInt>(anim.animation));
+        intAnim = &std::get<AnimationInt>(anim.animation);
+    }
+    if (anim.running) {
+        // extend the time
+        intAnim->tend = timeNow() + ms;
+        intAnim->vend = value;
+        intAnim->ease = getEasingFunction(ease);
+    } else {
+        anim.running = true;
+        intAnim->telapsed = 0;
+        intAnim->tstart = timeNow();
+        intAnim->tend = intAnim->tstart + ms;
+        intAnim->vstart = std::get<int32_t>(prop);
+        intAnim->vend = value;
+        intAnim->ease = getEasingFunction(ease);
+    }
+}
+
+void RendererImpl::animatePropertyFloat(uint32_t box, Renderer::Property property, float value, uint64_t ms, Ease ease)
+{
+    assert(box < renderProperties.size() && box < animatingProperties.size());
+
+    const auto propNo = static_cast<std::underlying_type_t<Renderer::Property>>(property);
+
+    auto& props = renderProperties[box];
+    auto& anims = animatingProperties[box];
+
+    assert(propNo < props.size() && propNo < anims.size());
+    auto& prop = props[propNo];
+    assert(std::holds_alternative<float>(prop));
+    auto& anim = anims[propNo];
+    AnimationFloat* floatAnim;
+    if (std::holds_alternative<std::nullopt_t>(anim.animation)) {
+        anim.animation = AnimationFloat {};
+        floatAnim = &std::get<AnimationFloat>(anim.animation);
+    } else {
+        assert(std::holds_alternative<AnimationFloat>(anim.animation));
+        floatAnim = &std::get<AnimationFloat>(anim.animation);
+    }
+    if (anim.running) {
+        // extend the time
+        floatAnim->tend = timeNow() + ms;
+        floatAnim->vend = value;
+        floatAnim->ease = getEasingFunction(ease);
+    } else {
+        anim.running = true;
+        floatAnim->telapsed = 0;
+        floatAnim->tstart = timeNow();
+        floatAnim->tend = floatAnim->tstart + ms;
+        floatAnim->vstart = std::get<float>(prop);
+        floatAnim->vend = value;
+        floatAnim->ease = getEasingFunction(ease);
+    }
+}
+
+int32_t RendererImpl::propertyInt(uint32_t box, Renderer::Property property) const
+{
+    assert(box < renderProperties.size() && box < animatingProperties.size());
+    const auto propNo = static_cast<std::underlying_type_t<Renderer::Property>>(property);
+    const auto& props = renderProperties[box];
+    assert(std::holds_alternative<int32_t>(props[propNo]));
+    return std::get<int32_t>(props[propNo]);
+}
+
+float RendererImpl::propertyFloat(uint32_t box, Renderer::Property property) const
+{
+    assert(box < renderProperties.size() && box < animatingProperties.size());
+    const auto propNo = static_cast<std::underlying_type_t<Renderer::Property>>(property);
+    const auto& props = renderProperties[box];
+    assert(std::holds_alternative<float>(props[propNo]));
+    return std::get<float>(props[propNo]);
+}
+
+void RendererImpl::updateAnimations()
+{
+    if (lastRender == 0) {
+        lastRender = timeNow();
+        return;
+    }
+
+    /*
+    auto updateIntAnimation = [](auto& prop, auto& anim, uint64_t lastTime, uint64_t nowTime) {
+        assert(std::holds_alternative<int32_t>(prop));
+        assert(std::holds_alternative<AnimationInt>(anim));
+
+        auto& animAnim = std::get<AnimationInt>(anim);
+        const auto elapsed = (nowTime - lastTime) + animAnim.telapsed;
+        // const auto animTime = animAnim.tnow + elapsed;
+        const float t = (animAnim.tend - animAnim.tstart) / static_cast<float>(elapsed);
+        const float where = animAnim.ease(t);
+
+        const int32_t newValue = static_cast<int32_t>((animAnim.vend - animAnim.vstart) * where) + animAnim.vstart;
+        prop = newValue;
+
+        animAnim.telapsed += elapsed;
+    };
+    */
+
+    auto updateFloatAnimation = [](auto& prop, auto& anim, uint64_t lastTime, uint64_t nowTime) {
+        assert(anim.running);
+        assert(std::holds_alternative<float>(prop));
+        assert(std::holds_alternative<AnimationFloat>(anim.animation));
+
+        auto& animAnim = std::get<AnimationFloat>(anim.animation);
+        const auto elapsed = (nowTime - lastTime) + animAnim.telapsed;
+        // const auto animTime = animAnim.tnow + elapsed;
+        const float t = (animAnim.tend - animAnim.tstart) / static_cast<float>(elapsed);
+        const float where = animAnim.ease(t);
+
+        const float newValue = ((animAnim.vend - animAnim.vstart) * where) + animAnim.vstart;
+        prop = newValue;
+
+        animAnim.telapsed += elapsed;
+    };
+
+    const auto now = timeNow();
+    for (std::size_t box = 0; box < animatingProperties.size(); ++box) {
+        assert(box < renderProperties.size());
+        auto& props = renderProperties[box];
+        auto& anims = animatingProperties[box];
+        for (std::size_t propNo = 0; propNo < anims.size(); ++propNo) {
+            assert(propNo < props.size());
+            auto& prop = props[propNo];
+            auto& anim = anims[propNo];
+            if (!anim.running) {
+                continue;
+            }
+            switch (static_cast<Renderer::Property>(propNo)) {
+            case Renderer::Property::FirstLine:
+                // float
+                updateFloatAnimation(prop, anim, lastRender, now);
+                break;
+            case Renderer::Property::Max:
+                break;
+            }
+        }
+    }
+
+    lastRender = now;
 }
 
 VkBuffer RendererImpl::textFragUniformBuffer(const TextProperty& prop)
@@ -461,6 +707,7 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
             const auto& vboTextProp = curProp != nullptr ? *curProp : defaultTextProperty;
             makeTextFragUniformBuffer(cmdbuffer, vboTextProp);
             vbo->setProperty(vboTextProp);
+            vbo->setFirstLine(line.line);
             auto& atlas = atlasFor(line.font);
             const auto fontSize = line.font.size();
 
@@ -528,6 +775,7 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
 
                         assert(view != VK_NULL_HANDLE);
                         vbo->setView(view);
+                        vbo->setFirstLine(line.line);
 
                         const auto& newVboTextProp = curProp != nullptr ? *curProp : defaultTextProperty;
                         makeTextFragUniformBuffer(cmdbuffer, newVboTextProp);
@@ -1440,10 +1688,52 @@ void Renderer::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
     });
 }
 
+void Renderer::clearTextLines(uint32_t box)
+{
+    mEventLoop->post([box, impl = mImpl]() {
+        impl->clearTextLines(box);
+    });
+}
+
 void Renderer::addTextProperties(uint32_t box, std::vector<TextProperty>&& properties)
 {
     mEventLoop->post([box, properties = std::move(properties), impl = mImpl]() mutable {
         impl->addTextProperties(box, std::move(properties));
+    });
+}
+
+void Renderer::clearTextProperties(uint32_t box)
+{
+    mEventLoop->post([box, impl = mImpl]() {
+        impl->clearTextProperties(box);
+    });
+}
+
+void Renderer::setPropertyInt(uint32_t box, Property prop, int32_t value)
+{
+    mEventLoop->post([box, prop, value, impl = mImpl]() {
+        impl->setPropertyInt(box, prop, value);
+    });
+}
+
+void Renderer::setPropertyFloat(uint32_t box, Property prop, float value)
+{
+    mEventLoop->post([box, prop, value, impl = mImpl]() {
+        impl->setPropertyFloat(box, prop, value);
+    });
+}
+
+void Renderer::animatePropertyInt(uint32_t box, Property prop, int32_t value, uint64_t ms, Ease ease)
+{
+    mEventLoop->post([box, prop, value, ms, ease, impl = mImpl]() {
+        impl->animatePropertyInt(box, prop, value, ms, ease);
+    });
+}
+
+void Renderer::animatePropertyFloat(uint32_t box, Property prop, float value, uint64_t ms, Ease ease)
+{
+    mEventLoop->post([box, prop, value, ms, ease, impl = mImpl]() {
+        impl->animatePropertyFloat(box, prop, value, ms, ease);
     });
 }
 
@@ -1452,6 +1742,8 @@ void Renderer::render()
     if (mImpl->vkbSwapchain.swapchain == VK_NULL_HANDLE) {
         return;
     }
+
+    mImpl->updateAnimations();
 
     auto& swapSemaphores = mImpl->swapSemaphores;
     const auto currentSemaphore = mImpl->currentSwapchain;
@@ -1582,8 +1874,13 @@ void Renderer::render()
 
         vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->textPipeline);
 
-        for (const auto& vbos : mImpl->textVBOs) {
+        for (std::size_t box = 0; box < mImpl->textVBOs.size(); ++box) {
+            const auto& vbos = mImpl->textVBOs[box];
+            const uint32_t firstLine = static_cast<uint32_t>(mImpl->propertyFloat(box, Property::FirstLine));
             for (const auto& vbo : vbos) {
+                if (vbo.firstLine() < firstLine) {
+                    continue;
+                }
                 if (vbo.view() == VK_NULL_HANDLE) {
                     continue;
                 }

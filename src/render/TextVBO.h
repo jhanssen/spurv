@@ -6,6 +6,7 @@
 #include <volk.h>
 #include <vk_mem_alloc.h>
 #include <vector>
+#include <cstdint>
 
 namespace spurv {
 
@@ -23,9 +24,11 @@ public:
 
     void setView(VkImageView view);
     void setProperty(const TextProperty& property);
+    void setFirstLine(uint64_t line);
 
     VkBuffer buffer() const;
     uint32_t size() const;
+    uint64_t firstLine() const;
 
     VkImageView view() const;
     const TextProperty& property() const;
@@ -37,6 +40,7 @@ private:
 private:
     std::vector<float> mMemory = {};
     std::size_t mOffset = 0, mSize = 0;
+    uint64_t mFirstLine = 0;
     VmaAllocator mAllocator = VK_NULL_HANDLE;
     VmaAllocation mAllocation = VK_NULL_HANDLE;
     VkBuffer mBuffer = VK_NULL_HANDLE;
@@ -62,6 +66,16 @@ inline void TextVBO::setProperty(const TextProperty& property)
 inline const TextProperty& TextVBO::property() const
 {
     return mProperty;
+}
+
+inline void TextVBO::setFirstLine(uint64_t line)
+{
+    mFirstLine = line;
+}
+
+inline uint64_t TextVBO::firstLine() const
+{
+    return mFirstLine;
 }
 
 inline VkBuffer TextVBO::buffer() const
