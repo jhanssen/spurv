@@ -12,16 +12,6 @@ public:
     virtual ~MainEventLoop() override;
 
     virtual int run() override;
-    virtual void stop(int exitCode) override;
-
-    using EventLoop::post;
-    virtual void post(std::unique_ptr<Event>&& event) override;
-
-    using EventLoop::startTimer;
-    virtual uint32_t startTimer(const std::shared_ptr<Event>& event, uint64_t timeout, TimerMode mode = TimerMode::SingleShot) override;
-    virtual void stopTimer(uint32_t id) override;
-
-    virtual void* handle() const override;
 
     EventEmitter<void(uint32_t)>& onUnicode();
     /**
