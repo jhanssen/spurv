@@ -708,6 +708,7 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
             makeTextFragUniformBuffer(cmdbuffer, vboTextProp);
             vbo->setProperty(vboTextProp);
             vbo->setFirstLine(line.line);
+            vbo->setLinePosition(linePos);
             auto& atlas = atlasFor(line.font);
             const auto fontSize = line.font.size();
 
@@ -776,6 +777,7 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
                         assert(view != VK_NULL_HANDLE);
                         vbo->setView(view);
                         vbo->setFirstLine(line.line);
+                        vbo->setLinePosition(linePos);
 
                         const auto& newVboTextProp = curProp != nullptr ? *curProp : defaultTextProperty;
                         makeTextFragUniformBuffer(cmdbuffer, newVboTextProp);
@@ -1405,10 +1407,17 @@ void Renderer::thread_internal()
     textUniformLayoutInfo.pBindings = textUniformBinding;
     VK_CHECK_SUCCESS(vkCreateDescriptorSetLayout(mImpl->device, &textUniformLayoutInfo, nullptr, &mImpl->textUniformLayout));
 
+    VkPushConstantRange textYOffsetPushConstant = {};
+    textYOffsetPushConstant.offset = 0;
+    textYOffsetPushConstant.size = sizeof(float);
+    textYOffsetPushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
     VkPipelineLayoutCreateInfo textPipelineLayoutInfo = {};
     textPipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     textPipelineLayoutInfo.setLayoutCount = 1;
     textPipelineLayoutInfo.pSetLayouts = &mImpl->textUniformLayout;
+    textPipelineLayoutInfo.pushConstantRangeCount = 1;
+    textPipelineLayoutInfo.pPushConstantRanges = &textYOffsetPushConstant;
     VK_CHECK_SUCCESS(vkCreatePipelineLayout(mImpl->device, &textPipelineLayoutInfo, nullptr, &mImpl->textPipelineLayout));
 
     VkDescriptorSetLayoutBinding boxUniformBinding[] = {
@@ -1877,9 +1886,15 @@ void Renderer::render()
         for (std::size_t box = 0; box < mImpl->textVBOs.size(); ++box) {
             const auto& vbos = mImpl->textVBOs[box];
             const uint32_t firstLine = static_cast<uint32_t>(mImpl->propertyFloat(box, Property::FirstLine));
+            int64_t iadjust = -1;
+            float fadjust = 0;
             for (const auto& vbo : vbos) {
                 if (vbo.firstLine() < firstLine) {
                     continue;
+                } else if (iadjust == -1) {
+                    iadjust = static_cast<int64_t>(vbo.linePosition());
+                    fadjust = static_cast<float>(iadjust) * -1.f;
+                    vkCmdPushConstants(cmdbuffer, mImpl->textPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float), &fadjust);
                 }
                 if (vbo.view() == VK_NULL_HANDLE) {
                     continue;

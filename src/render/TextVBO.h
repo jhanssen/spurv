@@ -25,10 +25,12 @@ public:
     void setView(VkImageView view);
     void setProperty(const TextProperty& property);
     void setFirstLine(uint64_t line);
+    void setLinePosition(uint64_t pos);
 
     VkBuffer buffer() const;
     uint32_t size() const;
     uint64_t firstLine() const;
+    uint64_t linePosition() const;
 
     VkImageView view() const;
     const TextProperty& property() const;
@@ -40,7 +42,7 @@ private:
 private:
     std::vector<float> mMemory = {};
     std::size_t mOffset = 0, mSize = 0;
-    uint64_t mFirstLine = 0;
+    uint64_t mFirstLine = 0, mLinePosition = 0;
     VmaAllocator mAllocator = VK_NULL_HANDLE;
     VmaAllocation mAllocation = VK_NULL_HANDLE;
     VkBuffer mBuffer = VK_NULL_HANDLE;
@@ -76,6 +78,16 @@ inline void TextVBO::setFirstLine(uint64_t line)
 inline uint64_t TextVBO::firstLine() const
 {
     return mFirstLine;
+}
+
+inline void TextVBO::setLinePosition(uint64_t pos)
+{
+    mLinePosition = pos;
+}
+
+inline uint64_t TextVBO::linePosition() const
+{
+    return mLinePosition;
 }
 
 inline VkBuffer TextVBO::buffer() const
