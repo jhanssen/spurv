@@ -4,13 +4,15 @@
 
 void JS_FreeException(JSContext* ctx, JSValueConst obj)
 {
-    if (!JS_IsObject(obj) && !JS_IsNull(obj)) {
+    if (JS_IsUndefined(obj) || JS_IsNull(obj)) {
         return;
     }
-    const auto& atoms = spurv::ScriptEngine::scriptEngine()->atoms();
-    auto message = JS_GetProperty(ctx, obj, atoms.message);
-    if (!JS_IsUndefined(message)) {
-        JS_FreeValue(ctx, message);
+    if (JS_IsObject(obj)) {
+        const auto& atoms = spurv::ScriptEngine::scriptEngine()->atoms();
+        auto message = JS_GetProperty(ctx, obj, atoms.message);
+        if (!JS_IsUndefined(message)) {
+            JS_FreeValue(ctx, message);
+        }
     }
     JS_FreeValue(ctx, obj);
 }
