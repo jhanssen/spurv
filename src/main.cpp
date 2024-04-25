@@ -75,6 +75,7 @@ int main(int argc, char** argv, char** envp)
                 }
             } });
     const int32_t ret = loop.run();
+    ThreadPool::destroyMainThreadPool();
     Editor::destroy();
     Renderer::destroy();
     return ret;
