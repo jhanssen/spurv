@@ -57,10 +57,10 @@ void Editor::thread_internal()
         mainEventLoop->post([editor = this]() {
             editor->mOnReady.emit();
         });
-        mainEventLoop->onKey().connect([this](int key, int scancode, int action, int mods) {
+        mConnectKeys[0] = mainEventLoop->onKey().connect([this](int key, int scancode, int action, int mods) {
             mScriptEngine->onKey(key, scancode, action, mods);
         });
-        mainEventLoop->onUnicode().connect([this](uint32_t uc) {
+        mConnectKeys[1] = mainEventLoop->onUnicode().connect([this](uint32_t uc) {
             spdlog::error("editor uc {}", uc);
             if (mCurrentDoc) {
                 mCurrentDoc->insert(static_cast<char32_t>(uc));
@@ -69,6 +69,13 @@ void Editor::thread_internal()
 
     });
     mEventLoop->run();
+
+    if (mInitialized) {
+        auto mainEventLoop = static_cast<MainEventLoop*>(EventLoop::mainEventLoop());
+        mainEventLoop->onKey().disconnect(mConnectKeys[0]);
+        mainEventLoop->onUnicode().disconnect(mConnectKeys[1]);
+    }
+
     mEventLoop->uninstall();
     {
         std::unique_lock lock(mMutex);

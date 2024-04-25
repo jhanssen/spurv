@@ -49,6 +49,7 @@ private:
     std::thread mThread;
     std::unique_ptr<EventLoop> mEventLoop;
     std::vector<std::unique_ptr<Document>> mDocuments;
+    std::array<EventLoop::ConnectKey, 2> mConnectKeys;
     Document* mCurrentDoc = nullptr;
     EventEmitter<void()> mOnReady;
     EditorImpl* mImpl;
