@@ -415,7 +415,7 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
         std::size_t highestMatching = 0;
 
         const TextProperty* curProp = getProp(propStart);
-        if (curProp->start > 0) {
+        if (curProp && curProp->start > 0) {
             curProp = nullptr;
         }
         auto scanMatching = [&](std::size_t idx) -> void {
