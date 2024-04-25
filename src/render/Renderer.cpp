@@ -16,6 +16,7 @@
 #include <unordered_set>
 #include <vector>
 #include <cassert>
+#include <Thread.h>
 
 using namespace spurv;
 
@@ -822,6 +823,8 @@ static inline vkb::Result<uint32_t> get_transfer_queue_index(vkb::Device& device
 
 void Renderer::thread_internal()
 {
+    setCurrentThreadName("Render");
+
     if (volkInitialize() != VK_SUCCESS) {
         spdlog::critical("Failed to initialize volk/vulkan. You may need to download the Vulkan SDK and source the setup-env.sh script");
         spdlog::critical("- Remember to bundle the vulkan/moltenvk libraries/icds when making a mac bundle");

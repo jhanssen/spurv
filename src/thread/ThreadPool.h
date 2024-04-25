@@ -79,7 +79,7 @@ private:
         std::function<void()> task;
     };
 
-    void thread_internal();
+    void thread_internal(uint32_t idx);
 
 private:
     std::mutex mMutex;

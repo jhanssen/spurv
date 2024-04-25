@@ -6,6 +6,7 @@
 #include <EventLoopUv.h>
 #include <fmt/core.h>
 #include <uv.h>
+#include <Thread.h>
 
 using namespace spurv;
 
@@ -34,6 +35,7 @@ Editor::~Editor()
 
 void Editor::thread_internal()
 {
+    setCurrentThreadName("Editor");
     // finalize the event loop
     mEventLoop->install();
     mEventLoop->post([this]() {
@@ -68,10 +70,14 @@ void Editor::thread_internal()
     });
     mEventLoop->run();
     mEventLoop->uninstall();
-    mEventLoop.reset();
-    mScriptEngine.reset();
-    mDocuments.clear();
-    mCurrentDoc = nullptr;
+    {
+        std::unique_lock lock(mMutex);
+        mEventLoop.reset();
+        mScriptEngine.reset();
+        mDocuments.clear();
+        mCurrentDoc = nullptr;
+        mCond.notify_one();
+    }
 }
 
 void Editor::stop()
@@ -79,8 +85,10 @@ void Editor::stop()
     {
         std::unique_lock lock(mMutex);
         assert(mInitialized);
+        while (mEventLoop) {
+            mCond.wait(lock);
+        }
     }
-    assert(!mEventLoop);
     mThread.join();
 }
 

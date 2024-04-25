@@ -1,4 +1,6 @@
 #include "ThreadPool.h"
+#include <fmt/core.h>
+#include <Thread.h>
 
 using namespace spurv;
 
@@ -13,7 +15,7 @@ ThreadPool::ThreadPool(uint32_t numThreads)
 {
     // start <numThreads> threads
     for (uint32_t t = 0; t < numThreads; ++t) {
-        mThreads.push_back(std::thread(&ThreadPool::thread_internal, this));
+        mThreads.push_back(std::thread(&ThreadPool::thread_internal, this, t));
     }
 }
 
@@ -39,8 +41,10 @@ void ThreadPool::destroyMainThreadPool()
     sMainThreadPool.reset();
 }
 
-void ThreadPool::thread_internal()
+void ThreadPool::thread_internal(uint32_t idx)
 {
+    setCurrentThreadName(fmt::format("ThreadPool {}", idx));
+
     for (;;) {
         std::unique_ptr<Task> task;
         {
