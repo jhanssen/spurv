@@ -4,7 +4,7 @@
 
 #if defined(__clang__)
 # pragma clang diagnostic push
-// # pragma clang diagnostic ignore "-Wsequence-point"
+# pragma clang diagnostic ignored "-Wunsequenced"
 #else
 // gcc?
 # pragma GCC diagnostic push
