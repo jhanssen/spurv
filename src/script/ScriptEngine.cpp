@@ -41,11 +41,11 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
     bindSpurvFunction("stringtoutf16be", &Builtins::stringtoutf16be);
     bindSpurvFunction("stringtoutf32", &Builtins::stringtoutf32);
     bindSpurvFunction("setKeyEventHandler", &Builtins::setKeyEventHandler);
+    bindSpurvFunction("exit", std::bind(&ScriptEngine::exit, this, std::placeholders::_1));
     bindGlobalFunction("setTimeout", std::bind(&ScriptEngine::setTimeout, this, std::placeholders::_1));
     bindGlobalFunction("setInterval", std::bind(&ScriptEngine::setInterval, this, std::placeholders::_1));
     bindGlobalFunction("clearTimeout", std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
     bindGlobalFunction("clearInterval", std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
-    bindGlobalFunction("exit", std::bind(&ScriptEngine::exit, this, std::placeholders::_1));
 
     const std::filesystem::path file = mAppPath / "../src/typescript/dist/spurv.js";
     auto ret = eval(file);

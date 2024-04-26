@@ -86,4 +86,6 @@ declare namespace spurv {
         mods: number;
     }
     export function setKeyEventHandler(handler: (event: KeyEvent) => void): void;
+
+    export function exit(number?: number): void;
 }
