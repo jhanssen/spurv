@@ -130,6 +130,14 @@ void ScriptValue::clear()
     mValue = std::nullopt;
 }
 
+ScriptValue ScriptValue::call()
+{
+    if (isFunction()) {
+        return ScriptValue(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(), 0, nullptr));
+    }
+    return ScriptValue::makeError("Not a function");
+}
+
 ScriptValue ScriptValue::call(const std::vector<ScriptValue> &args)
 {
     if (isFunction()) {
@@ -156,6 +164,40 @@ ScriptValue ScriptValue::call(const ScriptValue &arg)
     }
     return ScriptValue::makeError("Not a function");
 }
+
+ScriptValue ScriptValue::construct()
+{
+    if (isConstructor()) {
+        return ScriptValue(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, 0, nullptr));
+    }
+    return ScriptValue::makeError("Not a function");
+}
+
+ScriptValue ScriptValue::construct(const std::vector<ScriptValue> &args)
+{
+    if (isConstructor()) {
+        std::vector<JSValue> argv(args.size());
+        size_t i = 0;
+        for (const ScriptValue &val : args) {
+            argv[i++] = *val;
+        }
+        return ScriptValue(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, argv.size(), argv.data()));
+    }
+    return ScriptValue::makeError("Not a function");
+}
+
+ScriptValue ScriptValue::construct(const ScriptValue &arg)
+{
+    if (isConstructor()) {
+        if (arg.isValid()) {
+            JSValue value = *arg;
+            return ScriptValue(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, 1, &value));
+        }
+        return ScriptValue(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, 0, nullptr));
+    }
+    return ScriptValue::makeError("Not a function");
+}
+
 
 ScriptValue ScriptValue::clone() const
 {
@@ -305,6 +347,11 @@ bool ScriptValue::isBigInt() const
 bool ScriptValue::isFunction() const
 {
     return mValue && JS_IsFunction(ScriptEngine::scriptEngine()->context(), *mValue);
+}
+
+bool ScriptValue::isConstructor() const
+{
+    return mValue && JS_IsConstructor(ScriptEngine::scriptEngine()->context(), *mValue);
 }
 
 bool ScriptValue::isError() const

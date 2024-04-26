@@ -39,8 +39,13 @@ public:
     void ref();
     void clear();
 
-    ScriptValue call(const std::vector<ScriptValue> &args);
+    // should have variadic template
+    ScriptValue call();
     ScriptValue call(const ScriptValue &arg);
+    ScriptValue call(const std::vector<ScriptValue> &args);
+    ScriptValue construct();
+    ScriptValue construct(const ScriptValue &arg);
+    ScriptValue construct(const std::vector<ScriptValue> &args);
 
     ScriptValue clone() const;
     JSValue leakValue();
@@ -68,6 +73,7 @@ public:
     bool isBigFloat() const;
     bool isBigDecimal() const;
     bool isFunction() const;
+    bool isConstructor() const;
 
     ScriptValue &operator=(ScriptValue &&other);
 
