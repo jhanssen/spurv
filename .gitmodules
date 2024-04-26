@@ -55,3 +55,6 @@
 [submodule "3rdparty/volk"]
 	path = 3rdparty/volk
 	url = https://github.com/zeux/volk.git
+[submodule "3rdparty/base64"]
+	path = 3rdparty/base64
+	url = git@github.com:tobiaslocker/base64.git
