@@ -222,13 +222,15 @@ struct RendererImpl
     void addTextProperties(uint32_t box, std::vector<TextProperty>&& properties);
     void clearTextProperties(uint32_t box);
 
-    void setPropertyInt(uint32_t box, Renderer::Property, int32_t value);
-    void setPropertyFloat(uint32_t box, Renderer::Property, float value);
-    void animatePropertyInt(uint32_t box, Renderer::Property prop, int32_t value, uint64_t ms, Ease ease);
-    void animatePropertyFloat(uint32_t box, Renderer::Property prop, float value, uint64_t ms, Ease ease);
+    template<typename ValueType>
+    void setProperty(uint32_t box, Renderer::Property, ValueType value);
 
-    int32_t propertyInt(uint32_t box, Renderer::Property) const;
-    float propertyFloat(uint32_t box, Renderer::Property) const;
+    template<typename ValueType, typename AnimationType>
+    void animateProperty(uint32_t box, Renderer::Property prop, ValueType value, uint64_t ms, Ease ease);
+
+    template<typename ValueType>
+    ValueType propertyValue(uint32_t box, Renderer::Property) const;
+
     void updateAnimations();
 
     void checkFence(VkFence fence);
@@ -405,7 +407,8 @@ void RendererImpl::clearTextProperties(uint32_t box)
     textProperties[box] = {};
 }
 
-void RendererImpl::setPropertyInt(uint32_t box, Renderer::Property prop, int32_t value)
+template<typename ValueType>
+void RendererImpl::setProperty(uint32_t box, Renderer::Property prop, ValueType value)
 {
     if (box >= renderProperties.size()) {
         renderProperties.resize(box + 1);
@@ -420,22 +423,8 @@ void RendererImpl::setPropertyInt(uint32_t box, Renderer::Property prop, int32_t
     props[static_cast<std::underlying_type_t<Renderer::Property>>(prop)] = value;
 }
 
-void RendererImpl::setPropertyFloat(uint32_t box, Renderer::Property prop, float value)
-{
-    if (box >= renderProperties.size()) {
-        renderProperties.resize(box + 1);
-        animatingProperties.resize(box + 1);
-    }
-    auto& props = renderProperties[box];
-    auto& anims = animatingProperties[box];
-    if (static_cast<std::underlying_type_t<Renderer::Property>>(prop) >= props.size()) {
-        props.resize(static_cast<std::underlying_type_t<Renderer::Property>>(prop) + 1);
-        anims.resize(static_cast<std::underlying_type_t<Renderer::Property>>(prop) + 1);
-    }
-    props[static_cast<std::underlying_type_t<Renderer::Property>>(prop)] = value;
-}
-
-void RendererImpl::animatePropertyInt(uint32_t box, Renderer::Property property, int32_t value, uint64_t ms, Ease ease)
+template<typename ValueType, typename AnimationType>
+void RendererImpl::animateProperty(uint32_t box, Renderer::Property property, ValueType value, uint64_t ms, Ease ease)
 {
     assert(box < renderProperties.size() && box < animatingProperties.size());
 
@@ -446,85 +435,40 @@ void RendererImpl::animatePropertyInt(uint32_t box, Renderer::Property property,
 
     assert(propNo < props.size() && propNo < anims.size());
     auto& prop = props[propNo];
-    assert(std::holds_alternative<int32_t>(prop));
+    assert(std::holds_alternative<ValueType>(prop));
     auto& anim = anims[propNo];
-    AnimationInt* intAnim;
+    AnimationType* tAnim;
     if (std::holds_alternative<std::nullopt_t>(anim.animation)) {
-        anim.animation = AnimationInt {};
-        intAnim = &std::get<AnimationInt>(anim.animation);
+        anim.animation = AnimationType {};
+        tAnim = &std::get<AnimationType>(anim.animation);
     } else {
-        assert(std::holds_alternative<AnimationInt>(anim.animation));
-        intAnim = &std::get<AnimationInt>(anim.animation);
+        assert(std::holds_alternative<AnimationType>(anim.animation));
+        tAnim = &std::get<AnimationType>(anim.animation);
     }
     if (anim.running) {
         // extend the time
-        intAnim->tend = timeNow() + ms;
-        intAnim->vend = value;
-        intAnim->ease = getEasingFunction(ease);
+        tAnim->tend = timeNow() + ms;
+        tAnim->vend = value;
+        tAnim->ease = getEasingFunction(ease);
     } else {
         anim.running = true;
-        intAnim->telapsed = 0;
-        intAnim->tstart = timeNow();
-        intAnim->tend = intAnim->tstart + ms;
-        intAnim->vstart = std::get<int32_t>(prop);
-        intAnim->vend = value;
-        intAnim->ease = getEasingFunction(ease);
+        tAnim->telapsed = 0;
+        tAnim->tstart = timeNow();
+        tAnim->tend = tAnim->tstart + ms;
+        tAnim->vstart = std::get<ValueType>(prop);
+        tAnim->vend = value;
+        tAnim->ease = getEasingFunction(ease);
     }
 }
 
-void RendererImpl::animatePropertyFloat(uint32_t box, Renderer::Property property, float value, uint64_t ms, Ease ease)
-{
-    assert(box < renderProperties.size() && box < animatingProperties.size());
-
-    const auto propNo = static_cast<std::underlying_type_t<Renderer::Property>>(property);
-
-    auto& props = renderProperties[box];
-    auto& anims = animatingProperties[box];
-
-    assert(propNo < props.size() && propNo < anims.size());
-    auto& prop = props[propNo];
-    assert(std::holds_alternative<float>(prop));
-    auto& anim = anims[propNo];
-    AnimationFloat* floatAnim;
-    if (std::holds_alternative<std::nullopt_t>(anim.animation)) {
-        anim.animation = AnimationFloat {};
-        floatAnim = &std::get<AnimationFloat>(anim.animation);
-    } else {
-        assert(std::holds_alternative<AnimationFloat>(anim.animation));
-        floatAnim = &std::get<AnimationFloat>(anim.animation);
-    }
-    if (anim.running) {
-        // extend the time
-        floatAnim->tend = timeNow() + ms;
-        floatAnim->vend = value;
-        floatAnim->ease = getEasingFunction(ease);
-    } else {
-        anim.running = true;
-        floatAnim->telapsed = 0;
-        floatAnim->tstart = timeNow();
-        floatAnim->tend = floatAnim->tstart + ms;
-        floatAnim->vstart = std::get<float>(prop);
-        floatAnim->vend = value;
-        floatAnim->ease = getEasingFunction(ease);
-    }
-}
-
-int32_t RendererImpl::propertyInt(uint32_t box, Renderer::Property property) const
+template<typename ValueType>
+ValueType RendererImpl::propertyValue(uint32_t box, Renderer::Property property) const
 {
     assert(box < renderProperties.size() && box < animatingProperties.size());
     const auto propNo = static_cast<std::underlying_type_t<Renderer::Property>>(property);
     const auto& props = renderProperties[box];
-    assert(std::holds_alternative<int32_t>(props[propNo]));
-    return std::get<int32_t>(props[propNo]);
-}
-
-float RendererImpl::propertyFloat(uint32_t box, Renderer::Property property) const
-{
-    assert(box < renderProperties.size() && box < animatingProperties.size());
-    const auto propNo = static_cast<std::underlying_type_t<Renderer::Property>>(property);
-    const auto& props = renderProperties[box];
-    assert(std::holds_alternative<float>(props[propNo]));
-    return std::get<float>(props[propNo]);
+    assert(std::holds_alternative<ValueType>(props[propNo]));
+    return std::get<ValueType>(props[propNo]);
 }
 
 void RendererImpl::updateAnimations()
@@ -534,30 +478,12 @@ void RendererImpl::updateAnimations()
         return;
     }
 
-    /*
-    auto updateIntAnimation = [](auto& prop, auto& anim, uint64_t lastTime, uint64_t nowTime) {
-        assert(std::holds_alternative<int32_t>(prop));
-        assert(std::holds_alternative<AnimationInt>(anim));
-
-        auto& animAnim = std::get<AnimationInt>(anim);
-        const auto elapsed = (nowTime - lastTime) + animAnim.telapsed;
-        // const auto animTime = animAnim.tnow + elapsed;
-        const float t = (animAnim.tend - animAnim.tstart) / static_cast<float>(elapsed);
-        const float where = animAnim.ease(t);
-
-        const int32_t newValue = static_cast<int32_t>((animAnim.vend - animAnim.vstart) * where) + animAnim.vstart;
-        prop = newValue;
-
-        animAnim.telapsed += elapsed;
-    };
-    */
-
-    auto updateFloatAnimation = [](auto& prop, auto& anim, uint64_t lastTime, uint64_t nowTime) {
+    auto updateAnimation = []<typename ValueType, typename AnimationType>(auto& prop, auto& anim, uint64_t lastTime, uint64_t nowTime) {
         assert(anim.running);
-        assert(std::holds_alternative<float>(prop));
-        assert(std::holds_alternative<AnimationFloat>(anim.animation));
+        assert(std::holds_alternative<ValueType>(prop));
+        assert(std::holds_alternative<AnimationType>(anim.animation));
 
-        auto& animAnim = std::get<AnimationFloat>(anim.animation);
+        auto& animAnim = std::get<AnimationType>(anim.animation);
         const auto elapsed = (nowTime - lastTime) + animAnim.telapsed;
         if (animAnim.tstart + elapsed >= animAnim.tend) {
             anim.running = false;
@@ -566,7 +492,7 @@ void RendererImpl::updateAnimations()
             const float t = elapsed / static_cast<float>(animAnim.tend - animAnim.tstart);
             const float where = animAnim.ease(t);
 
-            const float newValue = ((animAnim.vend - animAnim.vstart) * where) + animAnim.vstart;
+            const ValueType newValue = static_cast<ValueType>((animAnim.vend - animAnim.vstart) * where) + animAnim.vstart;
             prop = newValue;
 
             animAnim.telapsed = elapsed;
@@ -588,7 +514,7 @@ void RendererImpl::updateAnimations()
             switch (static_cast<Renderer::Property>(propNo)) {
             case Renderer::Property::FirstLine:
                 // float
-                updateFloatAnimation(prop, anim, lastRender, now);
+                updateAnimation.operator()<float, AnimationFloat>(prop, anim, lastRender, now);
                 break;
             case Renderer::Property::Max:
                 break;
@@ -1725,28 +1651,28 @@ void Renderer::clearTextProperties(uint32_t box)
 void Renderer::setPropertyInt(uint32_t box, Property prop, int32_t value)
 {
     mEventLoop->post([box, prop, value, impl = mImpl]() {
-        impl->setPropertyInt(box, prop, value);
+        impl->setProperty<int32_t>(box, prop, value);
     });
 }
 
 void Renderer::setPropertyFloat(uint32_t box, Property prop, float value)
 {
     mEventLoop->post([box, prop, value, impl = mImpl]() {
-        impl->setPropertyFloat(box, prop, value);
+        impl->setProperty<float>(box, prop, value);
     });
 }
 
 void Renderer::animatePropertyInt(uint32_t box, Property prop, int32_t value, uint64_t ms, Ease ease)
 {
     mEventLoop->post([box, prop, value, ms, ease, impl = mImpl]() {
-        impl->animatePropertyInt(box, prop, value, ms, ease);
+        impl->animateProperty<int32_t, RendererImpl::AnimationInt>(box, prop, value, ms, ease);
     });
 }
 
 void Renderer::animatePropertyFloat(uint32_t box, Property prop, float value, uint64_t ms, Ease ease)
 {
     mEventLoop->post([box, prop, value, ms, ease, impl = mImpl]() {
-        impl->animatePropertyFloat(box, prop, value, ms, ease);
+        impl->animateProperty<float, RendererImpl::AnimationFloat>(box, prop, value, ms, ease);
     });
 }
 
@@ -1890,7 +1816,7 @@ void Renderer::render()
         for (std::size_t box = 0; box < mImpl->textVBOs.size(); ++box) {
             const auto& vbos = mImpl->textVBOs[box];
 
-            const auto firstLineFloat = mImpl->propertyFloat(box, Property::FirstLine);
+            const auto firstLineFloat = mImpl->propertyValue<float>(box, Property::FirstLine);
             const uint32_t firstLineLow = static_cast<uint32_t>(floorf(firstLineFloat));
             const uint32_t firstLineHigh = static_cast<uint32_t>(ceilf(firstLineFloat));
             const float firstLineDelta = firstLineFloat - floorf(firstLineFloat);// - firstLineFloat;
