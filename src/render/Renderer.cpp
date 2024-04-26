@@ -559,14 +559,18 @@ void RendererImpl::updateAnimations()
 
         auto& animAnim = std::get<AnimationFloat>(anim.animation);
         const auto elapsed = (nowTime - lastTime) + animAnim.telapsed;
-        // const auto animTime = animAnim.tnow + elapsed;
-        const float t = (animAnim.tend - animAnim.tstart) / static_cast<float>(elapsed);
-        const float where = animAnim.ease(t);
+        if (animAnim.tstart + elapsed >= animAnim.tend) {
+            anim.running = false;
+            prop = animAnim.vend;
+        } else {
+            const float t = elapsed / static_cast<float>(animAnim.tend - animAnim.tstart);
+            const float where = animAnim.ease(t);
 
-        const float newValue = ((animAnim.vend - animAnim.vstart) * where) + animAnim.vstart;
-        prop = newValue;
+            const float newValue = ((animAnim.vend - animAnim.vstart) * where) + animAnim.vstart;
+            prop = newValue;
 
-        animAnim.telapsed += elapsed;
+            animAnim.telapsed = elapsed;
+        }
     };
 
     const auto now = timeNow();
@@ -1885,15 +1889,36 @@ void Renderer::render()
 
         for (std::size_t box = 0; box < mImpl->textVBOs.size(); ++box) {
             const auto& vbos = mImpl->textVBOs[box];
-            const uint32_t firstLine = static_cast<uint32_t>(mImpl->propertyFloat(box, Property::FirstLine));
-            int64_t iadjust = -1;
+
+            const auto firstLineFloat = mImpl->propertyFloat(box, Property::FirstLine);
+            const uint32_t firstLineLow = static_cast<uint32_t>(floorf(firstLineFloat));
+            const uint32_t firstLineHigh = static_cast<uint32_t>(ceilf(firstLineFloat));
+            const float firstLineDelta = firstLineFloat - floorf(firstLineFloat);// - firstLineFloat;
+
+            int64_t iadjustlow = -1;
+            int64_t iadjusthigh = -1;
             float fadjust = 0;
-            for (const auto& vbo : vbos) {
-                if (vbo.firstLine() < firstLine) {
-                    continue;
-                } else if (iadjust == -1) {
-                    iadjust = static_cast<int64_t>(vbo.linePosition());
-                    fadjust = static_cast<float>(iadjust) * -1.f;
+            for (size_t vboNo = 0; vboNo < vbos.size(); ++vboNo) {
+                const auto& vbo = vbos[vboNo];
+                if (vbo.firstLine() < firstLineHigh) {
+                    if (vbo.firstLine() == firstLineLow) {
+                        iadjustlow = static_cast<int64_t>(vbo.linePosition());
+                    } else {
+                        continue;
+                    }
+                }
+                if (iadjusthigh == -1) {
+                    if (iadjustlow != -1 && vboNo + 1 < vbos.size()) {
+                        iadjusthigh = static_cast<int64_t>(vbos[vboNo + 1].linePosition());
+                        fadjust = (static_cast<float>(iadjustlow) + ((iadjusthigh - iadjustlow) * firstLineDelta)) * -1.f;
+                    } else if (iadjustlow != -1) {
+                        iadjustlow = -1;
+                        continue;
+                    } else {
+                        iadjusthigh = static_cast<int64_t>(vbo.linePosition());
+                        fadjust = static_cast<float>(iadjusthigh) * -1.f;
+                    }
+                    // spdlog::info("adjusty {} {} {:.2f} {:.2f} == {:.2f}", iadjustlow, iadjusthigh, firstLineFloat, firstLineDelta, fadjust);
                     vkCmdPushConstants(cmdbuffer, mImpl->textPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float), &fadjust);
                 }
                 if (vbo.view() == VK_NULL_HANDLE) {
