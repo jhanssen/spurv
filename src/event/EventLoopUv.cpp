@@ -96,7 +96,7 @@ uint32_t EventLoopUv::startTimer(const std::shared_ptr<EventLoop::Event>& event,
         auto timer = &mData->timers.back().timer;
         uv_timer_init(&mData->uvloop, timer);
         timer->data = event.get();
-        uv_timer_start(timer, EventLoopUv::processTimer, timeout, mode == EventLoop::TimerMode::SingleShot ? 0 : 1);
+        uv_timer_start(timer, EventLoopUv::processTimer, timeout, mode == EventLoop::TimerMode::SingleShot ? 0 : timeout);
     } else {
         mData->timers.push_back(Data::Timer { id, event, {}, Data::Timer::EarlyData { timeout, mode } });
     }
@@ -131,7 +131,7 @@ void EventLoopUv::repostEarlyTimers()
             auto timer = &mData->timers.back().timer;
             uv_timer_init(&mData->uvloop, timer);
             timer->data = ref.event.get();
-            uv_timer_start(timer, EventLoopUv::processTimer, ref.earlyData->timeout, ref.earlyData->mode == EventLoop::TimerMode::SingleShot ? 0 : 1);
+            uv_timer_start(timer, EventLoopUv::processTimer, ref.earlyData->timeout, ref.earlyData->mode == EventLoop::TimerMode::SingleShot ? 0 : ref.earlyData->timeout);
         } else {
             break;
         }
