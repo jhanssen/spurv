@@ -187,28 +187,21 @@ struct RendererImpl
     VkPipeline boxPipeline = VK_NULL_HANDLE;
 
     std::vector<std::vector<std::variant<int32_t, float>>> renderProperties = {};
-    struct AnimationInt
+
+    template<typename ValueType>
+    struct AnimationData
     {
         uint64_t tstart = 0;
         uint64_t tend = 0;
         uint64_t telapsed = 0;
-        int32_t vstart = 0;
-        int32_t vend = 0;
-        EasingFunction ease = nullptr;
-    };
-    struct AnimationFloat
-    {
-        uint64_t tstart = 0;
-        uint64_t tend = 0;
-        uint64_t telapsed = 0;
-        float vstart = 0.f;
-        float vend = 0.f;
+        ValueType vstart = {};
+        ValueType vend = {};
         EasingFunction ease = nullptr;
     };
     struct Animation
     {
         bool running = false;
-        std::variant<AnimationInt, AnimationFloat, std::nullopt_t> animation = std::nullopt;
+        std::variant<AnimationData<int32_t>, AnimationData<float>, std::nullopt_t> animation = std::nullopt;
     };
     std::vector<std::vector<Animation>> animatingProperties = {};
     uint64_t lastRender = 0;
@@ -225,7 +218,7 @@ struct RendererImpl
     template<typename ValueType>
     void setProperty(uint32_t box, Renderer::Property, ValueType value);
 
-    template<typename ValueType, typename AnimationType>
+    template<typename ValueType>
     void animateProperty(uint32_t box, Renderer::Property prop, ValueType value, uint64_t ms, Ease ease);
 
     template<typename ValueType>
@@ -423,9 +416,11 @@ void RendererImpl::setProperty(uint32_t box, Renderer::Property prop, ValueType 
     props[static_cast<std::underlying_type_t<Renderer::Property>>(prop)] = value;
 }
 
-template<typename ValueType, typename AnimationType>
+template<typename ValueType>
 void RendererImpl::animateProperty(uint32_t box, Renderer::Property property, ValueType value, uint64_t ms, Ease ease)
 {
+    using AnimationType = AnimationData<ValueType>;
+
     assert(box < renderProperties.size() && box < animatingProperties.size());
 
     const auto propNo = static_cast<std::underlying_type_t<Renderer::Property>>(property);
@@ -478,7 +473,9 @@ void RendererImpl::updateAnimations()
         return;
     }
 
-    auto updateAnimation = []<typename ValueType, typename AnimationType>(auto& prop, auto& anim, uint64_t lastTime, uint64_t nowTime) {
+    auto updateAnimation = []<typename ValueType>(auto& prop, auto& anim, uint64_t lastTime, uint64_t nowTime) {
+        using AnimationType = AnimationData<ValueType>;
+
         assert(anim.running);
         assert(std::holds_alternative<ValueType>(prop));
         assert(std::holds_alternative<AnimationType>(anim.animation));
@@ -514,7 +511,7 @@ void RendererImpl::updateAnimations()
             switch (static_cast<Renderer::Property>(propNo)) {
             case Renderer::Property::FirstLine:
                 // float
-                updateAnimation.operator()<float, AnimationFloat>(prop, anim, lastRender, now);
+                updateAnimation.operator()<float>(prop, anim, lastRender, now);
                 break;
             case Renderer::Property::Max:
                 break;
@@ -1665,14 +1662,14 @@ void Renderer::setPropertyFloat(uint32_t box, Property prop, float value)
 void Renderer::animatePropertyInt(uint32_t box, Property prop, int32_t value, uint64_t ms, Ease ease)
 {
     mEventLoop->post([box, prop, value, ms, ease, impl = mImpl]() {
-        impl->animateProperty<int32_t, RendererImpl::AnimationInt>(box, prop, value, ms, ease);
+        impl->animateProperty<int32_t>(box, prop, value, ms, ease);
     });
 }
 
 void Renderer::animatePropertyFloat(uint32_t box, Property prop, float value, uint64_t ms, Ease ease)
 {
     mEventLoop->post([box, prop, value, ms, ease, impl = mImpl]() {
-        impl->animateProperty<float, RendererImpl::AnimationFloat>(box, prop, value, ms, ease);
+        impl->animateProperty<float>(box, prop, value, ms, ease);
     });
 }
 
