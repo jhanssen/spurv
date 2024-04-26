@@ -26,7 +26,7 @@ float easeOutSine( float t ) {
 }
 
 float easeInOutSine( float t ) {
-    return 0.5f * (1 + sin( 3.1415926f * (t - 0.5f) ) );
+    return 0.5f * (1 + sinf( 3.1415926f * (t - 0.5f) ) );
 }
 
 float easeInQuad( float t ) {
