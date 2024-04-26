@@ -10,6 +10,15 @@ spurv.setKeyEventHandler((event: spurv.KeyEvent) => {
     }
 });
 
+const foo = spurv.stringtoutf8("ABCDEFG");
+const bar = new Uint8Array(foo);
+error("arraybuffer", foo.byteLength);
+error("uint8", bar.byteLength);
+// const zot1 = spurv.utf8tostring(foo);
+const zot2 = spurv.utf8tostring(bar);
+// error("1", zot1);
+error("2", zot2);
+
 error("testing");
 error("testing2");
 

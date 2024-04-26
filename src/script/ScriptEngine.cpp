@@ -1,5 +1,4 @@
 #include "ScriptEngine.h"
-#include "JSExtra.h"
 #include "Builtins.h"
 
 #include <cassert>
@@ -25,6 +24,7 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
 #undef ScriptAtom
 
     mGlobal = ScriptValue(JS_GetGlobalObject(mContext));
+    initScriptBufferSourceIds();
     mSpurv = ScriptValue(std::vector<std::pair<std::string, ScriptValue>>());
     mGlobal.setProperty("spurv", mSpurv.clone());
 
@@ -145,6 +145,37 @@ void ScriptEngine::bindGlobalFunction(const std::string &name, ScriptValue::Func
 {
     ScriptValue func = bindFunction(std::move(function));
     mGlobal.setProperty(name, std::move(func));
+}
+
+void ScriptEngine::initScriptBufferSourceIds()
+{
+    ScriptValue arrayBuffer(JS_NewArrayBuffer(mContext, nullptr, 0, nullptr, nullptr, false));
+    mBufferSourceIds[static_cast<size_t>(ScriptBufferSource::ArrayBuffer)] = JS_GetClassID(*arrayBuffer);
+
+    struct {
+        const char *const name;
+        const ScriptBufferSource idx;
+    } const types[] = {
+        { "DataView", ScriptBufferSource::DataView },
+        { "Int16Array", ScriptBufferSource::Int16Array },
+        { "Int8Array", ScriptBufferSource::Int8Array },
+        { "BigInt64Array", ScriptBufferSource::BigInt64Array },
+        { "Uint8Array", ScriptBufferSource::Uint8Array },
+        { "Uint8ClampedArray", ScriptBufferSource::Uint8ClampedArray },
+        { "Uint16Array", ScriptBufferSource::Uint16Array },
+        { "Uint32Array", ScriptBufferSource::Uint32Array },
+        { "BigUint64Array", ScriptBufferSource::BigUint64Array },
+        { "Float32Array", ScriptBufferSource::Float32Array },
+        { "Float64Array", ScriptBufferSource::Float64Array }
+    };
+
+    for (const auto &pair : types) {
+        ScriptValue constructor = mGlobal.getProperty(pair.name);
+        assert(constructor.isConstructor());
+        ScriptValue instance = constructor.construct(arrayBuffer);
+        assert(instance.isObject());
+        mBufferSourceIds[static_cast<size_t>(pair.idx)] = JS_GetClassID(*instance);
+    }
 }
 
 EventEmitter<void(int)>& ScriptEngine::onExit()

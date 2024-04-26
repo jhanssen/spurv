@@ -1,6 +1,5 @@
 set(SOURCES
     Builtins.cpp
-    JSExtra.cpp
     ScriptEngine.cpp
     ScriptValue.cpp
 )

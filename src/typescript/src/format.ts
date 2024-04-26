@@ -18,6 +18,7 @@ export function format(...args: unknown[]): string {
                     str = "null";
                     break;
                 }
+                // ### need to format buffer sources etc, better stringifying too
                 try {
                     str = JSON.stringify(arg);
                 } catch (err: unknown) {

@@ -1,11 +1,28 @@
 #include "ScriptValue.h"
 #include "ScriptEngine.h"
-#include "JSExtra.h"
 #include <cassert>
 #include <unordered_set>
 #include <fmt/core.h>
 
 namespace spurv {
+namespace {
+ScriptBufferSource JS_IsBufferSource(JSValueConst obj)
+{
+    if (JS_IsObject(obj)) {
+        const JSClassID id = JS_GetClassID(obj);
+        if (id != JS_INVALID_CLASS_ID) {
+            ScriptEngine *engine = ScriptEngine::scriptEngine();
+            const std::array<JSClassID, NumScriptBufferSources> &array = engine->bufferSourceIds();
+            auto it = std::find(array.begin(), array.end(), id);
+            if (it != array.end()) {
+                return static_cast<ScriptBufferSource>(it - array.begin());
+            }
+        }
+    }
+    return ScriptBufferSource::Invalid;
+}
+} // anonymous namespace
+
 ScriptValue::ScriptValue(JSValue value)
     : mValue(value)
 {}
@@ -326,12 +343,16 @@ bool ScriptValue::isArray() const
 
 bool ScriptValue::isArrayBuffer() const
 {
-    return mValue && JS_IsArrayBuffer(ScriptEngine::scriptEngine()->context(), *mValue);
+    return mValue && JS_IsBufferSource(*mValue) == ScriptBufferSource::ArrayBuffer;
 }
 
 bool ScriptValue::isTypedArray() const
 {
-    return mValue && JS_IsTypedArray(ScriptEngine::scriptEngine()->context(), *mValue);
+    if (mValue) {
+        auto type = JS_IsBufferSource(*mValue);
+        return type != ScriptBufferSource::ArrayBuffer && type != ScriptBufferSource::Invalid;
+    }
+    return false;
 }
 
 bool ScriptValue::isBigNum() const
@@ -371,12 +392,10 @@ Result<std::pair<unsigned char *, std::size_t>> ScriptValue::arrayBufferData() c
         auto context = ScriptEngine::scriptEngine()->context();
         std::size_t byteOffset, byteLen;
         ScriptValue buffer(JS_GetTypedArrayBuffer(context, *mValue, &byteOffset, &byteLen, nullptr));
+        assert(buffer.isArrayBuffer());
         std::size_t p;
-        unsigned char *ret = JS_GetArrayBuffer(context, &p, *mValue);
-        if (ret) {
-            return std::make_pair(ret + byteOffset, p);
-        }
-        return spurv::makeError("Can't get typed array data");
+        unsigned char *ret = JS_GetArrayBuffer(context, &p, *buffer);
+        return std::make_pair(ret + byteOffset, p);
     }
 
     return spurv::makeError("Invalid type for arrayBufferData");

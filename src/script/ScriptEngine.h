@@ -10,6 +10,7 @@
 
 #include "ScriptValue.h"
 #include "ScriptAtoms.h"
+#include "ScriptBufferSource.h"
 
 namespace spurv {
 class ScriptEngine
@@ -32,6 +33,7 @@ public:
     JSContext *context() const { return mContext; }
 
     const ScriptAtoms &atoms() { return mAtoms; }
+    const std::array<JSClassID, NumScriptBufferSources> &bufferSourceIds() const { return mBufferSourceIds; }
     ScriptValue bindFunction(ScriptValue::Function &&function);
     void bindSpurvFunction(const std::string &name, ScriptValue::Function &&function);
     void bindGlobalFunction(const std::string &name, ScriptValue::Function &&function);
@@ -39,6 +41,7 @@ public:
     EventEmitter<void(int)>& onExit();
 
 private:
+    void initScriptBufferSourceIds();
     // setTimeout(callback: (...args: unknown[]) => void, ms: number, ...args: unknown[]): number;
     ScriptValue setTimeoutImpl(EventLoop::TimerMode mode, std::vector<ScriptValue> &&args);
     ScriptValue setTimeout(std::vector<ScriptValue> &&args);
@@ -76,6 +79,7 @@ private:
     JSContext *mContext = nullptr;
     const std::filesystem::path mAppPath;
     ScriptAtoms mAtoms;
+    std::array<JSClassID, NumScriptBufferSources> mBufferSourceIds;
     ScriptValue mGlobal;
     ScriptValue mSpurv;
     ScriptValue mProcessHandler;
