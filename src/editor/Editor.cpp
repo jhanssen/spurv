@@ -153,8 +153,8 @@ void Editor::load(const std::filesystem::path& path)
             mContainer->setStylesheet(
                 "editor { flex-direction: column;flex: 1; }\n"
                 "container.border { border: 10 #229922; }\n"
-                "editor > view { flex-direction: row;flex: 1; }\n"
-                "editor document { flex: 1 }");
+                "editor > view { flex: 1; }\n"
+                "editor document { flex: 1; margin: 5   2; }");
 
             currentDoc->setFont(Font("Inconsolata", 25));
 
