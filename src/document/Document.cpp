@@ -290,9 +290,15 @@ TextProperty Document::propertyForSelector(std::size_t start, std::size_t end, c
             for (auto bit = block.cbegin(); bit != block.cend(); ++bit) {
                 const auto& name = bit->first;
                 if (name == "background-color") {
-                    prop.background = parseColor(bit->second.first);
+                    auto color = parseColor(bit->second.first);
+                    if (color.has_value()) {
+                        prop.background = *color;
+                    }
                 } else if (name == "color") {
-                    prop.foreground = parseColor(bit->second.first);
+                    auto color = parseColor(bit->second.first);
+                    if (color.has_value()) {
+                        prop.foreground = *color;
+                    }
                 }
             }
             break;

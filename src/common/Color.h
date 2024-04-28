@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
 namespace spurv {
@@ -18,7 +19,7 @@ struct Color
     }
 };
 
-Color parseColor(const std::string& color);
+std::optional<Color> parseColor(const std::string& color);
 Color premultiplied(float r, float g, float b, float a);
 
 } // namespace spurv

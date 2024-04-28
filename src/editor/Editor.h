@@ -43,6 +43,8 @@ private:
     void thread_internal();
     void stop();
 
+    void relayout();
+
 private:
     static std::unique_ptr<Editor> sInstance;
 
@@ -54,8 +56,9 @@ private:
     std::unique_ptr<EventLoop> mEventLoop;
     std::vector<std::shared_ptr<Document>> mDocuments;
     std::unique_ptr<Container> mContainer;
-    std::array<EventLoop::ConnectKey, 2> mConnectKeys;
+    std::array<EventLoop::ConnectKey, 3> mConnectKeys;
     std::string mName;
+    uint32_t mWidth = 0, mHeight = 0;
     View* mCurrentView = nullptr;
     EventEmitter<void()> mOnReady;
     EditorImpl* mImpl;

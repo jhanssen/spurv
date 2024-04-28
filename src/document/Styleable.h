@@ -1,6 +1,9 @@
 #pragma once
 
+#include <Color.h>
 #include <qssdocument.h>
+#include <yoga/Yoga.h>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -33,13 +36,13 @@ namespace spurv {
 class Styleable
 {
 public:
-    Styleable() = default;
-    Styleable(Styleable&&) = default;
-    Styleable(const Styleable&) = default;
-    virtual ~Styleable() = default;
+    Styleable();
+    Styleable(Styleable&&);
+    virtual ~Styleable();
 
-    Styleable& operator=(Styleable&&) = default;
-    Styleable& operator=(const Styleable&) = default;
+    Styleable& operator=(Styleable&&);
+
+    void makeRoot();
 
     void setSelector(const std::string& selector);
     void setSelector(const qss::Selector& selector);
@@ -48,6 +51,7 @@ public:
     bool matchesSelector(const std::string& selector) const;
     bool matchesSelector(const qss::Selector& selector) const;
     static bool matchesSelector(const qss::Selector& selector1, const qss::Selector& selector2);
+    static uint64_t selectorSpecificity(const qss::Selector& selector);
 
     enum class StylesheetMode {
         Replace,
@@ -69,20 +73,30 @@ public:
     void addClass(const std::string& name);
     void removeClass(const std::string& name);
 
+    const std::optional<Color>& borderColor() const;
+
 protected:
     void mergeParentStylesheet(const qss::Document& qss);
     void unmergeParentStylesheet();
 
     qss::Selector& mutableSelector();
 
+    void applyStylesheet();
+    void relayout();
+
 protected:
     qss::Selector mSelector;
     qss::Document mQss, mMergedQss;
+    std::optional<Color> mBorderColor;
+    YGNodeRef mYogaNode = nullptr;
 
     Styleable* mParent = nullptr;
     std::vector<Styleable*> mChildren;
 
 private:
+    Styleable(const Styleable&) = delete;
+    Styleable& operator=(const Styleable&) = delete;
+
     static void buildSelector(qss::Selector& selector, const Styleable* styleable);
 };
 
@@ -139,6 +153,11 @@ inline void Styleable::addClass(const std::string& name)
 inline void Styleable::removeClass(const std::string& name)
 {
     mSelector[0].noclazz(name);
+}
+
+inline const std::optional<Color>& Styleable::borderColor() const
+{
+    return mBorderColor;
 }
 
 } // namespace spurv

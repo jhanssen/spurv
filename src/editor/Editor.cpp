@@ -4,6 +4,7 @@
 #include <MainEventLoop.h>
 #include <Renderer.h>
 #include <ScriptEngine.h>
+#include <Window.h>
 #include <EventLoopUv.h>
 #include <fmt/core.h>
 #include <uv.h>
@@ -37,9 +38,16 @@ Editor::~Editor()
 void Editor::thread_internal()
 {
     setCurrentThreadName("Editor");
+
+    auto window = Window::mainWindow();
+    if (window == nullptr) {
+        spdlog::critical("No window created");
+        return;
+    }
+
     // finalize the event loop
     mEventLoop->install();
-    mEventLoop->post([this]() {
+    mEventLoop->post([this, window]() {
         {
             std::unique_lock lock(mMutex);
             mImpl->loop = static_cast<uv_loop_t*>(mEventLoop->handle());
@@ -64,6 +72,15 @@ void Editor::thread_internal()
         mConnectKeys[1] = mainEventLoop->onUnicode().connect([](uint32_t uc) {
             spdlog::error("editor uc {}", uc);
         });
+        mConnectKeys[2] = window->onResize().connect([this](uint32_t w, uint32_t h) {
+            mWidth = w;
+            mHeight = h;
+
+            relayout();
+        });
+        const auto& windowRect = window->rect();
+        mWidth = windowRect.width;
+        mHeight = windowRect.height;
 
     });
     mEventLoop->run();
@@ -72,6 +89,7 @@ void Editor::thread_internal()
         auto mainEventLoop = static_cast<MainEventLoop*>(EventLoop::mainEventLoop());
         mainEventLoop->onKey().disconnect(mConnectKeys[0]);
         mainEventLoop->onUnicode().disconnect(mConnectKeys[1]);
+        window->onResize().disconnect(mConnectKeys[2]);
     }
 
     mEventLoop->uninstall();
@@ -110,6 +128,7 @@ void Editor::load(const std::filesystem::path& path)
     }
     mEventLoop->post([this, path]() {
         mContainer = std::make_unique<Container>();
+        mContainer->makeRoot();
         // addStyleableChild(mContainer.get());
 
         mContainer->setSelector("editor");
@@ -120,6 +139,7 @@ void Editor::load(const std::filesystem::path& path)
             mDocuments.push_back(std::make_shared<Document>());
             auto view = std::make_shared<View>();
             mContainer->addFrame(view);
+            mContainer->addClass("border");
             view->setName("hello");
             view->setDocument(mDocuments.back());
             view->setActive(false);
@@ -130,9 +150,15 @@ void Editor::load(const std::filesystem::path& path)
             // currentDoc->matchesSelector("editor document");
             // view->matchesSelector("container > view#hello:!active");
 
-            setStylesheet("editor { flex-direction: column }\neditor > frame { flex-direction: row }");
+            mContainer->setStylesheet(
+                "editor { flex-direction: column;flex: 1; }\n"
+                "container.border { border: 10 #229922; }\n"
+                "editor > view { flex-direction: row;flex: 1; }\n"
+                "editor document { flex: 1 }");
 
             currentDoc->setFont(Font("Inconsolata", 25));
+
+            relayout();
 
             /*
             currentDoc->setStylesheet("hello1 { color: #ff4354 }\nhello4 { color: #0000ff }");
@@ -165,10 +191,22 @@ void Editor::load(const std::filesystem::path& path)
     });
 }
 
-inline void Editor::setName(const std::string& name)
+void Editor::setName(const std::string& name)
 {
     mName = name;
     if (mContainer) {
         mContainer->mutableSelector()[0].id(name);
     }
+}
+
+void Editor::relayout()
+{
+    auto& root = mContainer;
+
+    YGNodeStyleSetWidth(root->mYogaNode, mWidth);
+    YGNodeStyleSetHeight(root->mYogaNode, mHeight);
+
+    YGNodeCalculateLayout(root->mYogaNode, YGUndefined, YGUndefined, YGDirectionLTR);
+
+    root->relayout();
 }

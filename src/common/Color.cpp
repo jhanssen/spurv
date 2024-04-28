@@ -3,7 +3,7 @@
 
 namespace spurv {
 
-Color parseColor(const std::string& color)
+std::optional<Color> parseColor(const std::string& color)
 {
     const auto sz = color.size();
     if ((sz == 4 || sz == 5 || sz == 7 || sz == 9) && color[0] == '#') {
@@ -43,9 +43,7 @@ Color parseColor(const std::string& color)
             }
         }
     }
-    return Color {
-        0.f, 0.f, 0.f, 0.f
-    };
+    return {};
 }
 
 Color premultiplied(float r, float g, float b, float a)
