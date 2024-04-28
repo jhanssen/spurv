@@ -186,7 +186,10 @@ bool Styleable::matchesSelector(const qss::Selector& inputSelector, const qss::S
             return false;
         }
         // remove the name and sub control, name we've already matched and sub control needs to be check on the outside
-        inputElem->name(std::string {}).sub(std::string {});
+        inputElem->name(std::string {});
+        if (idx == count) {
+            inputElem->sub(std::string {});
+        }
         if (!inputElem->isGeneralizedFrom(*styleElem)) {
             return false;
         }
@@ -203,7 +206,7 @@ bool Styleable::matchesSelector(const qss::Selector& inputSelector, const qss::S
                 styleElem = &styleSelector[idx - 1];
                 if (matchSelectorElement(*inputElem, *styleElem)) {
                     qss::SelectorElement inputElemCopy = *inputElem;
-                    inputElemCopy.name(std::string {}).sub(std::string {});
+                    inputElemCopy.name(std::string {});
                     if (inputElemCopy.isGeneralizedFrom(*styleElem)) {
                         if (inputElemCopy.position() == qss::SelectorElement::DESCENDANT) {
                             // this is a bit inefficient but we need to do the desendantness again
