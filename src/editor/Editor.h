@@ -55,6 +55,7 @@ private:
     std::vector<std::shared_ptr<Document>> mDocuments;
     std::unique_ptr<Container> mContainer;
     std::array<EventLoop::ConnectKey, 2> mConnectKeys;
+    std::string mName;
     View* mCurrentView = nullptr;
     EventEmitter<void()> mOnReady;
     EditorImpl* mImpl;

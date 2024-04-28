@@ -23,12 +23,16 @@ public:
     virtual void updateLayout(const Rect& rect) override;
     virtual void setName(const std::string& name) override;
 
+    void setActive(bool active);
+    bool isActive() const;
+
 private:
     void processDocument();
 
 private:
     std::shared_ptr<Document> mDocument;
     uint64_t mFirstLine = 0;
+    bool mActive = false;
 
 private:
     View(const View&) = delete;
@@ -42,8 +46,25 @@ inline const std::shared_ptr<Document> View::document() const
 
 inline void View::setName(const std::string& name)
 {
-    mName = name;
-    setSelector(fmt::format("frame > view#{}", name));
+    mutableSelector()[0].id(name);
+}
+
+inline void View::setActive(bool active)
+{
+    if (active == mActive) {
+        return;
+    }
+    if (active) {
+        mutableSelector()[0].when("active");
+    } else {
+        mutableSelector()[0].nowhen("active");
+    }
+    mActive = active;
+}
+
+inline bool View::isActive() const
+{
+    return mActive;
 }
 
 } // namespace spurv

@@ -27,8 +27,7 @@ inline Frame::Frame()
 
 inline void Frame::setName(const std::string& name)
 {
-    mName = name;
-    setSelector(fmt::format("frame#{}", name));
+    mutableSelector()[0].id(name);
 }
 
 } // namespace spurv

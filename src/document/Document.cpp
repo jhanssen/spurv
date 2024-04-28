@@ -34,7 +34,7 @@ using namespace spurv;
 
 Document::Document()
 {
-    setSelector("frame > view > document");
+    setSelector("document");
 }
 
 Document::~Document()
@@ -43,8 +43,7 @@ Document::~Document()
 
 void Document::setName(const std::string& name)
 {
-    mName = name;
-    setSelector(fmt::format("frame > view > document#{}", name));
+    mutableSelector()[0].id(name);
 }
 
 void Document::load(const std::filesystem::path& path)

@@ -6,7 +6,7 @@ using namespace spurv;
 
 View::View()
 {
-    setSelector("frame > view");
+    setSelector("view");
 }
 
 View::~View()

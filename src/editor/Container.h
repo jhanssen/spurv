@@ -10,6 +10,8 @@
 
 namespace spurv {
 
+class Editor;
+
 class Container : public Frame
 {
 public:
@@ -26,11 +28,13 @@ public:
 
 private:
     std::unordered_set<std::shared_ptr<Frame>> mFrames;
+
+    friend class Editor;
 };
 
 inline Container::Container()
 {
-    setSelector("frame > container");
+    setSelector("container");
 }
 
 inline std::size_t Container::size() const
@@ -40,8 +44,7 @@ inline std::size_t Container::size() const
 
 inline void Container::setName(const std::string& name)
 {
-    mName = name;
-    setSelector(fmt::format("frame > container#{}", name));
+    mutableSelector()[0].id(name);
 }
 
 } // namespace spurv

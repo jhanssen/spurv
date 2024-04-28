@@ -45,6 +45,10 @@ public:
     void setSelector(const qss::Selector& selector);
     const qss::Selector& selector() const;
 
+    bool matchesSelector(const std::string& selector) const;
+    bool matchesSelector(const qss::Selector& selector) const;
+    static bool matchesSelector(const qss::Selector& selector1, const qss::Selector& selector2);
+
     enum class StylesheetMode {
         Replace,
         Merge
@@ -53,35 +57,52 @@ public:
     void setStylesheet(const qss::Document& qss, StylesheetMode mode = StylesheetMode::Replace);
     const qss::Document& stylesheet() const;
 
-    void mergeParentStylesheet(const qss::Document& qss);
-
     void addStyleableChild(Styleable* child);
     void removeStyleableChild(Styleable* child);
 
     virtual void setName(const std::string& name) = 0;
     std::string name() const;
 
+    void addClass(const std::string& name);
+    void removeClass(const std::string& name);
+
+protected:
+    void mergeParentStylesheet(const qss::Document& qss);
+    void unmergeParentStylesheet();
+
+    qss::Selector& mutableSelector();
+
 protected:
     qss::Selector mSelector;
-    qss::Document mQss;
-    std::string mName;
+    qss::Document mQss, mMergedQss;
 
+    Styleable* mParent = nullptr;
     std::vector<Styleable*> mChildren;
 };
-
-inline void Styleable::setSelector(const std::string& selector)
-{
-    mSelector = qss::Selector(selector);
-}
 
 inline void Styleable::setSelector(const qss::Selector& selector)
 {
     mSelector = selector;
 }
 
+inline void Styleable::setSelector(const std::string& selector)
+{
+    setSelector(qss::Selector(selector));
+}
+
 inline const qss::Selector& Styleable::selector() const
 {
     return mSelector;
+}
+
+inline qss::Selector& Styleable::mutableSelector()
+{
+    return mSelector;
+}
+
+inline bool Styleable::matchesSelector(const std::string& selector) const
+{
+    return matchesSelector(qss::Selector(selector));
 }
 
 inline const qss::Document& Styleable::stylesheet() const
@@ -91,7 +112,17 @@ inline const qss::Document& Styleable::stylesheet() const
 
 inline std::string Styleable::name() const
 {
-    return mName;
+    return mSelector[0].id();
+}
+
+inline void Styleable::addClass(const std::string& name)
+{
+    mSelector[0].clazz(name);
+}
+
+inline void Styleable::removeClass(const std::string& name)
+{
+    mSelector[0].noclazz(name);
 }
 
 } // namespace spurv

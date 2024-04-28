@@ -110,19 +110,27 @@ void Editor::load(const std::filesystem::path& path)
     }
     mEventLoop->post([this, path]() {
         mContainer = std::make_unique<Container>();
-        mContainer->setSelector("frame > container > editor");
-        addStyleableChild(mContainer.get());
+        // addStyleableChild(mContainer.get());
+
+        mContainer->setSelector("editor");
+        mContainer->mutableSelector()[0].id(mName);
 
         if (mDocuments.empty()) {
             assert(mCurrentView == nullptr);
             mDocuments.push_back(std::make_shared<Document>());
             auto view = std::make_shared<View>();
             mContainer->addFrame(view);
+            view->setName("hello");
             view->setDocument(mDocuments.back());
+            view->setActive(false);
             mCurrentView = view.get();
             auto currentDoc = mCurrentView->document().get();
+            currentDoc->setName("doccy");
 
-            // setStylesheet("editor { flex-direction: column },
+            // currentDoc->matchesSelector("editor document");
+            // view->matchesSelector("container > view#hello:!active");
+
+            setStylesheet("editor { flex-direction: column }\neditor > frame { flex-direction: row }");
 
             currentDoc->setFont(Font("Inconsolata", 25));
 
@@ -159,6 +167,8 @@ void Editor::load(const std::filesystem::path& path)
 
 inline void Editor::setName(const std::string& name)
 {
-    mContainer->setName(name);
-    mContainer->setSelector(fmt::format("frame > container > editor#{}", name));
+    mName = name;
+    if (mContainer) {
+        mContainer->mutableSelector()[0].id(name);
+    }
 }
