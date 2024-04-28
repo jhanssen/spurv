@@ -15,7 +15,7 @@ namespace spurv {
    container is a frame (frame or container)
    view is a frame (frame or view)
    editor is a special class that only matches the top level container
-   .frame matches frames but not views and also not the editor
+   .class matches classes added with addClass(class)
    frame > frame matches any frames that are children of other frames
    editor > frame matches any direct frame children of the editor
    #<name> matches a named frame/view (frame#<name> or view#<name>)
@@ -62,6 +62,9 @@ public:
 
     virtual void setName(const std::string& name) = 0;
     std::string name() const;
+
+    void setTag(const std::string& key, const std::string& value);
+    void removeTag(const std::string& key);
 
     void addClass(const std::string& name);
     void removeClass(const std::string& name);
@@ -116,6 +119,16 @@ inline const qss::Document& Styleable::stylesheet() const
 inline std::string Styleable::name() const
 {
     return mSelector[0].id();
+}
+
+inline void Styleable::setTag(const std::string& key, const std::string& value)
+{
+    mSelector[0].on(key, value);
+}
+
+inline void Styleable::removeTag(const std::string& key)
+{
+    mSelector[0].off(key);
 }
 
 inline void Styleable::addClass(const std::string& name)
