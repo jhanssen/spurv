@@ -1,7 +1,7 @@
 #include "Builtins.h"
 #include "ScriptEngine.h"
+#include <Logger.h>
 #include <simdutf.h>
-#include <spdlog/spdlog.h>
 
 namespace spurv {
 namespace Builtins {

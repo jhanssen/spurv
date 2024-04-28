@@ -34,10 +34,17 @@ using namespace spurv;
 
 Document::Document()
 {
+    setSelector("frame > view > document");
 }
 
 Document::~Document()
 {
+}
+
+void Document::setName(const std::string& name)
+{
+    mName = name;
+    setSelector(fmt::format("frame > view > document#{}", name));
 }
 
 void Document::load(const std::filesystem::path& path)
@@ -332,15 +339,6 @@ std::vector<TextProperty> Document::propertiesForLine(std::size_t line) const
 void Document::setFont(const Font& font)
 {
     mLayout.setFont(font);
-}
-
-void Document::setStylesheet(const std::string& qss, StylesheetMode mode)
-{
-    if (mode == StylesheetMode::Replace) {
-        mQss = qss::Document(qss);
-    } else {
-        mQss += qss::Document(qss);
-    }
 }
 
 Document::Selector Document::addSelector(std::size_t start, std::size_t end, const std::string& name)

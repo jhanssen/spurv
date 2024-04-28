@@ -1,10 +1,10 @@
 #include "Layout.h"
 #include <EventLoop.h>
+#include <Logger.h>
 #include <ThreadPool.h>
 #include <mutex>
 #include <cassert>
 #include <cstring>
-#include <spdlog/spdlog.h>
 
 namespace spurv {
 struct LayoutChunk

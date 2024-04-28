@@ -1,6 +1,7 @@
 set(SOURCES
     Document.cpp
     Layout.cpp
+    Styleable.cpp
     rope/rope.cpp
     rope/node.cpp
 )

@@ -1,7 +1,7 @@
 set(SOURCES
+    AppPath.cpp
     Color.cpp
     FS.cpp
-    AppPath.cpp
     Thread.cpp
 )
 

@@ -1,12 +1,12 @@
 #pragma once
 
 #include "Layout.h"
+#include "Styleable.h"
 #include <EventEmitter.h>
 #include <Font.h>
 #include <TextLine.h>
 #include <TextProperty.h>
 #include <rope.hpp>
-#include <qssdocument.h>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -17,7 +17,7 @@ namespace spurv {
 
 struct DocumentSelectorInternal;
 
-class Document
+class Document : public Styleable
 {
 public:
     using Rope = proj::rope;
@@ -32,12 +32,6 @@ public:
 
     // styling
     void setFont(const Font& font);
-
-    enum class StylesheetMode {
-        Replace,
-        Merge
-    };
-    void setStylesheet(const std::string& qss, StylesheetMode mode = StylesheetMode::Replace);
 
     class Selector
     {
@@ -84,6 +78,8 @@ public:
     std::vector<TextProperty> propertiesForLine(std::size_t line) const;
     std::vector<TextProperty> propertiesForRange(std::size_t start, std::size_t end) const;
 
+    virtual void setName(const std::string& name) override;
+
 private:
     Document(Document&&) = delete;
     Document(const Document&) = delete;
@@ -112,7 +108,6 @@ private:
     std::u32string mChunk;
     std::size_t mChunkStart = 0, mChunkOffset = 0;
     std::size_t mDocumentSize = 0, mDocumentLines = 0;
-    qss::Document mQss = {};
     std::vector<std::shared_ptr<DocumentSelectorInternal>> mSelectors = {};
 
     bool mReady = false;

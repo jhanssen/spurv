@@ -62,6 +62,7 @@ add_subdirectory(simdutf)
 add_subdirectory(spdlog)
 add_subdirectory(vk-bootstrap)
 add_subdirectory(volk)
+add_subdirectory(yoga/yoga)
 
 # hack to make freetype pick up harfbuzz
 target_link_libraries(freetype PRIVATE harfbuzz)
@@ -70,6 +71,7 @@ include(quickjs.cmake)
 
 add_library(glfw::glfw ALIAS glfw)
 add_library(harfbuzz::harfbuzz ALIAS harfbuzz)
+add_library(yogacore::yogacore ALIAS yogacore)
 
 # remove fmt as an interface library for spdlog, we don't want it appearing on our link line twice
 get_target_property(SPDLOG_IFACE_LINKED_LIBS spdlog INTERFACE_LINK_LIBRARIES)

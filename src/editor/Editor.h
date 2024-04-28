@@ -1,9 +1,10 @@
 #pragma once
 
-#include "View.h"
+#include "Container.h"
 #include <Document.h>
 #include <EventEmitter.h>
 #include <EventLoop.h>
+#include <Styleable.h>
 #include <condition_variable>
 #include <filesystem>
 #include <memory>
@@ -15,7 +16,7 @@ namespace spurv {
 struct EditorImpl;
 class ScriptEngine;
 
-class Editor
+class Editor : public Styleable
 {
 public:
     ~Editor();
@@ -28,6 +29,8 @@ public:
     bool isReady() const;
     EventEmitter<void()>& onReady();
     void load(const std::filesystem::path& path);
+
+    virtual void setName(const std::string& name) override;
 
 private:
     Editor(const std::filesystem::path &appPath);
@@ -50,7 +53,7 @@ private:
     std::thread mThread;
     std::unique_ptr<EventLoop> mEventLoop;
     std::vector<std::shared_ptr<Document>> mDocuments;
-    std::vector<std::unique_ptr<View>> mViews;
+    std::unique_ptr<Container> mContainer;
     std::array<EventLoop::ConnectKey, 2> mConnectKeys;
     View* mCurrentView = nullptr;
     EventEmitter<void()> mOnReady;

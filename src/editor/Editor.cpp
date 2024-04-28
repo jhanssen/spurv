@@ -1,4 +1,5 @@
 #include "Editor.h"
+#include "View.h"
 #include <Logger.h>
 #include <MainEventLoop.h>
 #include <Renderer.h>
@@ -79,7 +80,6 @@ void Editor::thread_internal()
         mEventLoop.reset();
         mScriptEngine.reset();
         mDocuments.clear();
-        mViews.clear();
         mCurrentView = nullptr;
         mCond.notify_one();
     }
@@ -109,13 +109,20 @@ void Editor::load(const std::filesystem::path& path)
         return;
     }
     mEventLoop->post([this, path]() {
+        mContainer = std::make_unique<Container>();
+        mContainer->setSelector("frame > container > editor");
+        addStyleableChild(mContainer.get());
+
         if (mDocuments.empty()) {
             assert(mCurrentView == nullptr);
             mDocuments.push_back(std::make_shared<Document>());
-            mViews.push_back(std::make_unique<View>(static_cast<uint32_t>(mViews.size())));
-            mViews.back()->setDocument(mDocuments.back());
-            mCurrentView = mViews.back().get();
+            auto view = std::make_shared<View>();
+            mContainer->addFrame(view);
+            view->setDocument(mDocuments.back());
+            mCurrentView = view.get();
             auto currentDoc = mCurrentView->document().get();
+
+            // setStylesheet("editor { flex-direction: column },
 
             currentDoc->setFont(Font("Inconsolata", 25));
 
@@ -148,4 +155,10 @@ void Editor::load(const std::filesystem::path& path)
         }
         mDocuments.back()->load(path);
     });
+}
+
+inline void Editor::setName(const std::string& name)
+{
+    mContainer->setName(name);
+    mContainer->setSelector(fmt::format("frame > container > editor#{}", name));
 }

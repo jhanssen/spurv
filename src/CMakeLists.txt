@@ -22,6 +22,7 @@ set(LIBS
     vk-bootstrap::vk-bootstrap
     qss::qss
     quickjs::quickjs
+    yogacore::yogacore
 )
 
 # add all LIBS interface dirs as include dirs to all of spurv

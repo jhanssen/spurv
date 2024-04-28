@@ -58,3 +58,6 @@
 [submodule "3rdparty/base64"]
 	path = 3rdparty/base64
 	url = git@github.com:tobiaslocker/base64.git
+[submodule "3rdparty/yoga"]
+	path = 3rdparty/yoga
+	url = https://github.com/facebook/yoga.git

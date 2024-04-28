@@ -1,4 +1,5 @@
 set(SOURCES
+    Container.cpp
     Editor.cpp
     View.cpp
 )
