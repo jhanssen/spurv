@@ -16,7 +16,7 @@ struct StringSpaceSkipper
     bool advance();
 
 private:
-    bool advanceNext();
+    void advanceNext();
 };
 
 StringSpaceSkipper::StringSpaceSkipper(const std::string& s)
@@ -35,27 +35,21 @@ StringSpaceSkipper::StringSpaceSkipper(const std::string& s)
     advanceNext();
 }
 
-bool StringSpaceSkipper::advanceNext()
+void StringSpaceSkipper::advanceNext()
 {
-    auto prev = next;
     while (next != end) {
         ++next;
         if (*next == '\0') {
-            if (prev + 1 == next) {
-                prev = next;
-                continue;
-            }
-            while (next != end && *next == '0') {
-                ++next;
-            }
-            return next != end;
+            break;
         }
     }
-    return false;
 }
 
 bool StringSpaceSkipper::advance()
 {
+    while (next != end && *next == '\0') {
+        ++next;
+    }
     cur = next;
     if (cur != end) {
         advanceNext();
