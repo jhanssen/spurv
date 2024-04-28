@@ -224,7 +224,7 @@ bool Styleable::matchesSelector(const qss::Selector& selector) const
     std::string selstr = mSelector.toString();
     auto parent = mParent;
     while (parent != nullptr) {
-        auto subsel = qss::Selector(parent->mSelector.toString());
+        const auto& subsel = parent->mSelector;
         assert(subsel.fragmentCount() == 1);
         selstr = subsel.front().name() + " > " + selstr;
         parent = parent->mParent;
