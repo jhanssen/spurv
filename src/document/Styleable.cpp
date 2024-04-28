@@ -202,9 +202,15 @@ bool Styleable::matchesSelector(const qss::Selector& inputSelector, const qss::S
                 inputElem = &inputCopy[idx - 1 - inputSub + inputAdd];
                 styleElem = &styleSelector[idx - 1];
                 if (matchSelectorElement(*inputElem, *styleElem)) {
-                    // this is a little bit inefficient but we want to recheck the generalizedness and possible desendantness
-                    ++idx;
-                    break;
+                    qss::SelectorElement inputElemCopy = *inputElem;
+                    inputElemCopy.name(std::string {}).sub(std::string {});
+                    if (inputElemCopy.isGeneralizedFrom(*styleElem)) {
+                        if (inputElemCopy.position() == qss::SelectorElement::DESCENDANT) {
+                            // this is a bit inefficient but we need to do the desendantness again
+                            ++idx;
+                        }
+                        break;
+                    }
                 }
                 ++inputAdd;
                 --idx;
