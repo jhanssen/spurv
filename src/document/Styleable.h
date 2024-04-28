@@ -78,6 +78,9 @@ protected:
 
     Styleable* mParent = nullptr;
     std::vector<Styleable*> mChildren;
+
+private:
+    static void buildSelector(qss::Selector& selector, const Styleable* styleable);
 };
 
 inline void Styleable::setSelector(const qss::Selector& selector)

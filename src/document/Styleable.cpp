@@ -217,20 +217,20 @@ bool Styleable::matchesSelector(const qss::Selector& inputSelector, const qss::S
     return true;
 }
 
+void Styleable::buildSelector(qss::Selector& selector, const Styleable* styleable)
+{
+    if (styleable->mParent) {
+        buildSelector(selector, styleable->mParent);
+    }
+    const auto pos = selector.fragmentCount() > 0 ? qss::SelectorElement::CHILD : qss::SelectorElement::PARENT;
+    assert(styleable->mSelector.fragmentCount() == 1);
+    selector.append(styleable->mSelector[0], pos);
+}
+
 bool Styleable::matchesSelector(const qss::Selector& selector) const
 {
-    // build a selector
-    // ### this could likely be optimized since it's currently parsing quite a few times
-    std::string selstr = mSelector.toString();
-    auto parent = mParent;
-    while (parent != nullptr) {
-        const auto& subsel = parent->mSelector;
-        assert(subsel.fragmentCount() == 1);
-        selstr = subsel.front().name() + " > " + selstr;
-        parent = parent->mParent;
-    }
+    qss::Selector styleSelector;
+    buildSelector(styleSelector, this);
 
-    auto sel = qss::Selector(selstr);
-
-    return matchesSelector(selector, sel);
+    return matchesSelector(selector, styleSelector);
 }
