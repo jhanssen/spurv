@@ -54,7 +54,7 @@ public:
     static bool matchesSelector(const qss::Selector& selector1, const qss::Selector& selector2);
     static uint64_t selectorSpecificity(const qss::Selector& selector);
 
-    enum class StylesheetMode {
+    enum class StylesheetMode : uint32_t {
         Replace,
         Merge
     };
@@ -76,7 +76,12 @@ public:
     void addClass(const std::string& name);
     void removeClass(const std::string& name);
 
-    const std::optional<Color>& borderColor() const;
+    enum class ColorType : uint32_t {
+        Background,
+        Foreground,
+        Border
+    };
+    const std::optional<Color>& color(ColorType type) const;
     // left, top, right, bottom
     const std::array<uint32_t, 4>& borderRadius() const;
 
@@ -93,7 +98,7 @@ protected:
 protected:
     qss::Selector mSelector;
     qss::Document mQss, mMergedQss;
-    std::optional<Color> mBorderColor;
+    std::array<std::optional<Color>, 3> mColors;
     // left, top, right, bottom
     std::array<uint32_t, 4> mBorderRadius = {};
     YGNodeRef mYogaNode = nullptr;
@@ -168,9 +173,9 @@ inline void Styleable::removeClass(const std::string& name)
     mSelector[0].noclazz(name);
 }
 
-inline const std::optional<Color>& Styleable::borderColor() const
+inline const std::optional<Color>& Styleable::color(ColorType type) const
 {
-    return mBorderColor;
+    return mColors[static_cast<std::underlying_type_t<ColorType>>(type)];
 }
 
 inline const std::array<uint32_t, 4>& Styleable::borderRadius() const

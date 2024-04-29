@@ -113,11 +113,13 @@ static inline StyleSelectorName nameToStyleSelectorName(const std::string& name)
 
 enum class StyleRuleName {
     Unknown,
+    BackgroundColor,
     Border,
     BorderWidth,
     // BorderStyle,
     BorderColor,
     BorderRadius,
+    Color,
     Flex,
     FlexBasis,
     FlexDirection,
@@ -141,6 +143,11 @@ static inline StyleRuleName nameToStyleRuleName(const std::string& name)
     case 4:
         if (strncasecmp(name.c_str(), "flex", 4) == 0) {
             return StyleRuleName::Flex;
+        }
+        break;
+    case 5:
+        if (strncasecmp(name.c_str(), "color", 5) == 0) {
+            return StyleRuleName::Color;
         }
         break;
     case 6:
@@ -196,6 +203,11 @@ static inline StyleRuleName nameToStyleRuleName(const std::string& name)
     case 14:
         if (strncasecmp(name.c_str(), "flex-direction", 14) == 0) {
             return StyleRuleName::FlexDirection;
+        }
+        break;
+    case 16:
+        if (strncasecmp(name.c_str(), "background-color", 16) == 0) {
+            return StyleRuleName::BackgroundColor;
         }
         break;
     default:
@@ -651,6 +663,10 @@ void Styleable::applyStylesheet()
 {
     std::unordered_map<std::string, std::pair<uint64_t, std::string>> matching;
 
+    auto setColor = [this](ColorType type, std::optional<Color>&& color) -> void {
+        mColors[static_cast<std::underlying_type_t<ColorType>>(type)] = std::move(color);
+    };
+
     const auto dend = mMergedQss.cend();
     for (auto dit = mMergedQss.cbegin(); dit != dend; ++dit) {
         const auto& fragment = dit->first;
@@ -674,11 +690,18 @@ void Styleable::applyStylesheet()
         const auto ruleName = nameToStyleRuleName(mit->first);
         const auto& ruleValue = mit->second.second;
         switch (ruleName) {
+        case StyleRuleName::BackgroundColor: {
+            if (ruleValue.size() == 7 && strncasecmp(ruleValue.c_str(), "initial", 7) == 0) {
+                setColor(ColorType::Background, {});
+            } else {
+                setColor(ColorType::Background, parseColor(ruleValue));
+            }
+            break; }
         case StyleRuleName::Border: {
             StringSpaceSkipper skipper(ruleValue);
             while (skipper.cur != skipper.end) {
                 if (skipper.next - skipper.cur == 7 && strncasecmp(skipper.cur, "initial", 7) == 0) {
-                    mBorderColor = {};
+                    setColor(ColorType::Border, {});
                     YGNodeStyleSetBorder(mYogaNode, YGEdgeAll, 0.f);
                 } else {
                     auto maybeNumber = nameToStyleNumber(skipper.cur);
@@ -687,7 +710,7 @@ void Styleable::applyStylesheet()
                             YGNodeStyleSetBorder(mYogaNode, YGEdgeAll, maybeNumber->number);
                         }
                     } else {
-                        mBorderColor = parseColor(std::string(skipper.cur, skipper.next - skipper.cur));
+                        setColor(ColorType::Border, parseColor(std::string(skipper.cur, skipper.next - skipper.cur)));
                     }
                 }
                 skipper.advance();
@@ -744,9 +767,9 @@ void Styleable::applyStylesheet()
             break; }
         case StyleRuleName::BorderColor: {
             if (ruleValue.size() == 7 && strncasecmp(ruleValue.c_str(), "initial", 7) == 0) {
-                mBorderColor = {};
+                setColor(ColorType::Border, {});
             } else {
-                mBorderColor = parseColor(ruleValue);
+                setColor(ColorType::Border, parseColor(ruleValue));
             }
             break; }
         case StyleRuleName::BorderRadius: {
@@ -795,6 +818,13 @@ void Styleable::applyStylesheet()
                     }
                     break;
                 }
+            }
+            break; }
+        case StyleRuleName::Color: {
+            if (ruleValue.size() == 7 && strncasecmp(ruleValue.c_str(), "initial", 7) == 0) {
+                setColor(ColorType::Foreground, {});
+            } else {
+                setColor(ColorType::Foreground, parseColor(ruleValue));
             }
             break; }
         case StyleRuleName::Flex: {
