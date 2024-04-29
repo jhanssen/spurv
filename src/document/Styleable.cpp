@@ -750,47 +750,51 @@ void Styleable::applyStylesheet()
             }
             break; }
         case StyleRuleName::BorderRadius: {
-            std::array<StyleNumber, 4> numbers;
-            const auto numNumbers = spacedNumbers(numbers, ruleValue);
-            switch (numNumbers) {
-            case 1:
-                if (!numbers[0].percentage) {
-                    mBorderRadius[0] = mBorderRadius[1] = mBorderRadius[2] = mBorderRadius[3] = static_cast<uint32_t>(numbers[0].number);
+            if (ruleValue.size() == 7 && strncasecmp(ruleValue.c_str(), "initial", 7) == 0) {
+                mBorderRadius = {};
+            } else {
+                std::array<StyleNumber, 4> numbers;
+                const auto numNumbers = spacedNumbers(numbers, ruleValue);
+                switch (numNumbers) {
+                case 1:
+                    if (!numbers[0].percentage) {
+                        mBorderRadius[0] = mBorderRadius[1] = mBorderRadius[2] = mBorderRadius[3] = static_cast<uint32_t>(numbers[0].number);
+                    }
+                    break;
+                case 2:
+                    if (!numbers[0].percentage) {
+                        mBorderRadius[1] = mBorderRadius[3] = static_cast<uint32_t>(numbers[0].number);
+                    }
+                    if (!numbers[1].percentage) {
+                        mBorderRadius[0] = mBorderRadius[2] = static_cast<uint32_t>(numbers[1].number);
+                    }
+                    break;
+                case 3:
+                    if (!numbers[0].percentage) {
+                        mBorderRadius[1] = static_cast<uint32_t>(numbers[0].number);
+                    }
+                    if (!numbers[1].percentage) {
+                        mBorderRadius[0] = mBorderRadius[2] = static_cast<uint32_t>(numbers[1].number);
+                    }
+                    if (!numbers[2].percentage) {
+                        mBorderRadius[3] = static_cast<uint32_t>(numbers[2].number);
+                    }
+                    break;
+                case 4:
+                    if (!numbers[0].percentage) {
+                        mBorderRadius[1] = static_cast<uint32_t>(numbers[0].number);
+                    }
+                    if (!numbers[1].percentage) {
+                        mBorderRadius[2] = static_cast<uint32_t>(numbers[1].number);
+                    }
+                    if (!numbers[2].percentage) {
+                        mBorderRadius[3] = static_cast<uint32_t>(numbers[2].number);
+                    }
+                    if (!numbers[3].percentage) {
+                        mBorderRadius[0] = static_cast<uint32_t>(numbers[3].number);
+                    }
+                    break;
                 }
-                break;
-            case 2:
-                if (!numbers[0].percentage) {
-                    mBorderRadius[1] = mBorderRadius[3] = static_cast<uint32_t>(numbers[0].number);
-                }
-                if (!numbers[1].percentage) {
-                    mBorderRadius[0] = mBorderRadius[2] = static_cast<uint32_t>(numbers[1].number);
-                }
-                break;
-            case 3:
-                if (!numbers[0].percentage) {
-                    mBorderRadius[1] = static_cast<uint32_t>(numbers[0].number);
-                }
-                if (!numbers[1].percentage) {
-                    mBorderRadius[0] = mBorderRadius[2] = static_cast<uint32_t>(numbers[1].number);
-                }
-                if (!numbers[2].percentage) {
-                    mBorderRadius[3] = static_cast<uint32_t>(numbers[2].number);
-                }
-                break;
-            case 4:
-                if (!numbers[0].percentage) {
-                    mBorderRadius[1] = static_cast<uint32_t>(numbers[0].number);
-                }
-                if (!numbers[1].percentage) {
-                    mBorderRadius[2] = static_cast<uint32_t>(numbers[1].number);
-                }
-                if (!numbers[2].percentage) {
-                    mBorderRadius[3] = static_cast<uint32_t>(numbers[2].number);
-                }
-                if (!numbers[3].percentage) {
-                    mBorderRadius[0] = static_cast<uint32_t>(numbers[3].number);
-                }
-                break;
             }
             break; }
         case StyleRuleName::Flex: {
@@ -971,168 +975,180 @@ void Styleable::applyStylesheet()
             }
             break; }
         case StyleRuleName::Gap: {
-            std::array<StyleNumber, 2> numbers;
-            const auto numNumbers = spacedNumbers(numbers, ruleValue);
-            switch (numNumbers) {
-            case 1:
-                if (numbers[0].percentage) {
-                    YGNodeStyleSetGapPercent(mYogaNode, YGGutterAll, numbers[0].number);
-                } else {
-                    YGNodeStyleSetGap(mYogaNode, YGGutterAll, numbers[0].number);
+            if (ruleValue.size() == 7 && strncasecmp(ruleValue.c_str(), "initial", 7) == 0) {
+                YGNodeStyleSetGap(mYogaNode, YGGutterAll, 0.f);
+            } else {
+                std::array<StyleNumber, 2> numbers;
+                const auto numNumbers = spacedNumbers(numbers, ruleValue);
+                switch (numNumbers) {
+                case 1:
+                    if (numbers[0].percentage) {
+                        YGNodeStyleSetGapPercent(mYogaNode, YGGutterAll, numbers[0].number);
+                    } else {
+                        YGNodeStyleSetGap(mYogaNode, YGGutterAll, numbers[0].number);
+                    }
+                    break;
+                case 2:
+                    if (numbers[0].percentage) {
+                        YGNodeStyleSetGapPercent(mYogaNode, YGGutterRow, numbers[0].number);
+                    } else {
+                        YGNodeStyleSetGap(mYogaNode, YGGutterRow, numbers[0].number);
+                    }
+                    if (numbers[1].percentage) {
+                        YGNodeStyleSetGapPercent(mYogaNode, YGGutterColumn, numbers[1].number);
+                    } else {
+                        YGNodeStyleSetGap(mYogaNode, YGGutterColumn, numbers[1].number);
+                    }
+                    break;
                 }
-                break;
-            case 2:
-                if (numbers[0].percentage) {
-                    YGNodeStyleSetGapPercent(mYogaNode, YGGutterRow, numbers[0].number);
-                } else {
-                    YGNodeStyleSetGap(mYogaNode, YGGutterRow, numbers[0].number);
-                }
-                if (numbers[1].percentage) {
-                    YGNodeStyleSetGapPercent(mYogaNode, YGGutterColumn, numbers[1].number);
-                } else {
-                    YGNodeStyleSetGap(mYogaNode, YGGutterColumn, numbers[1].number);
-                }
-                break;
             }
             break; }
         case StyleRuleName::Margin: {
-            std::array<StyleNumber, 4> numbers;
-            const auto numNumbers = spacedNumbers(numbers, ruleValue);
-            switch (numNumbers) {
-            case 1:
-                if (numbers[0].percentage) {
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeAll, numbers[0].number);
-                } else {
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeAll, numbers[0].number);
+            if (ruleValue.size() == 7 && strncasecmp(ruleValue.c_str(), "initial", 7) == 0) {
+                YGNodeStyleSetMargin(mYogaNode, YGEdgeAll, 0.f);
+            } else {
+                std::array<StyleNumber, 4> numbers;
+                const auto numNumbers = spacedNumbers(numbers, ruleValue);
+                switch (numNumbers) {
+                case 1:
+                    if (numbers[0].percentage) {
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeAll, numbers[0].number);
+                    } else {
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeAll, numbers[0].number);
+                    }
+                    break;
+                case 2:
+                    if (numbers[0].percentage) {
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeTop, numbers[0].number);
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeBottom, numbers[0].number);
+                    } else {
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeTop, numbers[0].number);
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeBottom, numbers[0].number);
+                    }
+                    if (numbers[1].percentage) {
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeLeft, numbers[1].number);
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeRight, numbers[1].number);
+                    } else {
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeLeft, numbers[1].number);
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeRight, numbers[1].number);
+                    }
+                    break;
+                case 3:
+                    if (numbers[0].percentage) {
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeTop, numbers[0].number);
+                    } else {
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeTop, numbers[0].number);
+                    }
+                    if (numbers[1].percentage) {
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeLeft, numbers[1].number);
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeRight, numbers[1].number);
+                    } else {
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeLeft, numbers[1].number);
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeRight, numbers[1].number);
+                    }
+                    if (numbers[2].percentage) {
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeBottom, numbers[2].number);
+                    } else {
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeBottom, numbers[2].number);
+                    }
+                    break;
+                case 4:
+                    if (numbers[0].percentage) {
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeTop, numbers[0].number);
+                    } else {
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeTop, numbers[0].number);
+                    }
+                    if (numbers[1].percentage) {
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeRight, numbers[1].number);
+                    } else {
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeRight, numbers[1].number);
+                    }
+                    if (numbers[2].percentage) {
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeBottom, numbers[2].number);
+                    } else {
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeBottom, numbers[2].number);
+                    }
+                    if (numbers[3].percentage) {
+                        YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeLeft, numbers[3].number);
+                    } else {
+                        YGNodeStyleSetMargin(mYogaNode, YGEdgeLeft, numbers[3].number);
+                    }
+                    break;
                 }
-                break;
-            case 2:
-                if (numbers[0].percentage) {
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeTop, numbers[0].number);
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeBottom, numbers[0].number);
-                } else {
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeTop, numbers[0].number);
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeBottom, numbers[0].number);
-                }
-                if (numbers[1].percentage) {
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeLeft, numbers[1].number);
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeRight, numbers[1].number);
-                } else {
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeLeft, numbers[1].number);
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeRight, numbers[1].number);
-                }
-                break;
-            case 3:
-                if (numbers[0].percentage) {
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeTop, numbers[0].number);
-                } else {
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeTop, numbers[0].number);
-                }
-                if (numbers[1].percentage) {
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeLeft, numbers[1].number);
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeRight, numbers[1].number);
-                } else {
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeLeft, numbers[1].number);
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeRight, numbers[1].number);
-                }
-                if (numbers[2].percentage) {
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeBottom, numbers[2].number);
-                } else {
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeBottom, numbers[2].number);
-                }
-                break;
-            case 4:
-                if (numbers[0].percentage) {
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeTop, numbers[0].number);
-                } else {
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeTop, numbers[0].number);
-                }
-                if (numbers[1].percentage) {
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeRight, numbers[1].number);
-                } else {
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeRight, numbers[1].number);
-                }
-                if (numbers[2].percentage) {
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeBottom, numbers[2].number);
-                } else {
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeBottom, numbers[2].number);
-                }
-                if (numbers[3].percentage) {
-                    YGNodeStyleSetMarginPercent(mYogaNode, YGEdgeLeft, numbers[3].number);
-                } else {
-                    YGNodeStyleSetMargin(mYogaNode, YGEdgeLeft, numbers[3].number);
-                }
-                break;
             }
             break; }
         case StyleRuleName::Padding: {
-            std::array<StyleNumber, 4> numbers;
-            const auto numNumbers = spacedNumbers(numbers, ruleValue);
-            switch (numNumbers) {
-            case 1:
-                if (numbers[0].percentage) {
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeAll, numbers[0].number);
-                } else {
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeAll, numbers[0].number);
+            if (ruleValue.size() == 7 && strncasecmp(ruleValue.c_str(), "initial", 7) == 0) {
+                YGNodeStyleSetPadding(mYogaNode, YGEdgeAll, 0.f);
+            } else {
+                std::array<StyleNumber, 4> numbers;
+                const auto numNumbers = spacedNumbers(numbers, ruleValue);
+                switch (numNumbers) {
+                case 1:
+                    if (numbers[0].percentage) {
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeAll, numbers[0].number);
+                    } else {
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeAll, numbers[0].number);
+                    }
+                    break;
+                case 2:
+                    if (numbers[0].percentage) {
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeTop, numbers[0].number);
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeBottom, numbers[0].number);
+                    } else {
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeTop, numbers[0].number);
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeBottom, numbers[0].number);
+                    }
+                    if (numbers[1].percentage) {
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeLeft, numbers[1].number);
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeRight, numbers[1].number);
+                    } else {
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeLeft, numbers[1].number);
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeRight, numbers[1].number);
+                    }
+                    break;
+                case 3:
+                    if (numbers[0].percentage) {
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeTop, numbers[0].number);
+                    } else {
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeTop, numbers[0].number);
+                    }
+                    if (numbers[1].percentage) {
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeLeft, numbers[1].number);
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeRight, numbers[1].number);
+                    } else {
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeLeft, numbers[1].number);
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeRight, numbers[1].number);
+                    }
+                    if (numbers[2].percentage) {
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeBottom, numbers[2].number);
+                    } else {
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeBottom, numbers[2].number);
+                    }
+                    break;
+                case 4:
+                    if (numbers[0].percentage) {
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeTop, numbers[0].number);
+                    } else {
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeTop, numbers[0].number);
+                    }
+                    if (numbers[1].percentage) {
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeRight, numbers[1].number);
+                    } else {
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeRight, numbers[1].number);
+                    }
+                    if (numbers[2].percentage) {
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeBottom, numbers[2].number);
+                    } else {
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeBottom, numbers[2].number);
+                    }
+                    if (numbers[3].percentage) {
+                        YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeLeft, numbers[3].number);
+                    } else {
+                        YGNodeStyleSetPadding(mYogaNode, YGEdgeLeft, numbers[3].number);
+                    }
+                    break;
                 }
-                break;
-            case 2:
-                if (numbers[0].percentage) {
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeTop, numbers[0].number);
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeBottom, numbers[0].number);
-                } else {
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeTop, numbers[0].number);
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeBottom, numbers[0].number);
-                }
-                if (numbers[1].percentage) {
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeLeft, numbers[1].number);
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeRight, numbers[1].number);
-                } else {
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeLeft, numbers[1].number);
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeRight, numbers[1].number);
-                }
-                break;
-            case 3:
-                if (numbers[0].percentage) {
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeTop, numbers[0].number);
-                } else {
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeTop, numbers[0].number);
-                }
-                if (numbers[1].percentage) {
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeLeft, numbers[1].number);
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeRight, numbers[1].number);
-                } else {
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeLeft, numbers[1].number);
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeRight, numbers[1].number);
-                }
-                if (numbers[2].percentage) {
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeBottom, numbers[2].number);
-                } else {
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeBottom, numbers[2].number);
-                }
-                break;
-            case 4:
-                if (numbers[0].percentage) {
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeTop, numbers[0].number);
-                } else {
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeTop, numbers[0].number);
-                }
-                if (numbers[1].percentage) {
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeRight, numbers[1].number);
-                } else {
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeRight, numbers[1].number);
-                }
-                if (numbers[2].percentage) {
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeBottom, numbers[2].number);
-                } else {
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeBottom, numbers[2].number);
-                }
-                if (numbers[3].percentage) {
-                    YGNodeStyleSetPaddingPercent(mYogaNode, YGEdgeLeft, numbers[3].number);
-                } else {
-                    YGNodeStyleSetPadding(mYogaNode, YGEdgeLeft, numbers[3].number);
-                }
-                break;
             }
             break; }
         case StyleRuleName::Unknown:
