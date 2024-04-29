@@ -77,6 +77,8 @@ public:
     void removeClass(const std::string& name);
 
     const std::optional<Color>& borderColor() const;
+    // left, top, right, bottom
+    const std::array<uint32_t, 4>& borderRadius() const;
 
 protected:
     void mergeParentStylesheet(const qss::Document& qss);
@@ -92,6 +94,8 @@ protected:
     qss::Selector mSelector;
     qss::Document mQss, mMergedQss;
     std::optional<Color> mBorderColor;
+    // left, top, right, bottom
+    std::array<uint32_t, 4> mBorderRadius = {};
     YGNodeRef mYogaNode = nullptr;
 
     Styleable* mParent = nullptr;
@@ -167,6 +171,11 @@ inline void Styleable::removeClass(const std::string& name)
 inline const std::optional<Color>& Styleable::borderColor() const
 {
     return mBorderColor;
+}
+
+inline const std::array<uint32_t, 4>& Styleable::borderRadius() const
+{
+    return mBorderRadius;
 }
 
 } // namespace spurv

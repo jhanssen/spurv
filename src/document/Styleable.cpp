@@ -117,6 +117,7 @@ enum class StyleRuleName {
     BorderWidth,
     // BorderStyle,
     BorderColor,
+    BorderRadius,
     Flex,
     FlexBasis,
     FlexDirection,
@@ -185,6 +186,11 @@ static inline StyleRuleName nameToStyleRuleName(const std::string& name)
         // }
         if (strncasecmp(name.c_str(), "border-color", 12) == 0) {
             return StyleRuleName::BorderColor;
+        }
+        break;
+    case 13:
+        if (strncasecmp(name.c_str(), "border-radius", 13) == 0) {
+            return StyleRuleName::BorderRadius;
         }
         break;
     case 14:
@@ -741,6 +747,50 @@ void Styleable::applyStylesheet()
                 mBorderColor = {};
             } else {
                 mBorderColor = parseColor(ruleValue);
+            }
+            break; }
+        case StyleRuleName::BorderRadius: {
+            std::array<StyleNumber, 4> numbers;
+            const auto numNumbers = spacedNumbers(numbers, ruleValue);
+            switch (numNumbers) {
+            case 1:
+                if (!numbers[0].percentage) {
+                    mBorderRadius[0] = mBorderRadius[1] = mBorderRadius[2] = mBorderRadius[3] = static_cast<uint32_t>(numbers[0].number);
+                }
+                break;
+            case 2:
+                if (!numbers[0].percentage) {
+                    mBorderRadius[1] = mBorderRadius[3] = static_cast<uint32_t>(numbers[0].number);
+                }
+                if (!numbers[1].percentage) {
+                    mBorderRadius[0] = mBorderRadius[2] = static_cast<uint32_t>(numbers[1].number);
+                }
+                break;
+            case 3:
+                if (!numbers[0].percentage) {
+                    mBorderRadius[1] = static_cast<uint32_t>(numbers[0].number);
+                }
+                if (!numbers[1].percentage) {
+                    mBorderRadius[0] = mBorderRadius[2] = static_cast<uint32_t>(numbers[1].number);
+                }
+                if (!numbers[2].percentage) {
+                    mBorderRadius[3] = static_cast<uint32_t>(numbers[2].number);
+                }
+                break;
+            case 4:
+                if (!numbers[0].percentage) {
+                    mBorderRadius[1] = static_cast<uint32_t>(numbers[0].number);
+                }
+                if (!numbers[1].percentage) {
+                    mBorderRadius[2] = static_cast<uint32_t>(numbers[1].number);
+                }
+                if (!numbers[2].percentage) {
+                    mBorderRadius[3] = static_cast<uint32_t>(numbers[2].number);
+                }
+                if (!numbers[3].percentage) {
+                    mBorderRadius[0] = static_cast<uint32_t>(numbers[3].number);
+                }
+                break;
             }
             break; }
         case StyleRuleName::Flex: {
