@@ -23,8 +23,6 @@ namespace spurv {
    frame > frame matches any frames that are children of other frames
    editor > frame matches any direct frame children of the editor
    #<name> matches a named frame/view (frame#<name> or view#<name>)
-   ::border is the styleable border of a frame (frame::border or view::border)
-   .frame::border matches borders of frames but not of views
    :active matches the active view (view:active)
    :hover matches if the mouse is hovering the frame or view (frame:hover or view:hover)
    :pressed matches if the mouse is pressed inside the frame or view (frame:pressed or view:pressed)
