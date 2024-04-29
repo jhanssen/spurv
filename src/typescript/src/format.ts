@@ -1,3 +1,7 @@
+import { formatArrayBuffer } from "./formatArrayBuffer";
+import { formatArrayBufferView } from "./formatArrayBufferView";
+import { formatError } from "./formatError";
+
 // import { assert } from "./assert";
 
 export function format(...args: unknown[]): string {
@@ -16,6 +20,19 @@ export function format(...args: unknown[]): string {
             case "object":
                 if (!arg) {
                     str = "null";
+                    break;
+                }
+                if (arg instanceof Error) {
+                    str = formatError(arg);
+                    break;
+                }
+                if (arg instanceof ArrayBuffer) {
+                    str = formatArrayBuffer(arg);
+                    break;
+                }
+
+                if (ArrayBuffer.isView(arg)) {
+                    str = formatArrayBufferView(arg);
                     break;
                 }
                 // ### need to format buffer sources etc, better stringifying too

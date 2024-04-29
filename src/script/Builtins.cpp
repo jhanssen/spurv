@@ -2,6 +2,7 @@
 #include "ScriptEngine.h"
 #include <Logger.h>
 #include <simdutf.h>
+#include <base64.hpp>
 
 namespace spurv {
 namespace Builtins {
@@ -27,7 +28,7 @@ ScriptValue log(std::vector<ScriptValue> &&args)
 
 ScriptValue setProcessHandler(std::vector<ScriptValue> &&args)
 {
-    if (args.empty() || args[0].isFunction()) {
+    if (args.empty() || !args[0].isFunction()) {
         return ScriptValue::makeError("Invalid arguments");
     }
 
@@ -237,22 +238,111 @@ ScriptValue setKeyEventHandler(std::vector<ScriptValue> &&args)
     return {};
 }
 
+namespace {
+enum class Mode {
+    ArrayBuffer,
+    String
+};
+
+} // anonymous namespace
 ScriptValue atob(std::vector<ScriptValue> &&args)
 {
     ScriptValue arg = args.empty() ? ScriptValue() : std::move(args[0]);
+    std::optional<Mode> mode;
+    if (args.size() > 1 && !args[1].isNullOrUndefined()) {
+        auto m = args[1].toString();
+        if (!m.ok()) {
+            return ScriptValue::makeError("Invalid mode");
+        }
+        std::string mm = *m;
+        if (mm == "string") {
+            mode = Mode::String;
+        } else if (mm == "ArrayBuffer") {
+            mode = Mode::ArrayBuffer;
+        } else {
+            return ScriptValue::makeError("mode must be \"string\" or \"ArrayBuffer\"");
+        }
+    }
+
+    std::string b;
     if (args[0].isArrayBuffer()) {
-
+        auto data = args[0].arrayBufferData();
+        if (!data.ok()) {
+            return ScriptValue::makeError("Invalid ArrayBuffer");
+        }
+        b = base64::decode_into<std::string>(data->first, data->first + data->second);
+        if (!mode) {
+            mode = Mode::ArrayBuffer;
+        }
     } else if (args[0].isString()) {
-
+        auto data = args[0].toString();
+        if (!data.ok()) {
+            return ScriptValue::makeError("Invalid string");
+        }
+        b = base64::from_base64(*data);
+        if (!mode) {
+            mode = Mode::String;
+        }
     } else {
         return ScriptValue::makeError("Invalid arguments");
     }
+
+    assert(mode);
+    if (*mode == Mode::String) {
+        return ScriptValue(b);
+    }
+    // ### we could make quickjs adopt this memory with relatively little work
+    return ScriptValue::makeArrayBuffer(reinterpret_cast<const unsigned char *>(b.c_str()), b.size());
 }
 
 ScriptValue btoa(std::vector<ScriptValue> &&args)
 {
+    ScriptValue arg = args.empty() ? ScriptValue() : std::move(args[0]);
+    std::optional<Mode> mode;
+    if (args.size() > 1 && !args[1].isNullOrUndefined()) {
+        auto m = args[1].toString();
+        if (!m.ok()) {
+            return ScriptValue::makeError("Invalid mode");
+        }
+        std::string mm = *m;
+        if (mm == "string") {
+            mode = Mode::String;
+        } else if (mm == "ArrayBuffer") {
+            mode = Mode::ArrayBuffer;
+        } else {
+            return ScriptValue::makeError("mode must be \"string\" or \"ArrayBuffer\"");
+        }
+    }
 
+    std::string a;
+    if (args[0].isArrayBuffer()) {
+        auto data = args[0].arrayBufferData();
+        if (!data.ok()) {
+            return ScriptValue::makeError("Invalid ArrayBuffer");
+        }
+        a = base64::encode_into<std::string>(data->first, data->first + data->second);
+        if (!mode) {
+            mode = Mode::ArrayBuffer;
+        }
+    } else if (args[0].isString()) {
+        auto data = args[0].toString();
+        if (!data.ok()) {
+            return ScriptValue::makeError("Invalid string");
+        }
+        a = base64::to_base64(*data);
+        if (!mode) {
+            mode = Mode::String;
+        }
+    } else {
+        return ScriptValue::makeError("Invalid arguments");
+    }
 
+    assert(mode);
+    if (*mode == Mode::String) {
+        return ScriptValue(a);
+    }
+    // ### we could make quickjs adopt this memory with relatively little work
+    return ScriptValue::makeArrayBuffer(reinterpret_cast<const unsigned char *>(a.c_str()), a.size());
 }
 } // namespace Builtins
 } // namespace spurv
