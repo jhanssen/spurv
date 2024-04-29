@@ -26,7 +26,7 @@ namespace spurv {
    :active matches the active view (view:active)
    :hover matches if the mouse is hovering the frame or view (frame:hover or view:hover)
    :pressed matches if the mouse is pressed inside the frame or view (frame:pressed or view:pressed)
-   you can match parent frames of the active view by doing frame > view:active
+   ### maybe support the is/where/not/has pseudo-classes, i.e. frame:has(> view:active) or frame:not(:has(> view:active))
 
    additionally js can assign tags to a frame using setTag(key:string, value:string) and removeTag(key:string),
    these can be matched as follows frame[key="value"] or view[key="value"]
