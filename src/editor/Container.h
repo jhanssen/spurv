@@ -24,7 +24,6 @@ public:
     std::size_t size() const;
 
     virtual void updateLayout(const Rect& rect) override;
-    virtual void setName(const std::string& name) override;
 
 private:
     std::unordered_set<std::shared_ptr<Frame>> mFrames;
@@ -40,11 +39,6 @@ inline Container::Container()
 inline std::size_t Container::size() const
 {
     return mFrames.size();
-}
-
-inline void Container::setName(const std::string& name)
-{
-    mutableSelector()[0].id(name);
 }
 
 } // namespace spurv

@@ -21,7 +21,6 @@ public:
     const std::shared_ptr<Document> document() const;
 
     virtual void updateLayout(const Rect& rect) override;
-    virtual void setName(const std::string& name) override;
 
     void setActive(bool active);
     bool isActive() const;
@@ -42,11 +41,6 @@ private:
 inline const std::shared_ptr<Document> View::document() const
 {
     return mDocument;
-}
-
-inline void View::setName(const std::string& name)
-{
-    mutableSelector()[0].id(name);
 }
 
 inline void View::setActive(bool active)

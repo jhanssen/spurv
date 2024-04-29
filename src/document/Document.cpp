@@ -41,11 +41,6 @@ Document::~Document()
 {
 }
 
-void Document::setName(const std::string& name)
-{
-    mutableSelector()[0].id(name);
-}
-
 void Document::updateLayout(const Rect& rect)
 {
     (void)rect;

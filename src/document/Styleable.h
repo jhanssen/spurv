@@ -65,7 +65,7 @@ public:
     void addStyleableChild(Styleable* child);
     void removeStyleableChild(Styleable* child);
 
-    virtual void setName(const std::string& name) = 0;
+    void setName(const std::string& name);
     std::string name() const;
 
     virtual void updateLayout(const Rect& rect) = 0;
@@ -132,6 +132,11 @@ inline bool Styleable::matchesSelector(const std::string& selector) const
 inline const qss::Document& Styleable::stylesheet() const
 {
     return mQss;
+}
+
+inline void Styleable::setName(const std::string& name)
+{
+    mutableSelector()[0].id(name);
 }
 
 inline std::string Styleable::name() const
