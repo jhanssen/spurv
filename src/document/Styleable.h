@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Color.h>
+#include <Geometry.h>
 #include <qssdocument.h>
 #include <yoga/Yoga.h>
 #include <optional>
@@ -67,6 +68,8 @@ public:
     virtual void setName(const std::string& name) = 0;
     std::string name() const;
 
+    virtual void updateLayout(const Rect& rect) = 0;
+
     void setTag(const std::string& key, const std::string& value);
     void removeTag(const std::string& key);
 
@@ -82,6 +85,7 @@ protected:
     qss::Selector& mutableSelector();
 
     void applyStylesheet();
+
     void relayout();
 
 protected:

@@ -79,6 +79,7 @@ public:
     std::vector<TextProperty> propertiesForRange(std::size_t start, std::size_t end) const;
 
     virtual void setName(const std::string& name) override;
+    virtual void updateLayout(const Rect& rect) override;
 
 private:
     Document(Document&&) = delete;

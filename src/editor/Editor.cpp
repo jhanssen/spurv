@@ -133,6 +133,7 @@ void Editor::load(const std::filesystem::path& path)
 
         mContainer->setSelector("editor");
         mContainer->mutableSelector()[0].id(mName);
+        mContainer->setStylesheet(mQss);
 
         if (mDocuments.empty()) {
             assert(mCurrentView == nullptr);
@@ -197,6 +198,23 @@ void Editor::setName(const std::string& name)
     if (mContainer) {
         mContainer->mutableSelector()[0].id(name);
     }
+}
+
+void Editor::setStylesheet(const qss::Document& qss, StylesheetMode mode)
+{
+    if (mode == StylesheetMode::Replace) {
+        mQss = qss;
+    } else {
+        mQss += qss;
+    }
+    if (mContainer) {
+        mContainer->setStylesheet(mQss);
+    }
+}
+
+void Editor::setStylesheet(const std::string& qss, StylesheetMode mode)
+{
+    setStylesheet(qss::Document(qss), mode);
 }
 
 void Editor::relayout()

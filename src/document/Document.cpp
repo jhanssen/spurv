@@ -46,6 +46,11 @@ void Document::setName(const std::string& name)
     mutableSelector()[0].id(name);
 }
 
+void Document::updateLayout(const Rect& rect)
+{
+    (void)rect;
+}
+
 void Document::load(const std::filesystem::path& path)
 {
     mLayout.reset(Layout::Mode::Chunked);

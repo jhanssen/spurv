@@ -4,7 +4,6 @@
 #include <Document.h>
 #include <EventEmitter.h>
 #include <EventLoop.h>
-#include <Styleable.h>
 #include <condition_variable>
 #include <filesystem>
 #include <memory>
@@ -16,7 +15,7 @@ namespace spurv {
 struct EditorImpl;
 class ScriptEngine;
 
-class Editor : public Styleable
+class Editor
 {
 public:
     ~Editor();
@@ -30,7 +29,13 @@ public:
     EventEmitter<void()>& onReady();
     void load(const std::filesystem::path& path);
 
-    virtual void setName(const std::string& name) override;
+    void setName(const std::string& name);
+
+    using StylesheetMode = Document::StylesheetMode;
+
+    void setStylesheet(const std::string& qss, StylesheetMode mode = StylesheetMode::Replace);
+    void setStylesheet(const qss::Document& qss, StylesheetMode mode = StylesheetMode::Replace);
+    const qss::Document& stylesheet() const;
 
 private:
     Editor(const std::filesystem::path &appPath);
@@ -58,6 +63,7 @@ private:
     std::unique_ptr<Container> mContainer;
     std::array<EventLoop::ConnectKey, 3> mConnectKeys;
     std::string mName;
+    qss::Document mQss;
     uint32_t mWidth = 0, mHeight = 0;
     View* mCurrentView = nullptr;
     EventEmitter<void()> mOnReady;
@@ -98,6 +104,11 @@ inline bool Editor::isReady() const
 {
     std::scoped_lock lock(mMutex);
     return mInitialized;
+}
+
+inline const qss::Document& Editor::stylesheet() const
+{
+    return mQss;
 }
 
 } // namespace spurv

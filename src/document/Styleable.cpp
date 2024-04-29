@@ -1093,6 +1093,16 @@ void Styleable::applyStylesheet()
 
 void Styleable::relayout()
 {
+    if (!YGNodeGetHasNewLayout(mYogaNode)) {
+        return;
+    }
+
+    YGNodeSetHasNewLayout(mYogaNode, false);
+
+    for (auto child : mChildren) {
+        child->relayout();
+    }
+
     const float left = YGNodeLayoutGetLeft(mYogaNode);
     const float top = YGNodeLayoutGetTop(mYogaNode);
     const float width = YGNodeLayoutGetWidth(mYogaNode);
@@ -1102,7 +1112,10 @@ void Styleable::relayout()
                  mSelector.toString(),
                  left, top, width, height);
 
-    for (auto child : mChildren) {
-        child->relayout();
-    }
+    updateLayout(Rect {
+            static_cast<int32_t>(left),
+            static_cast<int32_t>(top),
+            static_cast<uint32_t>(width),
+            static_cast<uint32_t>(height)
+        });
 }
