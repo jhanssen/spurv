@@ -1,3 +1,5 @@
+// import { error } from "./log";
+
 // function compareArrayBuffers(a: ArrayBuffer, b: ArrayBuffer): void {
 //     if (b.byteLength !== b.byteLength) {
 //         throw new Error(`Different lengths: ${a.byteLength} ${b.byteLength}`);

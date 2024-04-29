@@ -174,7 +174,7 @@ ScriptValue stringtoutf16(std::vector<ScriptValue> &&args)
     size_t len = simdutf::utf16_length_from_utf8(data->c_str(), data->size());
     std::vector<char16_t> vector(len);
     const size_t converted = simdutf::convert_valid_utf8_to_utf16(data->c_str(), data->size(), vector.data());
-    return ScriptValue::makeArrayBuffer(vector.data(), converted);
+    return ScriptValue::makeArrayBuffer(vector.data(), converted * sizeof(decltype(vector)::value_type));
 }
 
 ScriptValue stringtoutf16le(std::vector<ScriptValue> &&args)
@@ -190,8 +190,8 @@ ScriptValue stringtoutf16le(std::vector<ScriptValue> &&args)
 
     size_t len = simdutf::utf16_length_from_utf8(data->c_str(), data->size());
     std::vector<char16_t> vector(len);
-    const size_t converted = simdutf::convert_valid_utf8_to_utf16le(data->c_str(), data->size(), vector.data());
-    return ScriptValue::makeArrayBuffer(vector.data(), converted);
+    const size_t converted = simdutf::convert_valid_utf8_to_utf16le(data->c_str(), len, vector.data());
+    return ScriptValue::makeArrayBuffer(vector.data(), converted * sizeof(decltype(vector)::value_type));
 }
 
 ScriptValue stringtoutf16be(std::vector<ScriptValue> &&args)
@@ -208,7 +208,7 @@ ScriptValue stringtoutf16be(std::vector<ScriptValue> &&args)
     size_t len = simdutf::utf16_length_from_utf8(data->c_str(), data->size());
     std::vector<char16_t> vector(len);
     const size_t converted = simdutf::convert_valid_utf8_to_utf16be(data->c_str(), data->size(), vector.data());
-    return ScriptValue::makeArrayBuffer(vector.data(), converted);
+    return ScriptValue::makeArrayBuffer(vector.data(), converted * sizeof(decltype(vector)::value_type));
 }
 
 ScriptValue stringtoutf32(std::vector<ScriptValue> &&args)
@@ -225,7 +225,7 @@ ScriptValue stringtoutf32(std::vector<ScriptValue> &&args)
     size_t len = simdutf::utf32_length_from_utf8(data->c_str(), data->size());
     std::vector<char32_t> vector(len);
     const size_t converted = simdutf::convert_valid_utf8_to_utf32(data->c_str(), data->size(), vector.data());
-    return ScriptValue::makeArrayBuffer(vector.data(), converted);
+    return ScriptValue::makeArrayBuffer(vector.data(), converted * sizeof(decltype(vector)::value_type));
 }
 
 ScriptValue setKeyEventHandler(std::vector<ScriptValue> &&args)
