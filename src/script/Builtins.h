@@ -40,7 +40,12 @@ ScriptValue stringtoutf32(std::vector<ScriptValue> &&args);
 // setKeyEventHandler(handler: (event: KeyEvent) => void): void;
 ScriptValue setKeyEventHandler(std::vector<ScriptValue> &&args);
 
-// exit(number?: number): void;
-ScriptValue exit(std::vector<ScriptValue> &&args);
+// atob(str: string): string;
+// atob(buf: ArrayBuffer): ArrayBuffer;S
+ScriptValue atob(std::vector<ScriptValue> &&args);
+// btoa(str: string): string;
+// btoa(buf: ArrayBuffer): ArrayBuffer;
+ScriptValue btoa(std::vector<ScriptValue> &&args);
+
 } // namespace Builtins
 } // namespace spurv
