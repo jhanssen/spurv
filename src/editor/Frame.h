@@ -13,7 +13,10 @@ class Frame : public Styleable
 {
 public:
     Frame();
+    Frame(Frame&&) = default;
     virtual ~Frame() = default;
+
+    Frame& operator=(Frame&&) = default;
 
     virtual void setName(const std::string& name) override;
 
