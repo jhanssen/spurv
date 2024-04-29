@@ -236,5 +236,23 @@ ScriptValue setKeyEventHandler(std::vector<ScriptValue> &&args)
     ScriptEngine::scriptEngine()->setKeyEventHandler(std::move(args[0]));
     return {};
 }
+
+ScriptValue atob(std::vector<ScriptValue> &&args)
+{
+    ScriptValue arg = args.empty() ? ScriptValue() : std::move(args[0]);
+    if (args[0].isArrayBuffer()) {
+
+    } else if (args[0].isString()) {
+
+    } else {
+        return ScriptValue::makeError("Invalid arguments");
+    }
+}
+
+ScriptValue btoa(std::vector<ScriptValue> &&args)
+{
+
+
+}
 } // namespace Builtins
 } // namespace spurv

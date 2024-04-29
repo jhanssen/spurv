@@ -40,6 +40,7 @@ set(VK_BOOTSTRAP_VULKAN_HEADER_DIR ${CMAKE_CURRENT_LIST_DIR}/Vulkan-Headers/incl
 
 add_subdirectory(FunctionTraits)
 add_subdirectory(VulkanMemoryAllocator)
+add_subdirectory(base64)
 add_subdirectory(fmt)
 add_subdirectory(freetype)
 add_subdirectory(glfw)
