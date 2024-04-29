@@ -362,21 +362,6 @@ static inline std::variant<StyleFlexInitialInheritName, StyleNumber, std::nullop
     return std::nullopt;
 }
 
-static inline std::variant<StyleFlexDirectionName, StyleFlexWrapName, std::nullopt_t> nameToStyleFlexFlowName(const char* name, std::size_t size)
-{
-    auto flexDirection = nameToStyleFlexDirectionName(name, size);
-    if (flexDirection != StyleFlexDirectionName::Unknown) {
-        return flexDirection;
-    }
-    auto flexWrap = nameToStyleFlexWrapName(name, size);
-    if (flexWrap != StyleFlexWrapName::Unknown) {
-        return flexWrap;
-    }
-    return std::nullopt;
-}
-
-
-
 Styleable::Styleable()
     : mYogaNode(YGNodeNew())
 {
