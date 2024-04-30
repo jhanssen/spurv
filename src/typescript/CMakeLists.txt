@@ -1,6 +1,7 @@
 set(TS_DEPS
     build.js
     package.json
+    src/console.ts
     src/splitCommand.ts
     src/formatArrayBufferView.ts
     src/formatError.ts
