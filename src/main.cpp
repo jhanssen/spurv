@@ -10,11 +10,13 @@
 #include <fmt/core.h>
 #include <Logger.h>
 #include <cstdint>
+#include <uv.h>
 
 using namespace spurv;
 
 int main(int argc, char** argv, char** envp)
 {
+    uv_disable_stdio_inheritance();
     const auto args = ArgsParser::parse(argc, argv, envp, "SPURV_", [](const char* msg, size_t offset, char* arg) {
         fmt::print(stderr, "Spurv -- {}: {} ({})\n", msg, offset, arg);
         ::exit(1);
