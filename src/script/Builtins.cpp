@@ -66,14 +66,14 @@ ScriptValue utf16tostring(std::vector<ScriptValue> &&args)
         return ScriptValue::makeError(std::move(data).error().message);
     }
 
-    if (!simdutf::validate_utf16(reinterpret_cast<const char16_t *>(data->first), data->second)) {
+    if (!simdutf::validate_utf16(reinterpret_cast<const char16_t *>(data->first), data->second / sizeof(char16_t))) {
         return ScriptValue::makeError("Invalid utf16");
     }
 
-    size_t len = simdutf::utf8_length_from_utf16(reinterpret_cast<const char16_t *>(data->first), data->second);
+    size_t len = simdutf::utf8_length_from_utf16(reinterpret_cast<const char16_t *>(data->first), data->second / sizeof(char16_t));
     std::string str;
     str.resize(len);
-    const size_t converted = simdutf::convert_valid_utf16_to_utf8(reinterpret_cast<const char16_t *>(data->first), data->second, str.data());
+    const size_t converted = simdutf::convert_valid_utf16_to_utf8(reinterpret_cast<const char16_t *>(data->first), data->second / sizeof(char16_t), str.data());
     return ScriptValue(str.c_str(), converted);
 }
 
@@ -89,14 +89,14 @@ ScriptValue utf16letostring(std::vector<ScriptValue> &&args)
         return ScriptValue::makeError(std::move(data).error().message);
     }
 
-    if (!simdutf::validate_utf16le(reinterpret_cast<const char16_t *>(data->first), data->second)) {
+    if (!simdutf::validate_utf16le(reinterpret_cast<const char16_t *>(data->first), data->second / sizeof(char16_t))) {
         return ScriptValue::makeError("Invalid utf16");
     }
 
-    size_t len = simdutf::utf8_length_from_utf16le(reinterpret_cast<const char16_t *>(data->first), data->second);
+    size_t len = simdutf::utf8_length_from_utf16le(reinterpret_cast<const char16_t *>(data->first), data->second / sizeof(char16_t));
     std::string str;
     str.resize(len);
-    const size_t converted = simdutf::convert_valid_utf16le_to_utf8(reinterpret_cast<const char16_t *>(data->first), data->second, str.data());
+    const size_t converted = simdutf::convert_valid_utf16le_to_utf8(reinterpret_cast<const char16_t *>(data->first), data->second / sizeof(char16_t), str.data());
     return ScriptValue(str.c_str(), converted);
 }
 
@@ -112,14 +112,14 @@ ScriptValue utf16betostring(std::vector<ScriptValue> &&args)
         return ScriptValue::makeError(std::move(data).error().message);
     }
 
-    if (!simdutf::validate_utf16be(reinterpret_cast<const char16_t *>(data->first), data->second)) {
+    if (!simdutf::validate_utf16be(reinterpret_cast<const char16_t *>(data->first), data->second / sizeof(char16_t))) {
         return ScriptValue::makeError("Invalid utf16");
     }
 
-    size_t len = simdutf::utf8_length_from_utf16be(reinterpret_cast<const char16_t *>(data->first), data->second);
+    size_t len = simdutf::utf8_length_from_utf16be(reinterpret_cast<const char16_t *>(data->first), data->second / sizeof(char16_t));
     std::string str;
     str.resize(len);
-    const size_t converted = simdutf::convert_valid_utf16be_to_utf8(reinterpret_cast<const char16_t *>(data->first), data->second, str.data());
+    const size_t converted = simdutf::convert_valid_utf16be_to_utf8(reinterpret_cast<const char16_t *>(data->first), data->second / sizeof(char16_t), str.data());
     return ScriptValue(str.c_str(), converted);
 }
 
@@ -134,14 +134,14 @@ ScriptValue utf32tostring(std::vector<ScriptValue> &&args)
         return ScriptValue::makeError(std::move(data).error().message);
     }
 
-    if (!simdutf::validate_utf32(reinterpret_cast<const char32_t *>(data->first), data->second)) {
+    if (!simdutf::validate_utf32(reinterpret_cast<const char32_t *>(data->first), data->second / sizeof(char32_t))) {
         return ScriptValue::makeError("Invalid utf32");
     }
 
-    size_t len = simdutf::utf8_length_from_utf32(reinterpret_cast<const char32_t *>(data->first), data->second);
+    size_t len = simdutf::utf8_length_from_utf32(reinterpret_cast<const char32_t *>(data->first), data->second / sizeof(char32_t));
     std::string str;
     str.resize(len);
-    const size_t converted = simdutf::convert_valid_utf32_to_utf8(reinterpret_cast<const char32_t *>(data->first), data->second, str.data());
+    const size_t converted = simdutf::convert_valid_utf32_to_utf8(reinterpret_cast<const char32_t *>(data->first), data->second / sizeof(char32_t), str.data());
     return ScriptValue(str.c_str(), converted);
 }
 
@@ -244,10 +244,22 @@ enum class Mode {
     String
 };
 
+std::string base64Decode(const void *buf, size_t len)
+{
+    const size_t rest = len % 4;
+    if (!rest) {
+        return base64::decode_into<std::string>(reinterpret_cast<const unsigned char *>(buf), reinterpret_cast<const unsigned char *>(buf) + len);
+    }
+
+    std::unique_ptr<unsigned char[]> buffer(new unsigned char[len + 4 - rest + 1]);
+    memcpy(buffer.get(), buf, len);
+    memset(buffer.get() + len, '=', 4 - rest);
+    buffer[len + 4 - rest] = '\0';
+    return base64::decode_into<std::string>(buffer.get(), buffer.get() + len + 4 - rest);
+}
 } // anonymous namespace
 ScriptValue atob(std::vector<ScriptValue> &&args)
 {
-    ScriptValue arg = args.empty() ? ScriptValue() : std::move(args[0]);
     std::optional<Mode> mode;
     if (args.size() > 1 && !args[1].isNullOrUndefined()) {
         auto m = args[1].toString();
@@ -270,7 +282,11 @@ ScriptValue atob(std::vector<ScriptValue> &&args)
         if (!data.ok()) {
             return ScriptValue::makeError("Invalid ArrayBuffer");
         }
-        b = base64::decode_into<std::string>(data->first, data->first + data->second);
+        try {
+            b = base64Decode(data->first, data->second);
+        } catch (const std::runtime_error &e) {
+            return ScriptValue::makeError(e.what());
+        }
         if (!mode) {
             mode = Mode::ArrayBuffer;
         }
@@ -279,7 +295,11 @@ ScriptValue atob(std::vector<ScriptValue> &&args)
         if (!data.ok()) {
             return ScriptValue::makeError("Invalid string");
         }
-        b = base64::from_base64(*data);
+        try {
+            b = base64Decode(data->c_str(), data->size());
+        } catch (const std::runtime_error &e) {
+            return ScriptValue::makeError(e.what());
+        }
         if (!mode) {
             mode = Mode::String;
         }
@@ -297,7 +317,6 @@ ScriptValue atob(std::vector<ScriptValue> &&args)
 
 ScriptValue btoa(std::vector<ScriptValue> &&args)
 {
-    ScriptValue arg = args.empty() ? ScriptValue() : std::move(args[0]);
     std::optional<Mode> mode;
     if (args.size() > 1 && !args[1].isNullOrUndefined()) {
         auto m = args[1].toString();
@@ -320,7 +339,12 @@ ScriptValue btoa(std::vector<ScriptValue> &&args)
         if (!data.ok()) {
             return ScriptValue::makeError("Invalid ArrayBuffer");
         }
-        a = base64::encode_into<std::string>(data->first, data->first + data->second);
+        try {
+            a = base64::encode_into<std::string>(data->first, data->first + data->second);
+        } catch (const std::runtime_error &e) {
+            return ScriptValue::makeError(e.what());
+        }
+
         if (!mode) {
             mode = Mode::ArrayBuffer;
         }
@@ -329,7 +353,11 @@ ScriptValue btoa(std::vector<ScriptValue> &&args)
         if (!data.ok()) {
             return ScriptValue::makeError("Invalid string");
         }
-        a = base64::to_base64(*data);
+        try {
+            a = base64::to_base64(*data);
+        } catch (const std::runtime_error &e) {
+            return ScriptValue::makeError(e.what());
+        }
         if (!mode) {
             mode = Mode::String;
         }

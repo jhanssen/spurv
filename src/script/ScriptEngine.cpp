@@ -46,6 +46,8 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
     bindGlobalFunction("setInterval", std::bind(&ScriptEngine::setInterval, this, std::placeholders::_1));
     bindGlobalFunction("clearTimeout", std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
     bindGlobalFunction("clearInterval", std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
+    bindGlobalFunction("atob", &Builtins::atob);
+    bindGlobalFunction("btoa", &Builtins::btoa);
 
     const std::filesystem::path file = mAppPath / "../src/typescript/dist/spurv.js";
     auto ret = eval(file);

@@ -32,18 +32,18 @@ export function test(): void {
     const d = spurv.stringtoutf16(a);
     const e = spurv.utf16tostring(d);
     compareStrings(a, e);
-    const h = atob(a);
-    const i = btoa(h);
+    const f = spurv.stringtoutf32(a);
+    const g = spurv.utf32tostring(f);
+    compareStrings(a, g);
+    const h = btoa(a);
+    const i = atob(h);
     compareStrings(a, i);
 
-    const j = atob(a, "ArrayBuffer");
-    const k = btoa(j, "string");
+    const j = btoa(a, "ArrayBuffer");
+    const k = atob(j, "string");
     compareStrings(a, k);
     if (!(j instanceof ArrayBuffer)) {
         throw new Error("Should have been ArrayBuffer");
     }
 
-    const f = spurv.stringtoutf32(a);
-    const g = spurv.utf32tostring(f);
-    compareStrings(a, g);
 }
