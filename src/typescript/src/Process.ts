@@ -1,6 +1,5 @@
 import { ProcessData } from "./ProcessData";
 import { assert } from "./assert";
-import { error } from "./log";
 import { splitCommand } from "./splitCommand";
 import type { ProcessFinishedEvent } from "./ProcessFinishedEvent";
 import type { ProcessOptions } from "./ProcessOptions";
@@ -78,7 +77,7 @@ export class Process {
                     try {
                         x(event);
                     } catch (err: unknown) {
-                        error("Error in event handler", err);
+                        console.error("Error in event handler", err);
                     }
                 });
                 break;
@@ -89,7 +88,7 @@ export class Process {
                     try {
                         x(event);
                     } catch (err: unknown) {
-                        error("Error in event handler", err);
+                        console.error("Error in event handler", err);
                     }
                 });
                 break;
@@ -194,7 +193,7 @@ spurv.setProcessHandler(
     (event: spurv.NativeProcessFinishedEvent | spurv.NativeProcessStdoutEvent | spurv.NativeProcessStderrEvent) => {
         const data = processes.get(event.pid);
         if (!data) {
-            error("Got event for unknown pid", event);
+            console.error("Got event for unknown pid", event);
             return;
         }
 

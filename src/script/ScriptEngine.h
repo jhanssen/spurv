@@ -22,9 +22,6 @@ public:
     Result<void> eval(const std::filesystem::path &file);
     Result<void> eval(const std::string &url, const std::string &source);
 
-    void setProcessHandler(ScriptValue &&value);
-    void setKeyEventHandler(ScriptValue &&value);
-
     void onKey(int key, int scancode, int action, int mods);
 
     static ScriptEngine *scriptEngine() { return tScriptEngine; }
@@ -42,6 +39,21 @@ public:
 
 private:
     void initScriptBufferSourceIds();
+
+    // setProcessHandler(handler: (event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => void): void;
+    ScriptValue setProcessHandler(std::vector<ScriptValue> &&args);
+
+    // startProcess(arguments: string[], stdin: ArrayBuffer | string | undefined, flags: number): number;
+    ScriptValue startProcess(std::vector<ScriptValue> &&args);
+    // execProcess(arguments: string[], stdin: ArrayBuffer | string | undefined, flags: number): NativeSynchronousProcessResult;
+    ScriptValue execProcess(std::vector<ScriptValue> &&args);
+    // writeToProcessStdin(id: number, data: ArrayBuffer | string): void;
+    ScriptValue writeToProcessStdin(std::vector<ScriptValue> &&args);
+    // closeProcessStdin(id: number): void;
+    ScriptValue closeProcessStdin(std::vector<ScriptValue> &&args);
+
+    // setKeyEventHandler(handler: (event: KeyEvent) => void): void;
+    ScriptValue setKeyEventHandler(std::vector<ScriptValue> &&args);
     // setTimeout(callback: (...args: unknown[]) => void, ms: number, ...args: unknown[]): number;
     ScriptValue setTimeoutImpl(EventLoop::TimerMode mode, std::vector<ScriptValue> &&args);
     ScriptValue setTimeout(std::vector<ScriptValue> &&args);

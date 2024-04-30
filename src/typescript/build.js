@@ -18,13 +18,29 @@ async function stat(file) {
     }
 }
 
+let stderr = "";
+function onStderr(data) {
+    stderr += data.toString();
+    const lines = stderr.split("\n");
+    stderr = lines[lines.length - 1];
+    for (let i=0; i<lines.length - 1; ++i) {
+        let line = lines[i];
+        if (line.startsWith("[!] (plugin rpt2) Error: ")) {
+            line = line.substring(25);
+        }
+
+        const idx = line.indexOf("../spurv/src/typescript/");
+        if (idx !== -1) {
+            const start = line.lastIndexOf(" ", idx);
+            line = `${line.substring(0, start)} ${__dirname}${line.substring(idx + 23)}`;
+        }
+
+        console.error(line);
+    }
+}
+
 function spawn(command, args, options) {
     return new Promise((resolve, reject) => {
-        if (!options) {
-            options = { stdio: "inherit" };
-        } else if (!options.stdio) {
-            options.stdio = "inherit";
-        }
         const proc = child_process.spawn(command, args, options);
         proc.on("exit", async (code) => {
             if (!code) {
@@ -34,6 +50,7 @@ function spawn(command, args, options) {
                 reject(new Error(`${command} ${args.join(" ")} failed with code ${code}`));
             }
         });
+        proc.stderr.on("data", onStderr);
     });
 }
 
@@ -90,13 +107,17 @@ async function eslint() {
     const srcDir = path.join(__dirname, "src");
     const env = { ...process.env };
     env.NODE_PATH = path.join(process.cwd(), "node_modules");
+    env.FORCE_COLOR = "0"
     await spawn(eslintPath, [ "--config", eslintConfigBuild, srcDir, "--format", "unix" ], { env });
 }
 
 async function rollup() {
     const rollupPath = path.join(process.cwd(), "node_modules", ".bin", "rollup");
     const rollupConfig = path.join(process.cwd(), "rollup.config.js");
-    await spawn(rollupPath, [ "--config", rollupConfig ], { NODE_PATH: path.join(process.cwd(), "node_modules") });
+    const env = { ...process.env };
+    env.NODE_PATH = path.join(process.cwd(), "node_modules");
+    env.FORCE_COLOR = "0"
+    await spawn(rollupPath, [ "--config", rollupConfig ], { env });
 }
 
 (async function () {

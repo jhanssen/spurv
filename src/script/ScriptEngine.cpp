@@ -29,7 +29,11 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
     mGlobal.setProperty("spurv", mSpurv.clone());
 
     bindSpurvFunction("log", &Builtins::log);
-    bindSpurvFunction("setProcessHandler", &Builtins::setProcessHandler);
+    bindSpurvFunction("setProcessHandler", std::bind(&ScriptEngine::setProcessHandler, this, std::placeholders::_1));
+    bindSpurvFunction("startProcess", std::bind(&ScriptEngine::startProcess, this, std::placeholders::_1));
+    bindSpurvFunction("execProcess", std::bind(&ScriptEngine::execProcess, this, std::placeholders::_1));
+    bindSpurvFunction("writeToProcessStdin", std::bind(&ScriptEngine::writeToProcessStdin, this, std::placeholders::_1));
+    bindSpurvFunction("closeProcessStdin", std::bind(&ScriptEngine::closeProcessStdin, this, std::placeholders::_1));
     bindSpurvFunction("utf8tostring", &Builtins::utf8tostring);
     bindSpurvFunction("utf16tostring", &Builtins::utf16tostring);
     bindSpurvFunction("utf16letostring", &Builtins::utf16letostring);
@@ -40,7 +44,7 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
     bindSpurvFunction("stringtoutf16le", &Builtins::stringtoutf16le);
     bindSpurvFunction("stringtoutf16be", &Builtins::stringtoutf16be);
     bindSpurvFunction("stringtoutf32", &Builtins::stringtoutf32);
-    bindSpurvFunction("setKeyEventHandler", &Builtins::setKeyEventHandler);
+    bindSpurvFunction("setKeyEventHandler", std::bind(&ScriptEngine::setKeyEventHandler, this, std::placeholders::_1));
     bindSpurvFunction("exit", std::bind(&ScriptEngine::exit, this, std::placeholders::_1));
     bindGlobalFunction("setTimeout", std::bind(&ScriptEngine::setTimeout, this, std::placeholders::_1));
     bindGlobalFunction("setInterval", std::bind(&ScriptEngine::setInterval, this, std::placeholders::_1));
@@ -77,15 +81,38 @@ ScriptEngine::~ScriptEngine()
     tScriptEngine = nullptr;
 }
 
-void ScriptEngine::setProcessHandler(ScriptValue &&value)
+ScriptValue ScriptEngine::setProcessHandler(std::vector<ScriptValue> &&args)
 {
-    mProcessHandler = std::move(value);
+    if (args.empty() || !args[0].isFunction()) {
+        return ScriptValue::makeError("Invalid arguments");
+    }
+
+    mProcessHandler = std::move(args[0]);
+    return {};
 }
 
-void ScriptEngine::setKeyEventHandler(ScriptValue &&value)
+ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
 {
-    spdlog::error("Set key event handler", value.isFunction());
-    mKeyHandler = std::move(value);
+    static_cast<void>(args);
+    return {};
+}
+
+ScriptValue ScriptEngine::execProcess(std::vector<ScriptValue> &&args)
+{
+    static_cast<void>(args);
+    return {};
+}
+
+ScriptValue ScriptEngine::writeToProcessStdin(std::vector<ScriptValue> &&args)
+{
+    static_cast<void>(args);
+    return {};
+}
+
+ScriptValue ScriptEngine::closeProcessStdin(std::vector<ScriptValue> &&args)
+{
+    static_cast<void>(args);
+    return {};
 }
 
 void ScriptEngine::onKey(int key, int scancode, int action, int mods)
@@ -208,6 +235,16 @@ JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValue
     return *ScriptValue::undefined();
 }
 
+ScriptValue ScriptEngine::setKeyEventHandler(std::vector<ScriptValue> &&args)
+{
+    if (args.empty() || !args[0].isFunction()) {
+        return ScriptValue::makeError("Invalid arguments");
+    }
+
+    mKeyHandler = std::move(args[0]);
+    return {};
+}
+
 ScriptValue ScriptEngine::setTimeoutImpl(EventLoop::TimerMode mode, std::vector<ScriptValue> &&args)
 {
     if (args.empty() || !args[0].isFunction()) {
@@ -281,4 +318,3 @@ ScriptValue ScriptEngine::exit(std::vector<ScriptValue> &&args)
     return {};
 }
 } // namespace spurv
-

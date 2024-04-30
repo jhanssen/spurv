@@ -26,16 +26,6 @@ ScriptValue log(std::vector<ScriptValue> &&args)
     return {};
 }
 
-ScriptValue setProcessHandler(std::vector<ScriptValue> &&args)
-{
-    if (args.empty() || !args[0].isFunction()) {
-        return ScriptValue::makeError("Invalid arguments");
-    }
-
-    ScriptEngine::scriptEngine()->setProcessHandler(std::move(args[0]));
-    return {};
-}
-
 ScriptValue utf8tostring(std::vector<ScriptValue> &&args)
 {
     if (args.empty()) {
@@ -226,16 +216,6 @@ ScriptValue stringtoutf32(std::vector<ScriptValue> &&args)
     std::vector<char32_t> vector(len);
     const size_t converted = simdutf::convert_valid_utf8_to_utf32(data->c_str(), data->size(), vector.data());
     return ScriptValue::makeArrayBuffer(vector.data(), converted * sizeof(decltype(vector)::value_type));
-}
-
-ScriptValue setKeyEventHandler(std::vector<ScriptValue> &&args)
-{
-    if (args.empty() || !args[0].isFunction()) {
-        return ScriptValue::makeError("Invalid arguments");
-    }
-
-    ScriptEngine::scriptEngine()->setKeyEventHandler(std::move(args[0]));
-    return {};
 }
 
 namespace {
