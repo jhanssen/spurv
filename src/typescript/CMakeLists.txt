@@ -13,7 +13,6 @@ set(TS_DEPS
     src/formatArrayBuffer.ts
     src/ProcessStdoutEvent.ts
     src/index.ts
-    src/log.ts
     src/test.ts
     src/format.ts
     src/ProcessFinishedEvent.ts
