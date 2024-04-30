@@ -45,5 +45,4 @@ export function test(): void {
     if (!(j instanceof ArrayBuffer)) {
         throw new Error("Should have been ArrayBuffer");
     }
-
 }
