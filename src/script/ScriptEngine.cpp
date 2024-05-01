@@ -108,68 +108,107 @@ void cleanupOptions(uv_process_options_s options)
         delete[] options.args;
     }
 }
+// Duplicated in typescript
+enum class ProcessFlag {
+    None = 0x0,
+    StdinClosed = 0x1,
+    Stdout = 0x2,
+    Stderr = 0x4,
+    Strings = 0x8
+};
 } // anonymous namespace
+
+template <>
+struct IsEnumBitmask<ProcessFlag> {
+    static constexpr bool enable = true;
+};
 
 ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
 {
-    if (args.empty() || !args[0].isArray()) {
+    if (args.size() < 5 || !args[0].isArray() || !args[4].isNumber()) {
         return ScriptValue::makeError("Invalid arguments");
     }
 
-    uv_process_options_s options = {};
+    uv_loop_t *loop = static_cast<uv_loop_t *>(mEventLoop->handle());
 
-    if (args.size() > 1) {
-        if (!args[1].isNullOrUndefined()) {
-            if (!args[1].isObject()) {
-                return ScriptValue::makeError("Invalid env argument");
+    std::unique_ptr<ProcessData> data = std::make_unique<ProcessData>();
+
+    ProcessFlag flags = static_cast<ProcessFlag>(*args[4].toInt());
+    uv_stdio_container_t child_stdio[3];
+    uv_process_options_s options = {};
+    options.stdio = child_stdio;
+    options.stdio_count = 3;
+
+    if (flags & ProcessFlag::StdinClosed) {
+        child_stdio[0].flags = UV_IGNORE;
+    } else {
+        // ### flag for blocking reads?
+        child_stdio[0].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_WRITABLE_PIPE | UV_NONBLOCK_PIPE);
+        data->stdinPipe = {};
+        uv_pipe_init(loop, &(*data->stdinPipe), 1);
+    }
+
+    if (!(flags & ProcessFlag::Stdout)) {
+        child_stdio[1].flags = UV_IGNORE;
+    } else {
+        child_stdio[1].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_NONBLOCK_PIPE);
+        data->stdoutPipe = {};
+        uv_pipe_init(loop, &(*data->stdoutPipe), 1);
+    }
+
+    if (!(flags & ProcessFlag::Stderr)) {
+        child_stdio[2].flags = UV_IGNORE;
+    } else {
+        child_stdio[2].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_NONBLOCK_PIPE);
+        data->stderrPipe = {};
+        uv_pipe_init(loop, &(*data->stderrPipe), 1);
+    }
+
+    if (!args[1].isNullOrUndefined()) {
+        if (!args[1].isObject()) {
+            return ScriptValue::makeError("Invalid env argument");
+        }
+        auto vec = *args[1].toObject();
+        options.env = new char*[vec.size() + 1];
+        options.env[vec.size()] = nullptr;
+        size_t i = 0;
+        for (std::pair<std::string, ScriptValue> &arg : vec) {
+            auto str = arg.second.toString();
+            if (!str.ok()) {
+                cleanupOptions(options);
+                return ScriptValue::makeError("Couldn't convert env argument with key " + arg.first);
             }
-            auto vec = *args[1].toObject();
-            options.env = new char*[vec.size() + 1];
-            options.env[vec.size()] = nullptr;
-            size_t i = 0;
-            for (std::pair<std::string, ScriptValue> &arg : vec) {
-                auto str = arg.second.toString();
-                if (!str.ok()) {
-                    cleanupOptions(options);
-                    return ScriptValue::makeError("Couldn't convert env argument with key " + arg.first);
-                }
-                options.env[i++] = strdup(fmt::format("{}={}", arg.first, str->c_str()).c_str());
-            }
+            options.env[i++] = strdup(fmt::format("{}={}", arg.first, str->c_str()).c_str());
         }
     }
 
     std::string cwd;
-    if (args.size() > 2) {
-        if (!args[2].isNullOrUndefined()) {
-            auto cwdArg = args[2].toString();
-            if (cwdArg.ok()) {
-                cwd = *cwdArg;
-                options.cwd = cwd.c_str();
-            } else {
-                cleanupOptions(options);
-                return ScriptValue::makeError("Invalid cwd argument");
-            }
+    if (!args[2].isNullOrUndefined()) {
+        auto cwdArg = args[2].toString();
+        if (cwdArg.ok()) {
+            cwd = *cwdArg;
+            options.cwd = cwd.c_str();
+        } else {
+            cleanupOptions(options);
+            return ScriptValue::makeError("Invalid cwd argument");
         }
     }
 
-    std::vector<unsigned char> pendingStdin;
-
-    if (args.size() > 3) {
-        if (args[2].isArrayBuffer() || args[3].isTypedArray()) {
-            auto data = *args[2].arrayBufferData(); // ### can this fail?
-            pendingStdin.resize(data.second);
-            memcpy(pendingStdin.data(), data.first, data.second);
-        } else if (!args[2].isNullOrUndefined()) {
-            auto str = args[2].toString();
-            if (!str.ok()) {
-                cleanupOptions(options);
-                return ScriptValue::makeError("Invalid stdin argument");
-            }
-            const auto string = *str;
-            pendingStdin.resize(string.size());
-            memcpy(pendingStdin.data(), string.c_str(), string.size());
+    if (args[2].isArrayBuffer() || args[3].isTypedArray()) {
+        auto arrayBufferData = *args[2].arrayBufferData(); // ### can this fail?
+        data->pendingStdin.resize(arrayBufferData.second);
+        memcpy(data->pendingStdin.data(), arrayBufferData.first, arrayBufferData.second);
+    } else if (!args[2].isNullOrUndefined()) {
+        auto str = args[2].toString();
+        if (!str.ok()) {
+            cleanupOptions(options);
+            return ScriptValue::makeError("Invalid stdin argument");
         }
+        const auto string = *str;
+        data->pendingStdin.resize(string.size());
+        memcpy(data->pendingStdin.data(), string.c_str(), string.size());
     }
+    // ### Need to handle stdin
 
     const std::vector<ScriptValue> argv = *args[0].toArray();
 
@@ -187,11 +226,8 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
     options.file = options.args[0];
     options.exit_cb = ScriptEngine::onProcessExit;
 
-    std::unique_ptr<ProcessData> data = std::make_unique<ProcessData>();
-    data->pendingStdin = std::move(pendingStdin);
-    // ### Need to handle stdin
-
-    const int ret = uv_spawn(static_cast<uv_loop_t *>(mEventLoop->handle()), &data->proc, &options);
+    data->proc = {};
+    const int ret = uv_spawn(loop, &(*data->proc), &options);
     if (ret) {
         // failed to launch
         const char *err = uv_strerror(ret);
@@ -201,7 +237,11 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         return ScriptValue(error);
     }
     cleanupOptions(options);
-    const int pid = data->proc.pid;
+    const int pid = data->proc->pid;
+    // dummy_buf = uv_buf_init("a", 1);
+    // struct child_worker *worker = &workers[round_robin_counter];
+    // uv_write2(write_req, (uv_stream_t*) &worker->pipe, &dummy_buf, 1, (uv_stream_t*) client, NULL);
+
     mProcesses.push_back(std::move(data));
     return ScriptValue(pid);
 }
@@ -235,7 +275,8 @@ ScriptValue ScriptEngine::killProcess(std::vector<ScriptValue> &&args)
         return ScriptValue::makeError("Can't find process");
     }
 
-    uv_process_kill(&(*it)->proc, *args[1].toInt());
+
+    uv_process_kill(&*(*it)->proc, *args[1].toInt());
     return {};
 }
 
@@ -339,7 +380,7 @@ EventEmitter<void(int)>& ScriptEngine::onExit()
 std::vector<std::unique_ptr<ScriptEngine::ProcessData>>::iterator ScriptEngine::findProcessByPid(int pid)
 {
     for (auto it = mProcesses.begin(); it != mProcesses.end(); ++it) {
-        if ((*it)->proc.pid == pid) {
+        if ((*it)->proc->pid == pid) {
             return it;
         }
     }
@@ -376,8 +417,7 @@ void ScriptEngine::onProcessExit(uv_process_t *proc, int64_t exit_status, int te
     ScriptEngine *that = ScriptEngine::scriptEngine();
     assert(that);
     for (auto it = that->mProcesses.begin(); it != that->mProcesses.end(); ++it) {
-        if (&(*it)->proc == proc) {
-            that->mProcesses.erase(it);
+        if (&*(*it)->proc == proc) {
             if (that->mProcessHandler.isFunction()) {
                 ScriptValue object(ScriptValue::Object);
                 object.setProperty(that->mAtoms.type, ScriptValue("finished"));
@@ -387,10 +427,11 @@ void ScriptEngine::onProcessExit(uv_process_t *proc, int64_t exit_status, int te
                 object.setProperty(that->mAtoms.exitCode, ScriptValue(static_cast<int>(exit_status)));
                 that->mProcessHandler.call(object);
             }
-            uv_close(reinterpret_cast<uv_handle_t *>(proc), nullptr);
+            that->mProcesses.erase(it);
             return;
         }
     }
+    // ### if this happens we've probably invalid'read'ed libuv already
     spdlog::error("Couldn't find process with pid {} for onProcessExit wiht exit_status {} and term_signal {}",
                   proc->pid, exit_status, term_signal);
     uv_close(reinterpret_cast<uv_handle_t *>(proc), nullptr);
@@ -477,6 +518,26 @@ ScriptValue ScriptEngine::exit(std::vector<ScriptValue> &&args)
 
     mOnExit.emit(exitCode);
     return {};
+}
+
+ScriptEngine::ProcessData::~ProcessData()
+{
+    if (proc) {
+        uv_close(reinterpret_cast<uv_handle_t *>(&*proc), nullptr);
+    }
+
+    if (stdinPipe) {
+        uv_close(reinterpret_cast<uv_handle_t*>(&*stdinPipe), nullptr);
+    }
+
+    if (stdoutPipe) {
+        uv_close(reinterpret_cast<uv_handle_t*>(&*stdoutPipe), nullptr);
+    }
+
+    if (stderrPipe) {
+        uv_close(reinterpret_cast<uv_handle_t*>(&*stderrPipe), nullptr);
+    }
+
 }
 } // namespace spurv
 

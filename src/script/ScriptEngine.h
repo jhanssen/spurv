@@ -99,7 +99,13 @@ private:
     };
 
     struct ProcessData {
-        uv_process_t proc;
+        ~ProcessData();
+
+        bool stringReturnValues { false };
+        std::optional<uv_process_t> proc;
+        std::optional<uv_pipe_t> stdinPipe;
+        std::optional<uv_pipe_t> stdoutPipe;
+        std::optional<uv_pipe_t> stderrPipe;
         std::vector<unsigned char> pendingStdin;
     };
     std::vector<std::unique_ptr<ProcessData>> mProcesses;

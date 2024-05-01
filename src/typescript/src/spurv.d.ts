@@ -42,9 +42,10 @@ declare namespace spurv {
 
     export const enum ProcessFlags {
         None = 0x0,
-        Stdout = 0x1,
-        Stderr = 0x2,
-        Strings = 0x4
+        StdinClosed = 0x1,
+        Stdout = 0x2,
+        Stderr = 0x4,
+        Strings = 0x8
     }
 
     export function setProcessHandler(
