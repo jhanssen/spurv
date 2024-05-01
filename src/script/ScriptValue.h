@@ -27,11 +27,13 @@ public:
     explicit ScriptValue(uint32_t value);
     explicit ScriptValue(double value);
     explicit ScriptValue(const std::string &str);
+    explicit ScriptValue(const char *str);
     explicit ScriptValue(const char *str, size_t len);
     explicit ScriptValue(const std::u8string &str);
     explicit ScriptValue(const char8_t *str, size_t len);
     explicit ScriptValue(std::vector<ScriptValue> &&array);
     explicit ScriptValue(std::vector<std::pair<std::string, ScriptValue>> &&object);
+    explicit ScriptValue(std::vector<std::pair<JSAtom, ScriptValue>> &&object);
     explicit ScriptValue(Function &&function);
     explicit ScriptValue(Tag tag);
     ~ScriptValue();
@@ -95,16 +97,18 @@ public:
     Result<double> toDouble() const;
     Result<int32_t> toInt() const;
     Result<uint32_t> toUint() const;
-    Result<std::vector<ScriptValue>> toVector() const;
+    Result<std::vector<ScriptValue>> toArray() const;
     Result<std::vector<std::pair<std::string, ScriptValue>>> toObject() const;
     Result<std::unordered_map<std::string, ScriptValue>> toMap() const;
 
     void forEach(std::function<void(const ScriptValue &value, int idx)> function);
 
+    ScriptValue getProperty(JSAtom atom) const;
     ScriptValue getProperty(const std::string &name) const;
-    ScriptValue getProperty(uint32_t value) const;
+    ScriptValue getPropertyIdx(uint32_t value) const;
+    Result<void> setProperty(JSAtom atom, ScriptValue &&value);
     Result<void> setProperty(const std::string &name, ScriptValue &&value);
-    Result<void> setProperty(uint32_t idx, ScriptValue &&value);
+    Result<void> setPropertyIdx(uint32_t idx, ScriptValue &&value);
 
 private:
     std::optional<JSValue> mValue;

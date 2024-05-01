@@ -50,14 +50,24 @@ declare namespace spurv {
     export function setProcessHandler(
         handler: (event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => void
     ): void;
-    export function startProcess(arguments: string[], stdin: ArrayBuffer | string | undefined, flags: number): number;
+    export function startProcess(
+        arguments: string[],
+        env: Record<string, string> | undefined,
+        cwd: string | undefined,
+        stdin: ArrayBuffer | string | undefined,
+        flags: number
+    ): number | string;
     export function execProcess(
         arguments: string[],
+        env: Record<string, string> | undefined,
+        cwd: string | undefined,
         stdin: ArrayBuffer | string | undefined,
         flags: number
     ): NativeSynchronousProcessResult;
     export function writeToProcessStdin(id: number, data: ArrayBuffer | string): void;
     export function closeProcessStdin(id: number): void;
+    export function killProcess(pid: number, signal: number): void;
+    export function environ(): Record<string, string>;
 
     // unicode/buffers
 

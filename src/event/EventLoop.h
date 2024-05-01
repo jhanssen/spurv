@@ -64,7 +64,7 @@ public:
 
     virtual void* handle() const = 0;
 
-private:
+    private:
     std::mutex mMutex;
     std::vector<std::unique_ptr<Event>> mEvents;
 

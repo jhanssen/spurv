@@ -147,8 +147,13 @@ export class Process {
                 flags |= spurv.ProcessFlags.Strings;
             }
 
-            this.processId = spurv.startProcess(commandOrArgs, options?.stdin, flags);
-            processes.set(this.processId, data);
+            const ret = spurv.startProcess(commandOrArgs, options?.env, options?.cwd, options?.stdin, flags);
+            if (typeof ret === "string") {
+                reject(new Error(ret));
+            } else {
+                this.processId = ret;
+                processes.set(this.processId, data);
+            }
         });
     }
 

@@ -36,4 +36,3 @@ console.error("2", zot2);
 //     error("about to exit");
 //     exit(10);
 // }, 2000);
-

@@ -26,32 +26,32 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
     mGlobal = ScriptValue(JS_GetGlobalObject(mContext));
     initScriptBufferSourceIds();
     mSpurv = ScriptValue(std::vector<std::pair<std::string, ScriptValue>>());
-    mGlobal.setProperty("spurv", mSpurv.clone());
+    mGlobal.setProperty(mAtoms.spurv, mSpurv.clone());
 
-    bindSpurvFunction("log", &Builtins::log);
-    bindSpurvFunction("setProcessHandler", std::bind(&ScriptEngine::setProcessHandler, this, std::placeholders::_1));
-    bindSpurvFunction("startProcess", std::bind(&ScriptEngine::startProcess, this, std::placeholders::_1));
-    bindSpurvFunction("execProcess", std::bind(&ScriptEngine::execProcess, this, std::placeholders::_1));
-    bindSpurvFunction("writeToProcessStdin", std::bind(&ScriptEngine::writeToProcessStdin, this, std::placeholders::_1));
-    bindSpurvFunction("closeProcessStdin", std::bind(&ScriptEngine::closeProcessStdin, this, std::placeholders::_1));
-    bindSpurvFunction("utf8tostring", &Builtins::utf8tostring);
-    bindSpurvFunction("utf16tostring", &Builtins::utf16tostring);
-    bindSpurvFunction("utf16letostring", &Builtins::utf16letostring);
-    bindSpurvFunction("utf16betostring", &Builtins::utf16betostring);
-    bindSpurvFunction("utf32tostring", &Builtins::utf32tostring);
-    bindSpurvFunction("stringtoutf8", &Builtins::stringtoutf8);
-    bindSpurvFunction("stringtoutf16", &Builtins::stringtoutf16);
-    bindSpurvFunction("stringtoutf16le", &Builtins::stringtoutf16le);
-    bindSpurvFunction("stringtoutf16be", &Builtins::stringtoutf16be);
-    bindSpurvFunction("stringtoutf32", &Builtins::stringtoutf32);
-    bindSpurvFunction("setKeyEventHandler", std::bind(&ScriptEngine::setKeyEventHandler, this, std::placeholders::_1));
-    bindSpurvFunction("exit", std::bind(&ScriptEngine::exit, this, std::placeholders::_1));
-    bindGlobalFunction("setTimeout", std::bind(&ScriptEngine::setTimeout, this, std::placeholders::_1));
-    bindGlobalFunction("setInterval", std::bind(&ScriptEngine::setInterval, this, std::placeholders::_1));
-    bindGlobalFunction("clearTimeout", std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
-    bindGlobalFunction("clearInterval", std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
-    bindGlobalFunction("atob", &Builtins::atob);
-    bindGlobalFunction("btoa", &Builtins::btoa);
+    bindSpurvFunction(mAtoms.log, &Builtins::log);
+    bindSpurvFunction(mAtoms.setProcessHandler, std::bind(&ScriptEngine::setProcessHandler, this, std::placeholders::_1));
+    bindSpurvFunction(mAtoms.startProcess, std::bind(&ScriptEngine::startProcess, this, std::placeholders::_1));
+    bindSpurvFunction(mAtoms.execProcess, std::bind(&ScriptEngine::execProcess, this, std::placeholders::_1));
+    bindSpurvFunction(mAtoms.writeToProcessStdin, std::bind(&ScriptEngine::writeToProcessStdin, this, std::placeholders::_1));
+    bindSpurvFunction(mAtoms.closeProcessStdin, std::bind(&ScriptEngine::closeProcessStdin, this, std::placeholders::_1));
+    bindSpurvFunction(mAtoms.utf8tostring, &Builtins::utf8tostring);
+    bindSpurvFunction(mAtoms.utf16tostring, &Builtins::utf16tostring);
+    bindSpurvFunction(mAtoms.utf16letostring, &Builtins::utf16letostring);
+    bindSpurvFunction(mAtoms.utf16betostring, &Builtins::utf16betostring);
+    bindSpurvFunction(mAtoms.utf32tostring, &Builtins::utf32tostring);
+    bindSpurvFunction(mAtoms.stringtoutf8, &Builtins::stringtoutf8);
+    bindSpurvFunction(mAtoms.stringtoutf16, &Builtins::stringtoutf16);
+    bindSpurvFunction(mAtoms.stringtoutf16le, &Builtins::stringtoutf16le);
+    bindSpurvFunction(mAtoms.stringtoutf16be, &Builtins::stringtoutf16be);
+    bindSpurvFunction(mAtoms.stringtoutf32, &Builtins::stringtoutf32);
+    bindSpurvFunction(mAtoms.setKeyEventHandler, std::bind(&ScriptEngine::setKeyEventHandler, this, std::placeholders::_1));
+    bindSpurvFunction(mAtoms.exit, std::bind(&ScriptEngine::exit, this, std::placeholders::_1));
+    bindGlobalFunction(mAtoms.setTimeout, std::bind(&ScriptEngine::setTimeout, this, std::placeholders::_1));
+    bindGlobalFunction(mAtoms.setInterval, std::bind(&ScriptEngine::setInterval, this, std::placeholders::_1));
+    bindGlobalFunction(mAtoms.clearTimeout, std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
+    bindGlobalFunction(mAtoms.clearInterval, std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
+    bindGlobalFunction(mAtoms.atob, &Builtins::atob);
+    bindGlobalFunction(mAtoms.btoa, &Builtins::btoa);
 
     const std::filesystem::path file = mAppPath / "../src/typescript/dist/spurv.js";
     auto ret = eval(file);
@@ -91,10 +91,119 @@ ScriptValue ScriptEngine::setProcessHandler(std::vector<ScriptValue> &&args)
     return {};
 }
 
+namespace {
+void cleanupOptions(uv_process_options_s options)
+{
+    if (options.env) {
+        for (size_t i=0; options.env[i]; ++i) {
+            free(options.env[i]);
+        }
+        delete[] options.env;
+    }
+
+    if (options.args) {
+        for (size_t i=0; options.args[i]; ++i) {
+            free(options.args[i]);
+        }
+        delete[] options.args;
+    }
+}
+} // anonymous namespace
+
 ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
 {
-    static_cast<void>(args);
-    return {};
+    if (args.empty() || !args[0].isArray()) {
+        return ScriptValue::makeError("Invalid arguments");
+    }
+
+    uv_process_options_s options = {};
+
+    if (args.size() > 1) {
+        if (!args[1].isNullOrUndefined()) {
+            if (!args[1].isObject()) {
+                return ScriptValue::makeError("Invalid env argument");
+            }
+            auto vec = *args[1].toObject();
+            options.env = new char*[vec.size() + 1];
+            options.env[vec.size()] = nullptr;
+            size_t i = 0;
+            for (std::pair<std::string, ScriptValue> &arg : vec) {
+                auto str = arg.second.toString();
+                if (!str.ok()) {
+                    cleanupOptions(options);
+                    return ScriptValue::makeError("Couldn't convert env argument with key " + arg.first);
+                }
+                options.env[i++] = strdup(fmt::format("{}={}", arg.first, str->c_str()).c_str());
+            }
+        }
+    }
+
+    std::string cwd;
+    if (args.size() > 2) {
+        if (!args[2].isNullOrUndefined()) {
+            auto cwdArg = args[2].toString();
+            if (cwdArg.ok()) {
+                cwd = *cwdArg;
+                options.cwd = cwd.c_str();
+            } else {
+                cleanupOptions(options);
+                return ScriptValue::makeError("Invalid cwd argument");
+            }
+        }
+    }
+
+    std::vector<unsigned char> pendingStdin;
+
+    if (args.size() > 3) {
+        if (args[2].isArrayBuffer() || args[3].isTypedArray()) {
+            auto data = *args[2].arrayBufferData(); // ### can this fail?
+            pendingStdin.resize(data.second);
+            memcpy(pendingStdin.data(), data.first, data.second);
+        } else if (!args[2].isNullOrUndefined()) {
+            auto str = args[2].toString();
+            if (!str.ok()) {
+                cleanupOptions(options);
+                return ScriptValue::makeError("Invalid stdin argument");
+            }
+            const auto string = *str;
+            pendingStdin.resize(string.size());
+            memcpy(pendingStdin.data(), string.c_str(), string.size());
+        }
+    }
+
+    const std::vector<ScriptValue> argv = *args[0].toArray();
+
+    options.args = new char*[argv.size() + 1];
+    memset(options.args, 0, sizeof(char *) * argv.size() + 1);
+
+    for (size_t i=0; i<argv.size(); ++i) {
+        auto str = argv[i].toString();
+        if (!str.ok()) {
+            cleanupOptions(options);
+            return ScriptValue::makeError("Invalid arguments");
+        }
+        options.args[i] = strdup(str->c_str());
+    }
+    options.file = options.args[0];
+    options.exit_cb = ScriptEngine::onProcessExit;
+
+    std::unique_ptr<ProcessData> data = std::make_unique<ProcessData>();
+    data->pendingStdin = std::move(pendingStdin);
+    // ### Need to handle stdin
+
+    const int ret = uv_spawn(static_cast<uv_loop_t *>(mEventLoop->handle()), &data->proc, &options);
+    if (ret) {
+        // failed to launch
+        const char *err = uv_strerror(ret);
+        assert(err);
+        std::string error = fmt::format("Failed to launch {}: {}", options.file, err);
+        cleanupOptions(options);
+        return ScriptValue(error);
+    }
+    cleanupOptions(options);
+    const int pid = data->proc.pid;
+    mProcesses.push_back(std::move(data));
+    return ScriptValue(pid);
 }
 
 ScriptValue ScriptEngine::execProcess(std::vector<ScriptValue> &&args)
@@ -115,6 +224,21 @@ ScriptValue ScriptEngine::closeProcessStdin(std::vector<ScriptValue> &&args)
     return {};
 }
 
+ScriptValue ScriptEngine::killProcess(std::vector<ScriptValue> &&args)
+{
+    if (args.size() < 2 || !args[0].isInt() || !args[1].isInt()) {
+        return ScriptValue::makeError("Invalid arguments");
+    }
+
+    auto it = findProcessByPid(*args[0].toInt());
+    if (it == mProcesses.end()) {
+        return ScriptValue::makeError("Can't find process");
+    }
+
+    uv_process_kill(&(*it)->proc, *args[1].toInt());
+    return {};
+}
+
 void ScriptEngine::onKey(int key, int scancode, int action, int mods)
 {
     if (!mKeyHandler.isFunction()) {
@@ -123,10 +247,10 @@ void ScriptEngine::onKey(int key, int scancode, int action, int mods)
         return;
     }
     ScriptValue object(ScriptValue::Object);
-    object.setProperty("key", ScriptValue(key));
-    object.setProperty("scancode", ScriptValue(scancode));
-    object.setProperty("action", ScriptValue(action));
-    object.setProperty("mods", ScriptValue(mods));
+    object.setProperty(mAtoms.key, ScriptValue(key));
+    object.setProperty(mAtoms.scancode, ScriptValue(scancode));
+    object.setProperty(mAtoms.action, ScriptValue(action));
+    object.setProperty(mAtoms.mods, ScriptValue(mods));
     mKeyHandler.call(object);
 }
 
@@ -164,16 +288,16 @@ ScriptValue ScriptEngine::bindFunction(ScriptValue::Function &&function)
     return ret;
 }
 
-void ScriptEngine::bindSpurvFunction(const std::string &name, ScriptValue::Function &&function)
+void ScriptEngine::bindSpurvFunction(JSAtom atom, ScriptValue::Function &&function)
 {
     ScriptValue func = bindFunction(std::move(function));
-    mSpurv.setProperty(name, std::move(func));
+    mSpurv.setProperty(atom, std::move(func));
 }
 
-void ScriptEngine::bindGlobalFunction(const std::string &name, ScriptValue::Function &&function)
+void ScriptEngine::bindGlobalFunction(JSAtom atom, ScriptValue::Function &&function)
 {
     ScriptValue func = bindFunction(std::move(function));
-    mGlobal.setProperty(name, std::move(func));
+    mGlobal.setProperty(atom, std::move(func));
 }
 
 void ScriptEngine::initScriptBufferSourceIds()
@@ -212,6 +336,17 @@ EventEmitter<void(int)>& ScriptEngine::onExit()
     return mOnExit;
 }
 
+std::vector<std::unique_ptr<ScriptEngine::ProcessData>>::iterator ScriptEngine::findProcessByPid(int pid)
+{
+    for (auto it = mProcesses.begin(); it != mProcesses.end(); ++it) {
+        if ((*it)->proc.pid == pid) {
+            return it;
+        }
+    }
+    return mProcesses.end();
+}
+
+// static
 JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int magic, JSValue *)
 {
     ScriptEngine *that = ScriptEngine::scriptEngine();
@@ -233,6 +368,32 @@ JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst, int argc, JSValue
         return ret.leakValue();
     }
     return *ScriptValue::undefined();
+}
+
+// static
+void ScriptEngine::onProcessExit(uv_process_t *proc, int64_t exit_status, int term_signal)
+{
+    ScriptEngine *that = ScriptEngine::scriptEngine();
+    assert(that);
+    for (auto it = that->mProcesses.begin(); it != that->mProcesses.end(); ++it) {
+        if (&(*it)->proc == proc) {
+            that->mProcesses.erase(it);
+            if (that->mProcessHandler.isFunction()) {
+                ScriptValue object(ScriptValue::Object);
+                object.setProperty(that->mAtoms.type, ScriptValue("finished"));
+                object.setProperty(that->mAtoms.pid, ScriptValue(proc->pid));
+                assert(exit_status <= std::numeric_limits<int>::max() && exit_status >= std::numeric_limits<int>::min());
+                // ### term_signal ?
+                object.setProperty(that->mAtoms.exitCode, ScriptValue(static_cast<int>(exit_status)));
+                that->mProcessHandler.call(object);
+            }
+            uv_close(reinterpret_cast<uv_handle_t *>(proc), nullptr);
+            return;
+        }
+    }
+    spdlog::error("Couldn't find process with pid {} for onProcessExit wiht exit_status {} and term_signal {}",
+                  proc->pid, exit_status, term_signal);
+    uv_close(reinterpret_cast<uv_handle_t *>(proc), nullptr);
 }
 
 ScriptValue ScriptEngine::setKeyEventHandler(std::vector<ScriptValue> &&args)
@@ -318,3 +479,4 @@ ScriptValue ScriptEngine::exit(std::vector<ScriptValue> &&args)
     return {};
 }
 } // namespace spurv
+

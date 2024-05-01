@@ -57,6 +57,11 @@ ScriptValue::ScriptValue(const std::string &str)
 {
 }
 
+ScriptValue::ScriptValue(const char *str)
+    : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), str, strlen(str)))
+{
+}
+
 ScriptValue::ScriptValue(const char *str, size_t len)
     : mValue(JS_NewStringLen(ScriptEngine::scriptEngine()->context(), str, len))
 {
@@ -94,6 +99,17 @@ ScriptValue::ScriptValue(std::vector<std::pair<std::string, ScriptValue>> &&obje
     JSValue v = JS_NewObject(context);
     for (std::pair<std::string, ScriptValue> &value : object) {
         JS_SetPropertyStr(context, v, value.first.c_str(), value.second.leakValue());
+    }
+    mValue = v;
+}
+
+ScriptValue::ScriptValue(std::vector<std::pair<JSAtom, ScriptValue>> &&object)
+{
+    auto engine = ScriptEngine::scriptEngine();
+    auto context = engine->context();
+    JSValue v = JS_NewObject(context);
+    for (std::pair<JSAtom, ScriptValue> &value : object) {
+        JS_SetProperty(context, v, value.first, value.second.leakValue());
     }
     mValue = v;
 }
@@ -287,6 +303,14 @@ void ScriptValue::forEach(std::function<void(const ScriptValue &value, int idx)>
     }
 }
 
+ScriptValue ScriptValue::getProperty(JSAtom atom) const
+{
+    if (isObject()) {
+        return ScriptValue(JS_GetProperty(ScriptEngine::scriptEngine()->context(), *mValue, atom));
+    }
+    return ScriptValue();
+}
+
 ScriptValue ScriptValue::getProperty(const std::string &name) const
 {
     if (isObject()) {
@@ -295,12 +319,32 @@ ScriptValue ScriptValue::getProperty(const std::string &name) const
     return ScriptValue();
 }
 
-ScriptValue ScriptValue::getProperty(uint32_t value) const
+ScriptValue ScriptValue::getPropertyIdx(uint32_t value) const
 {
     if (isObject()) {
         return ScriptValue(JS_GetPropertyUint32(ScriptEngine::scriptEngine()->context(), *mValue, value));
     }
     return ScriptValue();
+}
+
+Result<void> ScriptValue::setProperty(JSAtom atom, ScriptValue &&value)
+{
+    ScriptEngine *engine = ScriptEngine::scriptEngine();
+    auto ctx = engine->context();
+    if (value && isObject()) {
+        if (JS_SetProperty(ctx, *mValue, atom, *value) == 1) {
+            value.leakValue();
+            return {};
+        }
+        auto name = JS_AtomToCString(ctx, atom);
+        const auto ret = spurv::makeError(fmt::format("Failed to set property {}", name));
+        JS_FreeCString(ctx, name);
+        return ret;
+    }
+    auto name = JS_AtomToCString(ctx, atom);
+    const auto ret = spurv::makeError(fmt::format("Failed to set property {}, value is not an object", name));
+    JS_FreeCString(ctx, name);
+    return ret;
 }
 
 Result<void> ScriptValue::setProperty(const std::string &name, ScriptValue &&value)
@@ -317,7 +361,7 @@ Result<void> ScriptValue::setProperty(const std::string &name, ScriptValue &&val
     return spurv::makeError(fmt::format("Failed to set property {}, value is not an object", name));
 }
 
-Result<void> ScriptValue::setProperty(uint32_t idx, ScriptValue &&value)
+Result<void> ScriptValue::setPropertyIdx(uint32_t idx, ScriptValue &&value)
 {
     if (value && isArray()) {
         ScriptEngine *engine = ScriptEngine::scriptEngine();
@@ -488,10 +532,10 @@ Result<uint32_t> ScriptValue::toUint() const
     return spurv::makeError("Invalid type for toUint");
 }
 
-Result<std::vector<ScriptValue>> ScriptValue::toVector() const
+Result<std::vector<ScriptValue>> ScriptValue::toArray() const
 {
     if (!isArray()) {
-        return spurv::makeError("Invalid type for toVector");
+        return spurv::makeError("Invalid type for toArray");
     }
 
     auto engine = ScriptEngine::scriptEngine();
