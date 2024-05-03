@@ -95,7 +95,9 @@ private:
     static JSValue classGetterSetterGetter(JSContext *ctx, JSValueConst this_val, int magic);
     static JSValue classGetterSetterSetter(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic);
     static JSValue classConstant(JSContext *ctx, JSValueConst this_val, int magic);
+    static JSValue classStaticConstant(JSContext *ctx, JSValueConst this_val, int magic);
     static JSValue classMethod(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
+    static JSValue classStaticMethod(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
 
     thread_local static ScriptEngine *tScriptEngine;
     EventLoop *mEventLoop;
@@ -131,12 +133,7 @@ private:
 
     struct ScriptClassData {
         std::string name;
-        std::vector<JSCFunctionListEntry> protoProperties;
-        enum {
-            FirstGetter = 0,
-            FirstGetterSetter = 4096,
-            FirstConstant = 8192
-        };
+        std::vector<JSCFunctionListEntry> protoProperties, staticProperties;
         struct Getter {
             std::string name;
             ScriptClass::Getter get;
@@ -158,8 +155,14 @@ private:
             ScriptClass::Method call;
         };
 
-        std::vector<Constant> constants;
+        std::vector<Constant> constants, staticConstants;
         std::vector<Method> methods;
+
+        struct StaticMethod {
+            std::string name;
+            ScriptClass::StaticMethod call;
+        };
+        std::vector<StaticMethod> staticMethods;
 
         ScriptValue prototype, constructor;
 

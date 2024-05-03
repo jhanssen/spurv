@@ -69,6 +69,7 @@ ScriptEngine::~ScriptEngine()
     mGlobal.clear();
     mProcessHandler.clear();
     mKeyHandler.clear();
+    mClasses.clear();
 
 #define ScriptAtom(atom)                        \
     JS_FreeAtom(mContext, mAtoms.atom);
@@ -362,6 +363,8 @@ bool ScriptEngine::addClass(ScriptClass &&clazz)
 
     // const auto &ctor = data->clazz.constructor();
     auto &properties = clazz.properties();
+    // ### should do this one without getter/setter shit
+    properties["__class_id__"] = ScriptValue(id);
     auto &methods = clazz.methods();
     data->protoProperties.resize(properties.size() + methods.size());
     memset(data->protoProperties.data(), 0, data->protoProperties.size() * sizeof(JSCFunctionListEntry));
@@ -391,19 +394,19 @@ bool ScriptEngine::addClass(ScriptClass &&clazz)
         if (std::holds_alternative<ScriptValue>(prop.second)) {
             protoProp.prop_flags &= ~JS_PROP_WRITABLE;
             protoProp.u.getset.get.getter_magic = &ScriptEngine::classConstant;
-            protoProp.magic = static_cast<int16_t>(ScriptClassData::FirstConstant + data->constants.size());
+            protoProp.magic = static_cast<int16_t>(data->constants.size());
             data->constants.push_back({ std::move(prop.first), std::get<ScriptValue>(std::move(prop.second)) });
             protoProp.name = data->constants.back().name.c_str();
         } else if (std::holds_alternative<ScriptClass::Getter>(prop.second)) {
             protoProp.prop_flags &= ~JS_PROP_WRITABLE;
             protoProp.u.getset.get.getter_magic = &ScriptEngine::classGetter;
-            protoProp.magic = static_cast<int16_t>(ScriptClassData::FirstGetter + data->getters.size());
+            protoProp.magic = static_cast<int16_t>(data->getters.size());
             data->getters.push_back({ std::move(prop.first), std::get<ScriptClass::Getter>(std::move(prop.second)) });
             protoProp.name = data->getters.back().name.c_str();
         } else {
             protoProp.u.getset.get.getter_magic = &ScriptEngine::classGetter;
             protoProp.u.getset.set.setter_magic = &ScriptEngine::classGetterSetterSetter;
-            protoProp.magic = static_cast<int16_t>(ScriptClassData::FirstGetterSetter + data->getterSetters.size());
+            protoProp.magic = static_cast<int16_t>(data->getterSetters.size());
             std::pair<ScriptClass::Getter, ScriptClass::Setter> getterSetter = std::get<std::pair<ScriptClass::Getter, ScriptClass::Setter>>(std::move(prop.second));
             data->getterSetters.push_back({ std::move(prop.first), std::move(getterSetter.first), std::move(getterSetter.second) });
             protoProp.name = data->getterSetters.back().name.c_str();
@@ -431,9 +434,41 @@ bool ScriptEngine::addClass(ScriptClass &&clazz)
 
     const int magic = ++mMagic;
     data->constructor = ScriptValue(JS_NewCFunctionData(mContext, constructHelper, 0, magic, 0, nullptr));
+
+    auto &staticProperties = clazz.staticProperties();
+    auto &staticMethods = clazz.staticMethods();
+    data->staticProperties.resize(staticProperties.size() + staticMethods.size());
+    memset(data->staticProperties.data(), 0, data->staticProperties.size() * sizeof(JSCFunctionListEntry));
+
+    data->staticConstants.reserve(staticProperties.size());
+    for (auto &prop : staticProperties) {
+        auto &staticProp = data->staticProperties[idx++];
+        staticProp.prop_flags = JS_PROP_C_W_E;
+        staticProp.def_type = JS_DEF_CGETSET_MAGIC;
+        staticProp.prop_flags &= ~JS_PROP_WRITABLE;
+        staticProp.u.getset.get.getter_magic = &ScriptEngine::classStaticConstant;
+        staticProp.magic = static_cast<int16_t>(data->constants.size());
+        data->staticConstants.push_back({ std::move(prop.first), std::move(prop.second) });
+        staticProp.name = data->staticConstants.back().name.c_str();
+    }
+
+    data->staticMethods.reserve(staticMethods.size());
+    for (auto &method : staticMethods) {
+        auto &staticProp = data->staticProperties[idx++];
+        staticProp.prop_flags = JS_PROP_C_W_E;
+        staticProp.def_type = JS_DEF_CFUNC;
+        staticProp.magic = static_cast<int16_t>(data->methods.size());
+        auto &func = staticProp.u.func;
+        func.length = 1;
+        func.cproto = JS_CFUNC_generic_magic;
+        func.cfunc.generic_magic = &ScriptEngine::classStaticMethod;
+        data->staticMethods.push_back({ std::move(method.first), std::move(method.second) });
+        staticProp.name = data->methods.back().name.c_str();
+    }
+
     JS_SetConstructorBit(mContext, *data->constructor, 1);
     JS_SetConstructor(mContext, *data->constructor, *data->prototype);
-    JS_SetClassProto(mContext, id, *data->prototype);
+    JS_SetClassProto(mContext, id, JS_DupValue(mContext, *data->prototype));
 
     mConstructors[magic] = id;
 
@@ -597,13 +632,12 @@ JSValue ScriptEngine::classGetter(JSContext *ctx, JSValueConst this_val, int mag
         return JS_ThrowTypeError(ctx, "Class can't be found %s", fmt::format("{} vs {}", id, keys(that->mClasses)).c_str());
     }
 
-    const size_t offset = magic - ScriptEngine::ScriptClassData::FirstGetter;
-    if (offset >= it->second->getters.size()) {
+    if (static_cast<size_t>(magic) >= it->second->getters.size()) {
         return JS_ThrowTypeError(ctx, "Property can't be found");
     }
 
     ScriptClassInstance *instance = static_cast<ScriptClassInstance *>(JS_GetOpaque(this_val, id));
-    ScriptValue ret = it->second->getters[offset].get(instance);
+    ScriptValue ret = it->second->getters[magic].get(instance);
     if (ret) {
         if (ret.isError()) {
             return JS_Throw(that->mContext, ret.leakValue());
@@ -628,13 +662,12 @@ JSValue ScriptEngine::classGetterSetterGetter(JSContext *ctx, JSValueConst this_
         return JS_ThrowTypeError(ctx, "Class can't be found %s", fmt::format("{} vs {}", id, keys(that->mClasses)).c_str());
     }
 
-    const size_t offset = magic - ScriptEngine::ScriptClassData::FirstGetterSetter;
-    if (offset >= it->second->getterSetters.size()) {
+    if (static_cast<size_t>(magic) >= it->second->getterSetters.size()) {
         return JS_ThrowTypeError(ctx, "Property can't be found");
     }
 
     ScriptClassInstance *instance = static_cast<ScriptClassInstance *>(JS_GetOpaque(this_val, id));
-    ScriptValue ret = it->second->getterSetters[offset].get(instance);
+    ScriptValue ret = it->second->getterSetters[magic].get(instance);
     if (ret) {
         if (ret.isError()) {
             return JS_Throw(that->mContext, ret.leakValue());
@@ -659,12 +692,11 @@ JSValue ScriptEngine::classConstant(JSContext *ctx, JSValueConst this_val, int m
         return JS_ThrowTypeError(ctx, "Class can't be found %s", fmt::format("{} vs {}", id, keys(that->mClasses)).c_str());
     }
 
-    const size_t offset = magic - ScriptEngine::ScriptClassData::FirstConstant;
-    if (offset >= it->second->constants.size()) {
+    if (static_cast<size_t>(magic) >= it->second->constants.size()) {
         return JS_ThrowTypeError(ctx, "Property can't be found");
     }
 
-    ScriptValue ret = it->second->constants[offset].value.clone();
+    ScriptValue ret = it->second->constants[magic].value.clone();
     if (ret) {
         if (ret.isError()) {
             return JS_Throw(that->mContext, ret.leakValue());
@@ -673,6 +705,44 @@ JSValue ScriptEngine::classConstant(JSContext *ctx, JSValueConst this_val, int m
     }
     return *ScriptValue::undefined();
 }
+
+// static
+JSValue ScriptEngine::classStaticConstant(JSContext *ctx, JSValueConst this_val, int magic)
+{
+    ScriptEngine *const that = ScriptEngine::scriptEngine();
+    ScriptValue proto(JS_GetPrototype(ctx, this_val));
+    // ### should have this on the constructor itself as well
+    const JSClassID id = proto.getProperty(that->mAtoms.__class_id__);
+    auto it = that->mClasses.find(id);
+    if (it == that->mClasses.end()) {
+        return JS_ThrowTypeError(ctx, "Class can't be found %s", fmt::format("{} vs {}", id, keys(that->mClasses)).c_str());
+    }
+
+    if (static_cast<size_t>(magic) >= it->second->staticConstants.size()) {
+        return JS_ThrowTypeError(ctx, "Property can't be found");
+    }
+
+    ScriptValue ret = it->second->staticConstants[magic].value.clone();
+    if (ret) {
+        if (ret.isError()) {
+            return JS_Throw(that->mContext, ret.leakValue());
+        }
+        return ret.leakValue();
+    }
+    return *ScriptValue::undefined();
+}
+
+// static
+JSValue ScriptEngine::classStaticMethod(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic)
+{
+    static_cast<void>(ctx);
+    static_cast<void>(this_val);
+    static_cast<void>(argc);
+    static_cast<void>(argv);
+    static_cast<void>(magic);
+    return {};
+}
+
 
 // static
 JSValue ScriptEngine::classGetterSetterSetter(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic)
@@ -685,14 +755,14 @@ JSValue ScriptEngine::classGetterSetterSetter(JSContext *ctx, JSValueConst this_
         return JS_ThrowTypeError(ctx, "Class can't be found");
     }
 
-    const size_t offset = magic - ScriptEngine::ScriptClassData::FirstGetterSetter;
-    if (offset >= it->second->getterSetters.size()) {
+
+    if (static_cast<size_t>(magic) >= it->second->getterSetters.size()) {
         return JS_ThrowTypeError(ctx, "Property can't be found");
     }
 
     ScriptClassInstance *instance = static_cast<ScriptClassInstance *>(JS_GetOpaque(this_val, id));
     ScriptValue value(JS_DupValue(ctx, val));
-    std::optional<std::string> ret = it->second->getterSetters[offset].set(instance, std::move(value));
+    std::optional<std::string> ret = it->second->getterSetters[magic].set(instance, std::move(value));
     if (ret) {
         return JS_ThrowTypeError(ctx, "Failed to set property %s on %s: %s",
                                  it->second->name.c_str(), it->second->name.c_str(), ret->c_str());
