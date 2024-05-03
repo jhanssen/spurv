@@ -87,8 +87,8 @@ private:
 
     struct ProcessData;
     std::vector<std::unique_ptr<ProcessData>>::iterator findProcessByPid(int pid);
-    static JSValue bindHelper(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *);
-    static JSValue constructHelper(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *);
+    static JSValue bindHelper(JSContext *ctx, JSValueConst functionVal, int argc, JSValueConst *argv, int magic, JSValue *);
+    static JSValue constructHelper(JSContext *ctx, JSValueConst functionVal, int argc, JSValueConst *argv, int magic, JSValue *);
     static void onProcessExit(uv_process_t *proc, int64_t exit_status, int term_signal);
     static void finalizeClassInstance(JSRuntime *rt, JSValue val);
     static JSValue classGetter(JSContext *ctx, JSValueConst this_val, int magic);
@@ -131,16 +131,39 @@ private:
 
     struct ScriptClassData {
         std::string name;
+        std::vector<JSCFunctionListEntry> protoProperties;
         enum {
             FirstGetter = 0,
             FirstGetterSetter = 4096,
             FirstConstant = 8192
         };
-        std::vector<std::pair<std::string, ScriptClass::Getter>> getters;
-        std::vector<std::pair<std::string, std::pair<ScriptClass::Getter, ScriptClass::Setter>>> getterSetters;
-        std::vector<std::pair<std::string, ScriptValue>> constants;
-        std::vector<std::pair<std::string, ScriptClass::Method>> methods;
-        ScriptClass::Constructor constructor;
+        struct Getter {
+            std::string name;
+            ScriptClass::Getter get;
+        };
+        std::vector<Getter> getters;
+        struct GetterSetter {
+            std::string name;
+            ScriptClass::Getter get;
+            ScriptClass::Setter set;
+        };
+        std::vector<GetterSetter> getterSetters;
+        struct Constant {
+            std::string name;
+            ScriptValue value;
+        };
+
+        struct Method {
+            std::string name;
+            ScriptClass::Method call;
+        };
+
+        std::vector<Constant> constants;
+        std::vector<Method> methods;
+
+        ScriptValue prototype, constructor;
+
+        ScriptClass::Constructor construct;
     };
 
     std::unordered_map<JSClassID, std::unique_ptr<ScriptClassData>> mClasses;

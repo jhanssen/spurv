@@ -9,6 +9,9 @@ installConsole();
 let view: spurv.View | undefined;
 spurv.setKeyEventHandler((event: spurv.KeyEvent) => {
     try {
+        // console.error(spurv.View.prototype);
+        // console.error(spurv.View.prototype.constructor);
+        // console.error(spurv.View.prototype.constructor === spurv.View);
         console.error("got key event", JSON.stringify(event, undefined, 4));
         if (event.action !== 1) {
             return;
@@ -20,6 +23,10 @@ spurv.setKeyEventHandler((event: spurv.KeyEvent) => {
             if (!view) {
                 view = new spurv.View();
             }
+            console.log("shat", spurv.View.prototype === Object.getPrototypeOf(view),
+                // Object.keys(Object.getPrototypeOf(view)),
+                Object.keys(spurv.View.prototype));
+
             console.log("Scrolling up", typeof view, view, view.currentLine, JSON.stringify(Object.getPrototypeOf(view)));
             view.scrollUp();
         } else if (event.key === 264) { // down

@@ -6,6 +6,7 @@
     ScriptAtom(clearInterval)                   \
     ScriptAtom(clearTimeout)                    \
     ScriptAtom(closeProcessStdin)               \
+    ScriptAtom(constructor)                     \
     ScriptAtom(execProcess)                     \
     ScriptAtom(exit)                            \
     ScriptAtom(exitCode)                        \
