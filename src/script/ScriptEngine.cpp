@@ -709,6 +709,7 @@ JSValue ScriptEngine::classConstant(JSContext *ctx, JSValueConst this_val, int m
 // static
 JSValue ScriptEngine::classStaticConstant(JSContext *ctx, JSValueConst this_val, int magic)
 {
+    // ### maybe just create a function with JS_NewCFunctionData and have more than one piece of userdata
     ScriptEngine *const that = ScriptEngine::scriptEngine();
     ScriptValue proto(JS_GetPrototype(ctx, this_val));
     // ### should have this on the constructor itself as well
