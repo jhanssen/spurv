@@ -2,12 +2,14 @@ import { Process } from "./Process";
 import { assert } from "./assert";
 import { installConsole } from "./installConsole";
 import { test } from "./test";
+import type { ProcessStderrEvent } from "./ProcessStderrEvent";
+import type { ProcessStdoutEvent } from "./ProcessStdoutEvent";
 
 Object.defineProperty(globalThis, "Process", Process);
 installConsole();
 
 let view: spurv.View | undefined;
-spurv.setKeyEventHandler((event: spurv.KeyEvent) => {
+spurv.setKeyEventHandler(async (event: spurv.KeyEvent): Promise<void> => {
     try {
         // console.error(spurv.View.prototype);
         // console.error(spurv.View.prototype.constructor);
@@ -48,6 +50,22 @@ spurv.setKeyEventHandler((event: spurv.KeyEvent) => {
             }
             console.log("Scrolling down", view.currentLine, typeof spurv.View);
             view.scrollDown();
+        } else if (event.key === spurv.Key.P) {
+            console.log("trying process");
+            const proc = new Process();
+            proc.on("stdout", (stdoutEv: ProcessStdoutEvent) => {
+                console.log("got stdout", stdoutEv.data, stdoutEv.end);
+            });
+            proc.on("stderr", (stderrEv: ProcessStderrEvent) => {
+                console.error("got stderr", stderrEv.data, stderrEv.end);
+            });
+
+            try {
+                const ret = await proc.start(["find", "/tmp"], { strings: true, stdout: true, stderr: true });
+                console.log("got ret", ret);
+            } catch (err: unknown) {
+                console.error("got err", err);
+            }
         }
     } catch (err: unknown) {
         console.error("Got some error here", err);

@@ -147,7 +147,9 @@ export class Process {
                 flags |= spurv.ProcessFlags.Strings;
             }
 
+            console.log("startProcess", commandOrArgs, options, flags);
             const ret = spurv.startProcess(commandOrArgs, options?.env, options?.cwd, options?.stdin, flags);
+            console.log("got ret", ret);
             if (typeof ret === "string") {
                 reject(new Error(ret));
             } else {
