@@ -52,6 +52,7 @@ function spawn(command, args, options) {
             }
         });
         proc.stderr.on("data", onStderr);
+        proc.stdout.on("data", onStderr);
     });
 }
 
@@ -122,18 +123,23 @@ async function rollup() {
 }
 
 (async function () {
-    const src_package_json_stat = await stat(src_package_json);
-    const build_package_json_stat = await stat(build_package_json);
-    // console.log(src_package_json_stat, build_package_json_stat);
-    if (!src_package_json_stat) {
-        throw new Error(`Can't stat ${src_package_json}`);
+    try {
+        const src_package_json_stat = await stat(src_package_json);
+        const build_package_json_stat = await stat(build_package_json);
+        // console.log(src_package_json_stat, build_package_json_stat);
+        if (!src_package_json_stat) {
+            throw new Error(`Can't stat ${src_package_json}`);
+        }
+
+        if (src_package_json_stat > build_package_json_stat) {
+            await npm_install();
+        }
+
+        await Promise.all([copyTsConfig(), copyRollupConfig()]);
+
+        await Promise.all([rollup(), eslint()]);
+    } catch (err) {
+        console.error(err.message);
+        process.exit(1);
     }
-
-    if (src_package_json_stat > build_package_json_stat) {
-        await npm_install();
-    }
-
-    await Promise.all([copyTsConfig(), copyRollupConfig()]);
-
-    await Promise.all([rollup(), eslint()]);
 })();
