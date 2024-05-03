@@ -12,6 +12,7 @@
 #include "ScriptValue.h"
 #include "ScriptAtoms.h"
 #include "ScriptBufferSource.h"
+#include "ScriptClass.h"
 
 namespace spurv {
 class ScriptEngine
@@ -35,6 +36,7 @@ public:
     ScriptValue bindFunction(ScriptValue::Function &&function);
     void bindSpurvFunction(JSAtom atom, ScriptValue::Function &&function);
     void bindGlobalFunction(JSAtom atom, ScriptValue::Function &&function);
+    bool addClass(ScriptClass &&clazz);
 
     EventEmitter<void(int)>& onExit();
 
@@ -86,7 +88,14 @@ private:
     struct ProcessData;
     std::vector<std::unique_ptr<ProcessData>>::iterator findProcessByPid(int pid);
     static JSValue bindHelper(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *);
+    static JSValue constructHelper(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *);
     static void onProcessExit(uv_process_t *proc, int64_t exit_status, int term_signal);
+    static void finalizeClassInstance(JSRuntime *rt, JSValue val);
+    static JSValue classGetter(JSContext *ctx, JSValueConst this_val, int magic);
+    static JSValue classGetterSetterGetter(JSContext *ctx, JSValueConst this_val, int magic);
+    static JSValue classGetterSetterSetter(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic);
+    static JSValue classConstant(JSContext *ctx, JSValueConst this_val, int magic);
+    static JSValue classMethod(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
 
     thread_local static ScriptEngine *tScriptEngine;
     EventLoop *mEventLoop;
@@ -119,6 +128,23 @@ private:
     };
 
     std::unordered_map<uint32_t, std::unique_ptr<TimerData>> mTimers;
+
+    struct ScriptClassData {
+        std::string name;
+        enum {
+            FirstGetter = 0,
+            FirstGetterSetter = 4096,
+            FirstConstant = 8192
+        };
+        std::vector<std::pair<std::string, ScriptClass::Getter>> getters;
+        std::vector<std::pair<std::string, std::pair<ScriptClass::Getter, ScriptClass::Setter>>> getterSetters;
+        std::vector<std::pair<std::string, ScriptValue>> constants;
+        std::vector<std::pair<std::string, ScriptClass::Method>> methods;
+        ScriptClass::Constructor constructor;
+    };
+
+    std::unordered_map<JSClassID, std::unique_ptr<ScriptClassData>> mClasses;
+    std::unordered_map<int, JSClassID> mConstructors;
 
     JSRuntime *mRuntime = nullptr;
     JSContext *mContext = nullptr;

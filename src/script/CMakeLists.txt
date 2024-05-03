@@ -2,6 +2,7 @@ set(SOURCES
     Builtins.cpp
     ScriptEngine.cpp
     ScriptValue.cpp
+    ScriptClass.cpp
 )
 
 add_library(spurv-script OBJECT ${SOURCES})
