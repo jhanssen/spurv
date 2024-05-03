@@ -309,6 +309,7 @@ Result<void> ScriptEngine::eval(const std::filesystem::path &file)
 
 Result<void> ScriptEngine::eval(const std::string &url, const std::string &source)
 {
+    CallScope scope(this);
     ScriptValue ret(JS_Eval(mContext, source.c_str(), source.size(), url.c_str(), JS_EVAL_TYPE_GLOBAL));
 
     if (ret.isException()) {
@@ -911,4 +912,9 @@ ScriptEngine::ProcessData::~ProcessData()
     }
 
 }
+void ScriptEngine::executeMicrotasks()
+{
+}
+
 } // namespace spurv
+

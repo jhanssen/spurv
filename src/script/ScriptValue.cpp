@@ -167,7 +167,8 @@ void ScriptValue::clear()
 ScriptValue ScriptValue::call()
 {
     if (isFunction()) {
-        ScriptValue ret(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(), 0, nullptr));
+        ScriptEngine::CallScope scope(ScriptEngine::scriptEngine());
+        ScriptValue ret(JS_Call(scope.context, *mValue, *ScriptValue::undefined(), 0, nullptr));
         if (ret.isException()) {
             spdlog::error("Got exception from ScriptValue::call(): {}", ret.toString());
         }
@@ -185,7 +186,8 @@ ScriptValue ScriptValue::call(const std::vector<ScriptValue> &args)
         for (const ScriptValue &val : args) {
             argv[i++] = *val;
         }
-        ScriptValue ret(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(),
+        ScriptEngine::CallScope scope(ScriptEngine::scriptEngine());
+        ScriptValue ret(JS_Call(scope.context, *mValue, *ScriptValue::undefined(),
                                 argv.size(), argv.data()));
         if (ret.isException()) {
             spdlog::error("Got exception from ScriptValue::call(std::vector<ScriptValue>): {}", ret.toString());
@@ -199,12 +201,13 @@ ScriptValue ScriptValue::call(const std::vector<ScriptValue> &args)
 ScriptValue ScriptValue::call(const ScriptValue &arg)
 {
     if (isFunction()) {
+        ScriptEngine::CallScope scope(ScriptEngine::scriptEngine());
         if (arg.isValid()) {
             JSValue value = *arg;
-            return ScriptValue(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(),
+            return ScriptValue(JS_Call(scope.context, *mValue, *ScriptValue::undefined(),
                                        1, &value));
         }
-        ScriptValue ret(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(), 0, nullptr));
+        ScriptValue ret(JS_Call(scope.context, *mValue, *ScriptValue::undefined(), 0, nullptr));
         if (ret.isException()) {
             spdlog::error("Got exception from ScriptValue::call(ScriptValue): {}", ret.toString());
         }
@@ -216,7 +219,8 @@ ScriptValue ScriptValue::call(const ScriptValue &arg)
 ScriptValue ScriptValue::construct()
 {
     if (isConstructor()) {
-        ScriptValue ret(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, 0, nullptr));
+        ScriptEngine::CallScope scope(ScriptEngine::scriptEngine());
+        ScriptValue ret(JS_CallConstructor(scope.context, *mValue, 0, nullptr));
         if (ret.isException()) {
             spdlog::error("Got exception from ScriptValue::construct(): {}", ret.toString());
         }
@@ -234,7 +238,8 @@ ScriptValue ScriptValue::construct(const std::vector<ScriptValue> &args)
         for (const ScriptValue &val : args) {
             argv[i++] = *val;
         }
-        ScriptValue ret(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, argv.size(), argv.data()));
+        ScriptEngine::CallScope scope(ScriptEngine::scriptEngine());
+        ScriptValue ret(JS_CallConstructor(scope.context, *mValue, argv.size(), argv.data()));
         if (ret.isException()) {
             spdlog::error("Got exception from ScriptValue::construct(std::vector<ScriptValue>): {}", ret.toString());
         }
@@ -247,15 +252,16 @@ ScriptValue ScriptValue::construct(const std::vector<ScriptValue> &args)
 ScriptValue ScriptValue::construct(const ScriptValue &arg)
 {
     if (isConstructor()) {
+        ScriptEngine::CallScope scope(ScriptEngine::scriptEngine());
         if (arg.isValid()) {
             JSValue value = *arg;
-            ScriptValue ret(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, 1, &value));
+            ScriptValue ret(JS_CallConstructor(scope.context, *mValue, 1, &value));
             if (ret.isException()) {
                 spdlog::error("Got exception from ScriptValue::construct(ScriptValue): {}", ret.toString());
             }
             return ret;
         }
-        ScriptValue ret(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, 0, nullptr));
+        ScriptValue ret(JS_CallConstructor(scope.context, *mValue, 0, nullptr));
         if (ret.isException()) {
             spdlog::error("Got exception from ScriptValue::call(): {}", ret.toString());
         }

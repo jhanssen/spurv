@@ -41,7 +41,32 @@ public:
     EventEmitter<void(int)>& onExit();
 
 private:
+    friend class ScriptValue;
+    class CallScope
+    {
+    public:
+        CallScope(ScriptEngine *e)
+            : engine(e), context(e->mContext)
+        {
+            ++engine->mCallDepth;
+        }
+
+        ~CallScope()
+        {
+            assert(engine->mCallDepth > 0);
+            if (!--engine->mCallDepth) {
+                engine->executeMicrotasks();
+            }
+        }
+
+        ScriptEngine *const engine;
+        JSContext *context;
+    };
+
+    size_t mCallDepth { 0 };
+
     void initScriptBufferSourceIds();
+    void executeMicrotasks();
 
     // setProcessHandler(handler: (event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => void): void;
     ScriptValue setProcessHandler(std::vector<ScriptValue> &&args);
