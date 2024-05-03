@@ -363,8 +363,6 @@ bool ScriptEngine::addClass(ScriptClass &&clazz)
 
     // const auto &ctor = data->clazz.constructor();
     auto &properties = clazz.properties();
-    // ### should do this one without getter/setter shit
-    properties["__class_id__"] = ScriptValue(id);
     auto &methods = clazz.methods();
     data->protoProperties.resize(properties.size() + methods.size());
     memset(data->protoProperties.data(), 0, data->protoProperties.size() * sizeof(JSCFunctionListEntry));
@@ -440,30 +438,36 @@ bool ScriptEngine::addClass(ScriptClass &&clazz)
     data->staticProperties.resize(staticProperties.size() + staticMethods.size());
     memset(data->staticProperties.data(), 0, data->staticProperties.size() * sizeof(JSCFunctionListEntry));
 
-    data->staticConstants.reserve(staticProperties.size());
+    idx = 0;
     for (auto &prop : staticProperties) {
         auto &staticProp = data->staticProperties[idx++];
         staticProp.prop_flags = JS_PROP_C_W_E;
         staticProp.def_type = JS_DEF_CGETSET_MAGIC;
         staticProp.prop_flags &= ~JS_PROP_WRITABLE;
         staticProp.u.getset.get.getter_magic = &ScriptEngine::classStaticConstant;
-        staticProp.magic = static_cast<int16_t>(data->constants.size());
-        data->staticConstants.push_back({ std::move(prop.first), std::move(prop.second) });
-        staticProp.name = data->staticConstants.back().name.c_str();
+        staticProp.magic = static_cast<int16_t>(mStaticClassConstants.size());
+        auto constant = std::make_unique<ScriptClassData::Constant>();
+        constant->name = std::move(prop.first);
+        constant->value = std::move(prop.second);
+        staticProp.name = constant->name.c_str();
+        mStaticClassConstants.push_back(std::move(constant));
     }
 
-    data->staticMethods.reserve(staticMethods.size());
     for (auto &method : staticMethods) {
         auto &staticProp = data->staticProperties[idx++];
         staticProp.prop_flags = JS_PROP_C_W_E;
         staticProp.def_type = JS_DEF_CFUNC;
-        staticProp.magic = static_cast<int16_t>(data->methods.size());
+        // ### is 2^31 enough static functions?
+        staticProp.magic = static_cast<int16_t>(mStaticClassMethods.size());
         auto &func = staticProp.u.func;
         func.length = 1;
         func.cproto = JS_CFUNC_generic_magic;
         func.cfunc.generic_magic = &ScriptEngine::classStaticMethod;
-        data->staticMethods.push_back({ std::move(method.first), std::move(method.second) });
-        staticProp.name = data->methods.back().name.c_str();
+        auto staticMethod = std::make_unique<StaticMethod>();
+        staticMethod->name = std::move(method.first);
+        staticMethod->call = std::move(method.second);
+        staticProp.name = staticMethod->name.c_str();
+        mStaticClassMethods.push_back(std::move(staticMethod));
     }
 
     JS_SetConstructorBit(mContext, *data->constructor, 1);
@@ -707,26 +711,16 @@ JSValue ScriptEngine::classConstant(JSContext *ctx, JSValueConst this_val, int m
 }
 
 // static
-JSValue ScriptEngine::classStaticConstant(JSContext *ctx, JSValueConst this_val, int magic)
+JSValue ScriptEngine::classStaticConstant(JSContext *ctx, JSValueConst /*this_val*/, int magic)
 {
-    // ### maybe just create a function with JS_NewCFunctionData and have more than one piece of userdata
-    ScriptEngine *const that = ScriptEngine::scriptEngine();
-    ScriptValue proto(JS_GetPrototype(ctx, this_val));
-    // ### should have this on the constructor itself as well
-    const JSClassID id = proto.getProperty(that->mAtoms.__class_id__);
-    auto it = that->mClasses.find(id);
-    if (it == that->mClasses.end()) {
-        return JS_ThrowTypeError(ctx, "Class can't be found %s", fmt::format("{} vs {}", id, keys(that->mClasses)).c_str());
+    ScriptEngine *const engine = ScriptEngine::scriptEngine();
+    if (static_cast<size_t>(magic) >= engine->mStaticClassConstants.size()) {
+        return JS_ThrowTypeError(ctx, "Static property can't be found");
     }
-
-    if (static_cast<size_t>(magic) >= it->second->staticConstants.size()) {
-        return JS_ThrowTypeError(ctx, "Property can't be found");
-    }
-
-    ScriptValue ret = it->second->staticConstants[magic].value.clone();
+    ScriptValue ret = engine->mStaticClassConstants[magic]->value.clone();
     if (ret) {
         if (ret.isError()) {
-            return JS_Throw(that->mContext, ret.leakValue());
+            return JS_Throw(ctx, ret.leakValue());
         }
         return ret.leakValue();
     }
@@ -734,16 +728,28 @@ JSValue ScriptEngine::classStaticConstant(JSContext *ctx, JSValueConst this_val,
 }
 
 // static
-JSValue ScriptEngine::classStaticMethod(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic)
+JSValue ScriptEngine::classStaticMethod(JSContext *ctx, JSValueConst /*this_val*/, int argc, JSValueConst *argv, int magic)
 {
-    static_cast<void>(ctx);
-    static_cast<void>(this_val);
-    static_cast<void>(argc);
-    static_cast<void>(argv);
-    static_cast<void>(magic);
-    return {};
-}
+    ScriptEngine *const engine = ScriptEngine::scriptEngine();
+    if (static_cast<size_t>(magic) >= engine->mStaticClassMethods.size()) {
+        return JS_ThrowTypeError(ctx, "Static method can't be found");
+    }
 
+    std::vector<ScriptValue> args(argc);
+    for (int i=0; i<argc; ++i) {
+        args[i] = ScriptValue(JS_DupValue(ctx, argv[i]));
+    }
+
+    ScriptValue ret = engine->mStaticClassMethods[magic]->call(std::move(args));
+    if (ret) {
+        if (ret.isError()) {
+            return JS_Throw(ctx, ret.leakValue());
+        }
+        return ret.leakValue();
+    }
+
+    return *ScriptValue::undefined();
+}
 
 // static
 JSValue ScriptEngine::classGetterSetterSetter(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic)

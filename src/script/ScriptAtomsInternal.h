@@ -1,5 +1,4 @@
 #define FOREACH_SCRIPTATOM(ScriptAtom)          \
-    ScriptAtom(__class_id__)                    \
     ScriptAtom(action)                          \
     ScriptAtom(atob)                            \
     ScriptAtom(btoa)                            \

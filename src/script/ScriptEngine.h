@@ -155,14 +155,8 @@ private:
             ScriptClass::Method call;
         };
 
-        std::vector<Constant> constants, staticConstants;
+        std::vector<Constant> constants;
         std::vector<Method> methods;
-
-        struct StaticMethod {
-            std::string name;
-            ScriptClass::StaticMethod call;
-        };
-        std::vector<StaticMethod> staticMethods;
 
         ScriptValue prototype, constructor;
 
@@ -170,6 +164,12 @@ private:
     };
 
     std::unordered_map<JSClassID, std::unique_ptr<ScriptClassData>> mClasses;
+    std::vector<std::unique_ptr<ScriptClassData::Constant>> mStaticClassConstants;
+    struct StaticMethod {
+        std::string name;
+        ScriptClass::StaticMethod call;
+    };
+    std::vector<std::unique_ptr<StaticMethod>> mStaticClassMethods;
     std::unordered_map<int, JSClassID> mConstructors;
 
     JSRuntime *mRuntime = nullptr;
