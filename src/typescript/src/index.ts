@@ -16,20 +16,32 @@ spurv.setKeyEventHandler((event: spurv.KeyEvent) => {
         if (event.action !== 1) {
             return;
         }
-        if (event.key === 81) { // q
+        if (event.key === spurv.Key.Q) {
+            // q
             spurv.exit(0);
-        } else if (event.key === 265) { // up
+        } else if (event.key === spurv.Key.Up) {
+            // up
             console.log("up", typeof view, typeof spurv.View);
             if (!view) {
                 view = new spurv.View();
             }
-            console.log("shat", spurv.View.prototype === Object.getPrototypeOf(view),
+            console.log(
+                "shat",
+                spurv.View.prototype === Object.getPrototypeOf(view),
                 // Object.keys(Object.getPrototypeOf(view)),
-                Object.keys(spurv.View.prototype));
+                Object.keys(spurv.View.prototype)
+            );
 
-            console.log("Scrolling up", typeof view, view, view.currentLine, JSON.stringify(Object.getPrototypeOf(view)));
+            console.log(
+                "Scrolling up",
+                typeof view,
+                view,
+                view.currentLine,
+                JSON.stringify(Object.getPrototypeOf(view))
+            );
             view.scrollUp();
-        } else if (event.key === 264) { // down
+        } else if (event.key === spurv.Key.Down) {
+            // down
             console.log("down", typeof view, typeof spurv.View);
             if (!view) {
                 view = new spurv.View();
