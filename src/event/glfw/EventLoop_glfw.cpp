@@ -123,7 +123,13 @@ int32_t MainEventLoop::run()
 
     glfwSetKeyCallback(mainWindow, [](GLFWwindow* win, int key, int scancode, int action, int mods) {
         auto eventLoop = GlfwUserData::get<1, MainEventLoop>(win);
-        eventLoop->mOnKey.emit(key, scancode, action, mods);
+        const char *name = glfwGetKeyName(key, scancode);
+        std::optional<std::string> keyName;
+        if (name) {
+            keyName = name;
+        }
+
+        eventLoop->mOnKey.emit(key, scancode, action, mods, keyName);
     });
 
     while (!mData->isStopped()) {

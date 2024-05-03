@@ -282,11 +282,12 @@ ScriptValue ScriptEngine::killProcess(std::vector<ScriptValue> &&args)
     return {};
 }
 
-void ScriptEngine::onKey(int key, int scancode, int action, int mods)
+void ScriptEngine::onKey(int key, int scancode, int action, int mods, const std::optional<std::string> &keyName)
 {
+    assert(EventLoop::eventLoop() == mEventLoop);
     if (!mKeyHandler.isFunction()) {
-        spdlog::error("Got key but no key handler key: {} scancode: {} action: {} mods: {}\n",
-                      key, scancode, action, mods);
+        spdlog::error("Got key but no key handler key: {} scancode: {} action: {} mods: {} name: {}\n",
+                      key, scancode, action, mods, keyName.value_or("unknown"));
         return;
     }
     ScriptValue object(ScriptValue::Object);
@@ -294,6 +295,9 @@ void ScriptEngine::onKey(int key, int scancode, int action, int mods)
     object.setProperty(mAtoms.scancode, ScriptValue(scancode));
     object.setProperty(mAtoms.action, ScriptValue(action));
     object.setProperty(mAtoms.mods, ScriptValue(mods));
+    if (keyName) {
+        object.setProperty(mAtoms.keyName, ScriptValue(*keyName));
+    }
     mKeyHandler.call(object);
 }
 

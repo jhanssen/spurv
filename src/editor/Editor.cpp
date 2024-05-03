@@ -101,8 +101,8 @@ void Editor::thread_internal()
         mainEventLoop->post([editor = this]() {
             editor->mOnReady.emit();
         });
-        mConnectKeys[0] = mainEventLoop->onKey().connect([this](int key, int scancode, int action, int mods) {
-            mScriptEngine->onKey(key, scancode, action, mods);
+        mConnectKeys[0] = mainEventLoop->onKey().connect([this](int key, int scancode, int action, int mods, const std::optional<std::string> &keyName) {
+            mScriptEngine->onKey(key, scancode, action, mods, keyName);
         });
         mConnectKeys[1] = mainEventLoop->onUnicode().connect([](uint32_t uc) {
             spdlog::error("editor uc {}", uc);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+#include <string>
 #include "EventLoop.h"
 #include "EventEmitter.h"
 
@@ -26,13 +28,13 @@ public:
      * glfwSetKeyCallback(GLFWwindow*, int key, int scancode, int action, int mods)
      */
 
-    EventEmitter<void(int, int, int, int)>& onKey();
+    EventEmitter<void(int, int, int, int, std::optional<std::string>)>& onKey();
 
 private:
     struct MainEventLoopData;
     MainEventLoopData *mData;
     EventEmitter<void(uint32_t)> mOnUnicode;
-    EventEmitter<void(int, int, int, int)> mOnKey;
+    EventEmitter<void(int, int, int, int, std::optional<std::string>)> mOnKey;
 };
 
 inline EventEmitter<void(uint32_t)>& MainEventLoop::onUnicode()
@@ -40,7 +42,7 @@ inline EventEmitter<void(uint32_t)>& MainEventLoop::onUnicode()
     return mOnUnicode;
 }
 
-inline EventEmitter<void(int, int, int, int)>& MainEventLoop::onKey()
+inline EventEmitter<void(int, int, int, int, std::optional<std::string>)>& MainEventLoop::onKey()
 {
     return mOnKey;
 }

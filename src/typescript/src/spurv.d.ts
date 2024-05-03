@@ -125,6 +125,12 @@ declare namespace spurv {
         Last = Menu
     }
 
+    export const enum Action {
+        Release = 0,
+        Press = 1,
+        Repeat = 2
+    }
+
     export const enum Modifier {
         Shift = 0x0001,
         Control = 0x0002,
@@ -226,10 +232,11 @@ declare namespace spurv {
     // events
 
     export interface KeyEvent {
-        key: number;
+        key: Key;
         scancode: number;
-        action: number;
-        mods: number;
+        action: Action;
+        mods: Modifier;
+        keyName?: string;
     }
     export function setKeyEventHandler(handler: (event: KeyEvent) => void): void;
 

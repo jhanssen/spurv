@@ -14,34 +14,36 @@ const plugins = [
     }),
     commonjs(),
     typescript({
-        tsconfig: "./tsconfig.json",
+        tsconfig: "./tsconfig.json"
         // cacheRoot: ".cache",
     }),
     ...(minify
         ? [
-            terser({
-                output: {
-                    ascii_only: true,
-                    semicolons: false,
-                    comments: false
-                },
-                compress: true,
-                mangle: true
-            })
-        ]
+              terser({
+                  output: {
+                      ascii_only: true,
+                      semicolons: false,
+                      comments: false
+                  },
+                  compress: true,
+                  mangle: true
+              })
+          ]
         : [])
 ];
-const builds = [{
-    input: "./src/index.ts",
-    plugins,
-    external: [],
-    output: {
-        file: "./dist/spurv.js",
-        format: "iife",
-        name: "spurv",
-        exports: "named",
-        sourcemap: "inline"
+const builds = [
+    {
+        input: "./src/index.ts",
+        plugins,
+        external: [],
+        output: {
+            file: "./dist/spurv.js",
+            format: "iife",
+            name: "spurv",
+            exports: "named",
+            sourcemap: "inline"
+        }
     }
-}];
+];
 
 export default builds;

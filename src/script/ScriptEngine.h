@@ -24,7 +24,7 @@ public:
     Result<void> eval(const std::filesystem::path &file);
     Result<void> eval(const std::string &url, const std::string &source);
 
-    void onKey(int key, int scancode, int action, int mods);
+    void onKey(int key, int scancode, int action, int mods, const std::optional<std::string> &keyName);
 
     static ScriptEngine *scriptEngine() { return tScriptEngine; }
 

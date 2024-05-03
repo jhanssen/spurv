@@ -11,6 +11,7 @@
     ScriptAtom(exit)                            \
     ScriptAtom(exitCode)                        \
     ScriptAtom(key)                             \
+    ScriptAtom(keyName)                         \
     ScriptAtom(length)                          \
     ScriptAtom(log)                             \
     ScriptAtom(message)                         \
