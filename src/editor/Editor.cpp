@@ -22,6 +22,12 @@ struct EditorImpl
 
 std::unique_ptr<Editor> Editor::sInstance = {};
 
+class ViewInstance : public ScriptClassInstance
+{
+public:
+    int32_t pos { 0 };
+};
+
 Editor::Editor(const std::filesystem::path &appPath)
     : mEventLoop(new EventLoopUv())
 {
@@ -57,6 +63,35 @@ void Editor::thread_internal()
 
         auto mainEventLoop = static_cast<MainEventLoop*>(EventLoop::mainEventLoop());
         mScriptEngine = std::make_unique<ScriptEngine>(mEventLoop.get(), mImpl->appPath);
+        ScriptClass clazz("View",
+                          [](ScriptClassInstance *&instance, std::vector<ScriptValue> &&/*args*/) -> std::optional<std::string> {
+                              ViewInstance *v = new ViewInstance;
+                              instance = v;
+                              return {};
+                          });
+
+        clazz.addMethod("scrollDown", [](ScriptClassInstance *instance, std::vector<ScriptValue> &&) -> ScriptValue {
+            ViewInstance *v = static_cast<ViewInstance *>(instance);
+            auto renderer = Renderer::instance();
+            renderer->animatePropertyFloat(0, Renderer::Property::FirstLine, static_cast<float>(++v->pos), 100, Ease::InOutQuad);
+            return {};
+        });
+
+
+        clazz.addMethod("scrollUp", [](ScriptClassInstance *instance, std::vector<ScriptValue> &&) -> ScriptValue {
+            ViewInstance *v = static_cast<ViewInstance *>(instance);
+            if (v->pos > 0) {
+                auto renderer = Renderer::instance();
+                renderer->animatePropertyFloat(0, Renderer::Property::FirstLine, static_cast<float>(--v->pos), 100, Ease::InOutQuad);
+            }
+            return {};
+        });
+        clazz.addProperty("currentLine", [](ScriptClassInstance *instance) -> ScriptValue {
+            ViewInstance *v = static_cast<ViewInstance *>(instance);
+            return ScriptValue(v->pos);
+        });
+        ScriptEngine::scriptEngine()->addClass(std::move(clazz));
+
         mScriptEngine->onExit().connect([this, mainEventLoop](int exitCode) {
             mEventLoop->stop(0);
             mainEventLoop->post([mainEventLoop, exitCode]() {

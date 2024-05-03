@@ -22,7 +22,7 @@ int main(int argc, char** argv, char** envp)
         ::exit(1);
     });
 
-    const auto level = args.value<std::string>("log-level", "error");
+    const auto level = args.value<std::string>("log-level", "info");
     if (level == "trace") {
         spdlog::set_level(spdlog::level::trace);
     } else if (level == "debug") {

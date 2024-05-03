@@ -6,10 +6,32 @@ import { test } from "./test";
 Object.defineProperty(globalThis, "Process", Process);
 installConsole();
 
+let view: spurv.View | undefined;
 spurv.setKeyEventHandler((event: spurv.KeyEvent) => {
-    // console.error("got key event", JSON.stringify(event, undefined, 4));
-    if (event.key === 81 && event.action === 1) {
-        spurv.exit(0);
+    try {
+        console.error("got key event", JSON.stringify(event, undefined, 4));
+        if (event.action !== 1) {
+            return;
+        }
+        if (event.key === 81) { // q
+            spurv.exit(0);
+        } else if (event.key === 265) { // up
+            console.log("up", typeof view, typeof spurv.View);
+            if (!view) {
+                view = new spurv.View();
+            }
+            console.log("Scrolling up", typeof view, view, view.currentLine, JSON.stringify(Object.getPrototypeOf(view)));
+            view.scrollUp();
+        } else if (event.key === 264) { // down
+            console.log("down", typeof view, typeof spurv.View);
+            if (!view) {
+                view = new spurv.View();
+            }
+            console.log("Scrolling down", view.currentLine, typeof spurv.View);
+            view.scrollDown();
+        }
+    } catch (err: unknown) {
+        console.error("Got some error here", err);
     }
 });
 

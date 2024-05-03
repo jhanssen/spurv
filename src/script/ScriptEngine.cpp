@@ -1,5 +1,6 @@
 #include "ScriptEngine.h"
 #include "Builtins.h"
+#include <Keys.h>
 
 #include <cassert>
 
@@ -353,7 +354,7 @@ bool ScriptEngine::addClass(ScriptClass &&clazz)
         nullptr
     };
 
-    JSClassID id;
+    JSClassID id = 0;
     JS_NewClassID(&id);
     if (JS_NewClass(mRuntime, id, &def) != 0) {
         return false;
@@ -387,6 +388,7 @@ bool ScriptEngine::addClass(ScriptClass &&clazz)
             data->getterSetters.push_back(std::make_pair(std::move(prop.first), std::get<std::pair<ScriptClass::Getter, ScriptClass::Setter>>(std::move(prop.second))));
         }
     }
+    data->constructor = std::move(clazz.constructor());
 
     data->methods.reserve(methods.size());
     for (auto &method : methods) {
@@ -407,9 +409,14 @@ bool ScriptEngine::addClass(ScriptClass &&clazz)
 
     const int magic = ++mMagic;
     JSValue constructor = JS_NewCFunctionData(mContext, constructHelper, 0, magic, 0, nullptr);
+    JS_SetConstructorBit(mContext, constructor, 1);
     JS_SetConstructor(mContext, constructor, proto);
 
     mConstructors[magic] = id;
+
+    // spdlog::error(data->name);
+    mSpurv.setProperty(data->name, ScriptValue(constructor));
+    mClasses[id] = std::move(data);
 
     return true;
 }
@@ -490,11 +497,13 @@ JSValue ScriptEngine::constructHelper(JSContext *ctx, JSValueConst this_val, int
     ScriptEngine *that = ScriptEngine::scriptEngine();
     auto it = that->mConstructors.find(magic);
     if (it == that->mConstructors.end()) {
+        spdlog::error("magic is {}, known are {}", magic, keys(that->mConstructors));
         return JS_ThrowTypeError(ctx, "Constructor can't be found (1)");
     }
 
     auto it2 = that->mClasses.find(it->second);
     if (it2 == that->mClasses.end()) {
+        spdlog::error("ClassId is {}, known are {}", it->second, keys(that->mClasses));
         return JS_ThrowTypeError(ctx, "Constructor can't be found (2)");
     }
 

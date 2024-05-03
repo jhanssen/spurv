@@ -42,6 +42,7 @@ function onStderr(data) {
 function spawn(command, args, options) {
     return new Promise((resolve, reject) => {
         const proc = child_process.spawn(command, args, options);
+        // console.log(command, args, options);
         proc.on("exit", async (code) => {
             if (!code) {
                 resolve();

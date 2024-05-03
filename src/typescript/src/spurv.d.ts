@@ -99,4 +99,13 @@ declare namespace spurv {
     export function setKeyEventHandler(handler: (event: KeyEvent) => void): void;
 
     export function exit(number?: number): void;
+
+    class View {
+        readonly currentLine: number;
+
+        constructor();
+
+        scrollUp(): void;
+        scrollDown(): void;
+    }
 }

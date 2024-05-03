@@ -3,6 +3,7 @@
 #include <cassert>
 #include <unordered_set>
 #include <fmt/core.h>
+#include <Logger.h>
 
 namespace spurv {
 namespace {
@@ -166,7 +167,12 @@ void ScriptValue::clear()
 ScriptValue ScriptValue::call()
 {
     if (isFunction()) {
-        return ScriptValue(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(), 0, nullptr));
+        ScriptValue ret(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(), 0, nullptr));
+        if (ret.isException()) {
+            spdlog::error("Got exception from ScriptValue::call(): {}", ret.toString());
+        }
+        return ret;
+
     }
     return ScriptValue::makeError("Not a function");
 }
@@ -179,8 +185,13 @@ ScriptValue ScriptValue::call(const std::vector<ScriptValue> &args)
         for (const ScriptValue &val : args) {
             argv[i++] = *val;
         }
-        return ScriptValue(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(),
-                                   argv.size(), argv.data()));
+        ScriptValue ret(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(),
+                                argv.size(), argv.data()));
+        if (ret.isException()) {
+            spdlog::error("Got exception from ScriptValue::call(std::vector<ScriptValue>): {}", ret.toString());
+        }
+        return ret;
+
     }
     return ScriptValue::makeError("Not a function");
 }
@@ -193,7 +204,11 @@ ScriptValue ScriptValue::call(const ScriptValue &arg)
             return ScriptValue(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(),
                                        1, &value));
         }
-        return ScriptValue(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(), 0, nullptr));
+        ScriptValue ret(JS_Call(ScriptEngine::scriptEngine()->context(), *mValue, *ScriptValue::undefined(), 0, nullptr));
+        if (ret.isException()) {
+            spdlog::error("Got exception from ScriptValue::call(ScriptValue): {}", ret.toString());
+        }
+        return ret;
     }
     return ScriptValue::makeError("Not a function");
 }
@@ -201,7 +216,12 @@ ScriptValue ScriptValue::call(const ScriptValue &arg)
 ScriptValue ScriptValue::construct()
 {
     if (isConstructor()) {
-        return ScriptValue(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, 0, nullptr));
+        ScriptValue ret(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, 0, nullptr));
+        if (ret.isException()) {
+            spdlog::error("Got exception from ScriptValue::construct(): {}", ret.toString());
+        }
+        return ret;
+
     }
     return ScriptValue::makeError("Not a function");
 }
@@ -214,7 +234,12 @@ ScriptValue ScriptValue::construct(const std::vector<ScriptValue> &args)
         for (const ScriptValue &val : args) {
             argv[i++] = *val;
         }
-        return ScriptValue(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, argv.size(), argv.data()));
+        ScriptValue ret(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, argv.size(), argv.data()));
+        if (ret.isException()) {
+            spdlog::error("Got exception from ScriptValue::construct(std::vector<ScriptValue>): {}", ret.toString());
+        }
+        return ret;
+
     }
     return ScriptValue::makeError("Not a function");
 }
@@ -224,9 +249,17 @@ ScriptValue ScriptValue::construct(const ScriptValue &arg)
     if (isConstructor()) {
         if (arg.isValid()) {
             JSValue value = *arg;
-            return ScriptValue(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, 1, &value));
+            ScriptValue ret(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, 1, &value));
+            if (ret.isException()) {
+                spdlog::error("Got exception from ScriptValue::construct(ScriptValue): {}", ret.toString());
+            }
+            return ret;
         }
-        return ScriptValue(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, 0, nullptr));
+        ScriptValue ret(JS_CallConstructor(ScriptEngine::scriptEngine()->context(), *mValue, 0, nullptr));
+        if (ret.isException()) {
+            spdlog::error("Got exception from ScriptValue::call(): {}", ret.toString());
+        }
+        return ret;
     }
     return ScriptValue::makeError("Not a function");
 }
@@ -238,8 +271,7 @@ ScriptValue ScriptValue::clone() const
         return {};
     }
 
-    ScriptValue ret(JS_DupValue(ScriptEngine::scriptEngine()->context(), *mValue));
-    return ret;
+    return ScriptValue(JS_DupValue(ScriptEngine::scriptEngine()->context(), *mValue));
 }
 
 JSValue ScriptValue::leakValue()

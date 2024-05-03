@@ -1,8 +1,11 @@
 #include "View.h"
 #include <Logger.h>
 #include <Renderer.h>
+#include <ScriptClass.h>
+#include <ScriptEngine.h>
 
 using namespace spurv;
+
 
 View::View()
 {
@@ -30,20 +33,20 @@ void View::processDocument()
         renderer->addTextLines(0, std::move(textLines));
 
         // start animating the first line just for shits and giggles
-        auto loop = EventLoop::eventLoop();
-        int32_t from = 0, to = 5;
-        loop->startTimer([renderer, from, to](uint32_t) mutable -> void {
-            // spdlog::info("start anim {} {}", from, to);
-            renderer->animatePropertyFloat(0, Renderer::Property::FirstLine, static_cast<float>(to), 1000, Ease::InOutQuad);
+        // auto loop = EventLoop::eventLoop();
+        // int32_t from = 0, to = 5;
+        // loop->startTimer([renderer, from, to](uint32_t) mutable -> void {
+        //     // spdlog::info("start anim {} {}", from, to);
+        //     renderer->animatePropertyFloat(0, Renderer::Property::FirstLine, static_cast<float>(to), 1000, Ease::InOutQuad);
 
-            if (from == 0) {
-                from = 5;
-                to = 0;
-            } else {
-                from = 0;
-                to = 5;
-            }
-        }, 2000, EventLoop::TimerMode::Repeat);
+        //     if (from == 0) {
+        //         from = 5;
+        //         to = 0;
+        //     } else {
+        //         from = 0;
+        //         to = 5;
+        //     }
+        // }, 2000, EventLoop::TimerMode::Repeat);
     }
 }
 
