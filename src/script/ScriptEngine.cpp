@@ -141,6 +141,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         data->child_stdio[1].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_NONBLOCK_PIPE);
         data->stdoutPipe = {};
         uv_pipe_init(loop, &(*data->stdoutPipe), 1);
+        // need to open
         data->child_stdio[1].data.stream = reinterpret_cast<uv_stream_t *>(&(*data->stdoutPipe));
     }
 
@@ -222,13 +223,15 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
     }
     const int pid = data->proc->pid;
     if (flags & ProcessFlag::Stdout) {
-        uv_read_start(data->child_stdio[1].data.stream, [](uv_handle_t *, size_t size, uv_buf_t *buf) {
+        int readStartRet = uv_read_start(data->child_stdio[1].data.stream, [](uv_handle_t *, size_t size, uv_buf_t *buf) {
             // ### this could try to not copy when sending it back to JS
+            spdlog::error("alloc callback {}", size);
             buf->base = static_cast<char *>(malloc(size));
             buf->len = size;
         }, [](uv_stream_t *, ssize_t nread, const uv_buf_t *buf) {
-            printf("motherfucker %zd vs %zu\n", nread, buf->len);
+            spdlog::error("read callback {} {}", nread, buf->len);
         });
+        spdlog::error("uv_read_start {}", readStartRet);
     }
     // typedef void (*uv_alloc_cb)(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
     //    typedef void (*uv_read_cb)(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
