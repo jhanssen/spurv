@@ -137,6 +137,9 @@ private:
     struct ProcessData {
         ~ProcessData();
 
+        uv_stdio_container_t child_stdio[3];
+        uv_process_options_s options = {};
+
         bool stringReturnValues { false };
         std::optional<uv_process_t> proc;
         std::optional<uv_pipe_t> stdinPipe;
