@@ -115,6 +115,33 @@ struct StagingBuffer
     void* data;
 };
 
+template<typename ValueType>
+struct AnimationData
+{
+    uint64_t tstart = 0;
+    uint64_t tend = 0;
+    uint64_t telapsed = 0;
+    ValueType vstart = {};
+    ValueType vend = {};
+    EasingFunction ease = nullptr;
+};
+
+struct Animation
+{
+    bool running = false;
+    std::variant<AnimationData<int32_t>, AnimationData<float>, std::nullopt_t> animation = std::nullopt;
+};
+
+struct ViewData
+{
+    RectF geom = {};
+    std::vector<TextLine> textLines = {};
+    std::vector<TextProperty> textProperties = {};
+    std::vector<TextVBO> textVBOs = {};
+    std::vector<std::variant<int32_t, float>> renderProperties = {};
+    std::vector<Animation> animatingProperties = {};
+};
+
 struct RendererImpl
 {
     uv_idle_t idle;
@@ -162,9 +189,7 @@ struct RendererImpl
     std::vector<std::function<void(VkCommandBuffer cmdbuffer)>> inFrameCallbacks = {};
 
     std::unordered_map<std::filesystem::path, GlyphAtlas> glyphAtlases = {};
-    unordered_dense::map<std::string, std::vector<TextLine>> textLines = {};
-    unordered_dense::map<std::string, std::vector<TextProperty>> textProperties = {};
-    unordered_dense::map<std::string, std::vector<TextVBO>> textVBOs = {};
+    unordered_dense::map<std::string, ViewData> views = {};
 
     VkSampler textSampler = VK_NULL_HANDLE;
 
@@ -186,24 +211,6 @@ struct RendererImpl
     VkPipelineLayout boxPipelineLayout = VK_NULL_HANDLE;
     VkPipeline boxPipeline = VK_NULL_HANDLE;
 
-    unordered_dense::map<std::string, std::vector<std::variant<int32_t, float>>> renderProperties = {};
-
-    template<typename ValueType>
-    struct AnimationData
-    {
-        uint64_t tstart = 0;
-        uint64_t tend = 0;
-        uint64_t telapsed = 0;
-        ValueType vstart = {};
-        ValueType vend = {};
-        EasingFunction ease = nullptr;
-    };
-    struct Animation
-    {
-        bool running = false;
-        std::variant<AnimationData<int32_t>, AnimationData<float>, std::nullopt_t> animation = std::nullopt;
-    };
-    unordered_dense::map<std::string, std::vector<Animation>> animatingProperties = {};
     uint64_t lastRender = 0;
 
     SizeF contentScale = { 1.f, 1.f };
@@ -222,7 +229,7 @@ struct RendererImpl
     void animateProperty(const std::string& ident, Renderer::Property prop, ValueType value, uint64_t ms, Ease ease);
 
     template<typename ValueType>
-    ValueType propertyValue(const std::string& ident, Renderer::Property) const;
+    ValueType propertyValue(const ViewData& view, Renderer::Property) const;
 
     void renameIdentifier(const std::string& oldIdent, const std::string& newIdent);
 
@@ -231,7 +238,8 @@ struct RendererImpl
     void checkFence(VkFence fence);
     void checkFences();
     void runFenceCallbacks(FenceInfo& info);
-    void generateVBOs(VkCommandBuffer cmdbuffer);
+    void generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer);
+    void clearAllVBOs();
     void recreateUniformBuffers();
     void writeUniformBuffer(VkCommandBuffer cmdbuffer, VkBuffer buffer, const void* data, std::size_t size, uint32_t bufferOffset);
     template<typename T>
@@ -371,38 +379,35 @@ void RendererImpl::addTextLines(const std::string& ident, std::vector<TextLine>&
         currentAtlas->generate(std::move(missing), transferTimeline, *cmdbuffer);
     }
 
-    textLines[ident] = std::move(lines);
-    textVBOs.clear();
+    auto& view = views[ident];
+    view.textLines = std::move(lines);
+    view.textVBOs.clear();
 }
 
 void RendererImpl::clearTextLines(const std::string& ident)
 {
-    auto it = textLines.find(ident);
-    if (it == textLines.end()) {
-        return;
-    }
-    textLines.erase(it);
+    auto& view = views[ident];
+    view.textLines.clear();
 }
 
 void RendererImpl::addTextProperties(const std::string& ident, std::vector<TextProperty>&& properties)
 {
-    textProperties[ident] = std::move(properties);
+    auto& view = views[ident];
+    view.textProperties = std::move(properties);
 }
 
 void RendererImpl::clearTextProperties(const std::string& ident)
 {
-    auto it = textProperties.find(ident);
-    if (it == textProperties.end()) {
-        return;
-    }
-    textProperties.erase(it);
+    auto& view = views[ident];
+    view.textProperties.clear();
 }
 
 template<typename ValueType>
 void RendererImpl::setProperty(const std::string& ident, Renderer::Property prop, ValueType value)
 {
-    auto& props = renderProperties[ident];
-    auto& anims = animatingProperties[ident];
+    auto& view = views[ident];
+    auto& props = view.renderProperties;
+    auto& anims = view.animatingProperties;
     if (static_cast<std::underlying_type_t<Renderer::Property>>(prop) >= props.size()) {
         props.resize(static_cast<std::underlying_type_t<Renderer::Property>>(prop) + 1);
         anims.resize(static_cast<std::underlying_type_t<Renderer::Property>>(prop) + 1);
@@ -417,8 +422,9 @@ void RendererImpl::animateProperty(const std::string& ident, Renderer::Property 
 
     const auto propNo = static_cast<std::underlying_type_t<Renderer::Property>>(property);
 
-    auto& props = renderProperties[ident];
-    auto& anims = animatingProperties[ident];
+    auto& view = views[ident];
+    auto& props = view.renderProperties;
+    auto& anims = view.animatingProperties;
 
     assert(propNo < props.size() && propNo < anims.size());
     auto& prop = props[propNo];
@@ -449,10 +455,10 @@ void RendererImpl::animateProperty(const std::string& ident, Renderer::Property 
 }
 
 template<typename ValueType>
-ValueType RendererImpl::propertyValue(const std::string& ident, Renderer::Property property) const
+ValueType RendererImpl::propertyValue(const ViewData& view, Renderer::Property property) const
 {
     const auto propNo = static_cast<std::underlying_type_t<Renderer::Property>>(property);
-    const auto& props = renderProperties.at(ident);
+    const auto& props = view.renderProperties;
     assert(std::holds_alternative<ValueType>(props[propNo]));
     return std::get<ValueType>(props[propNo]);
 }
@@ -462,16 +468,9 @@ void RendererImpl::renameIdentifier(const std::string& oldIdent, const std::stri
     if (oldIdent == newIdent) {
         return;
     }
-    auto swapEntry = [&oldIdent, &newIdent](auto& container) {
-        auto oldNew = std::move(container[newIdent]);
-        container[newIdent] = std::move(container[oldIdent]);
-        container[oldIdent] = std::move(oldNew);
-    };
-    swapEntry(textLines);
-    swapEntry(textProperties);
-    swapEntry(textVBOs);
-    swapEntry(renderProperties);
-    swapEntry(animatingProperties);
+    auto newCopy = std::move(views[newIdent]);
+    views[newIdent] = std::move(views[oldIdent]);
+    views[oldIdent] = std::move(newCopy);
 }
 
 void RendererImpl::updateAnimations()
@@ -505,13 +504,13 @@ void RendererImpl::updateAnimations()
     };
 
     const auto now = timeNow();
-    for (auto it = animatingProperties.begin(); it != animatingProperties.end(); ++it) {
-        auto& props = renderProperties[it->first];
-        auto& anims = it->second;
-        for (std::size_t propNo = 0; propNo < anims.size(); ++propNo) {
-            assert(propNo < props.size());
-            auto& prop = props[propNo];
-            auto& anim = anims[propNo];
+    for (auto& viewPair : views) {
+        auto& view = viewPair.second;
+        const auto size = view.animatingProperties.size();
+        assert(size == view.renderProperties.size());
+        for (std::size_t propNo = 0; propNo < size; ++propNo) {
+            auto& prop = view.renderProperties[propNo];
+            auto& anim = view.animatingProperties[propNo];
             if (!anim.running) {
                 continue;
             }
@@ -573,167 +572,175 @@ void RendererImpl::makeTextFragUniformBuffer(VkCommandBuffer cmdbuffer, const Te
     textFragUniformBuffers[prop] = std::make_pair(buffer, allocation);
 }
 
-void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
+void RendererImpl::clearAllVBOs()
+{
+    for (auto& viewPair : views) {
+        viewPair.second.textVBOs.clear();
+    }
+}
+
+void RendererImpl::generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer)
 {
     uint32_t missing = 0, generated = 0;
 
     spdlog::info("generating...");
 
-    for (const auto& linesPair : textLines) {
-        const auto& lines = linesPair.second;
-        if (lines.empty()) {
-            continue;
+    if (!view.textVBOs.empty()) {
+        return;
+    }
+    const auto& lines = view.textLines;
+    if (lines.empty()) {
+        return;
+    }
+
+    auto props = &view.textProperties;
+    auto getProp = [&props](std::size_t propIdx) -> const TextProperty* {
+        if (props == nullptr) {
+            return nullptr;
         }
-
-        auto props = &textProperties[linesPair.first];
-        auto getProp = [&props](std::size_t propIdx) -> const TextProperty* {
-            if (props == nullptr) {
-                return nullptr;
-            }
-            if (propIdx >= props->size()) {
-                return nullptr;
-            }
-            return &(*props)[propIdx];
-        };
-
-        std::size_t propStart = 0;
-        // better not have more than 32 matching props for a given character
-        std::bitset<32> propMatching = {}, propCurrent = {};
-        std::size_t highestMatching = 0;
-
-        const TextProperty* curProp = getProp(propStart);
-        if (curProp && curProp->start > 0) {
-            curProp = nullptr;
+        if (propIdx >= props->size()) {
+            return nullptr;
         }
-        auto scanMatching = [&](std::size_t idx) -> void {
-            propMatching.reset();
-            if (curProp == nullptr) {
+        return &(*props)[propIdx];
+    };
+
+    std::size_t propStart = 0;
+    // better not have more than 32 matching props for a given character
+    std::bitset<32> propMatching = {}, propCurrent = {};
+    std::size_t highestMatching = 0;
+
+    const TextProperty* curProp = getProp(propStart);
+    if (curProp && curProp->start > 0) {
+        curProp = nullptr;
+    }
+    auto scanMatching = [&](std::size_t idx) -> void {
+        propMatching.reset();
+        if (curProp == nullptr) {
+            return;
+        }
+        for (std::size_t n = 0; n < 32; ++n) {
+            auto np = getProp(propStart + n);
+            if (np == nullptr || idx < np->start) {
                 return;
             }
-            for (std::size_t n = 0; n < 32; ++n) {
-                auto np = getProp(propStart + n);
-                if (np == nullptr || idx < np->start) {
-                    return;
-                }
-                if (idx <= np->end) {
-                    propMatching.set(n);
-                }
+            if (idx <= np->end) {
+                propMatching.set(n);
             }
-            if (propMatching.to_ullong() > 0) {
-                highestMatching = 31 - __builtin_clzll(propMatching.to_ullong());
-            } else {
-                highestMatching = 0;
-            }
-        };
-        if (curProp != nullptr) {
-            scanMatching(propStart);
-            propCurrent = propMatching;
         }
+        if (propMatching.to_ullong() > 0) {
+            highestMatching = 31 - __builtin_clzll(propMatching.to_ullong());
+        } else {
+            highestMatching = 0;
+        }
+    };
+    if (curProp != nullptr) {
+        scanMatching(propStart);
+        propCurrent = propMatching;
+    }
 
-        float linePos = 0;
-        auto& vbos = textVBOs[linesPair.first];
-        for (const auto& line : lines) {
-            vbos.push_back(TextVBO());
-            auto* vbo = &vbos.back();
-            const auto& vboTextProp = curProp != nullptr ? *curProp : defaultTextProperty;
-            makeTextFragUniformBuffer(cmdbuffer, vboTextProp);
-            vbo->setProperty(vboTextProp);
-            vbo->setFirstLine(line.line);
-            vbo->setLinePosition(linePos);
-            auto& atlas = atlasFor(line.font);
-            const auto fontSize = line.font.size();
+    float linePos = 0;
+    auto& vbos = view.textVBOs;
+    for (const auto& line : lines) {
+        vbos.push_back(TextVBO());
+        auto* vbo = &vbos.back();
+        const auto& vboTextProp = curProp != nullptr ? *curProp : defaultTextProperty;
+        makeTextFragUniformBuffer(cmdbuffer, vboTextProp);
+        vbo->setProperty(vboTextProp);
+        vbo->setFirstLine(line.line);
+        vbo->setLinePosition(linePos);
+        auto& atlas = atlasFor(line.font);
+        const auto fontSize = line.font.size();
 
-            std::size_t glyphOffset = line.offset;
+        std::size_t glyphOffset = line.offset;
 
-            hb_font_extents_t fontExtents;
-            hb_font_get_h_extents(line.font.font(), &fontExtents);
-            const float lineHeight = ceilf(((fontExtents.ascender + fontExtents.descender + fontExtents.line_gap) / 64.f) + (fontSize / 4.f));
-            const float baseLine = ceilf(fontExtents.ascender / 64.f);
-            const float x_tracking = std::max(floorf(fontSize / 10.f), 1.f);
+        hb_font_extents_t fontExtents;
+        hb_font_get_h_extents(line.font.font(), &fontExtents);
+        const float lineHeight = ceilf(((fontExtents.ascender + fontExtents.descender + fontExtents.line_gap) / 64.f) + (fontSize / 4.f));
+        const float baseLine = ceilf(fontExtents.ascender / 64.f);
+        const float x_tracking = std::max(floorf(fontSize / 10.f), 1.f);
 
-            VkImageView view = VK_NULL_HANDLE;
-            uint32_t glyph_count;
-            float cursor_x = 0.f;
-            hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(line.buffer, &glyph_count);
-            for (uint32_t i = 0; i < glyph_count; ++i, ++glyphOffset) {
-                hb_codepoint_t glyphid = glyph_info[i].codepoint;
-                auto glyphInfo = atlas.glyphBox(glyphid);
-                if (glyphInfo == nullptr || glyphInfo->image == VK_NULL_HANDLE) {
-                    ++missing;
-                    continue;
-                }
-                if (view == VK_NULL_HANDLE) {
-                    view = glyphInfo->view;
-                    vbo->setView(view);
-                }
-                assert(view == glyphInfo->view);
+        VkImageView view = VK_NULL_HANDLE;
+        uint32_t glyph_count;
+        float cursor_x = 0.f;
+        hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(line.buffer, &glyph_count);
+        for (uint32_t i = 0; i < glyph_count; ++i, ++glyphOffset) {
+            hb_codepoint_t glyphid = glyph_info[i].codepoint;
+            auto glyphInfo = atlas.glyphBox(glyphid);
+            if (glyphInfo == nullptr || glyphInfo->image == VK_NULL_HANDLE) {
+                ++missing;
+                continue;
+            }
+            if (view == VK_NULL_HANDLE) {
+                view = glyphInfo->view;
+                vbo->setView(view);
+            }
+            assert(view == glyphInfo->view);
 
-                const float x_left = glyphInfo->box.bounds.l * fontSize;
-                const float x_right = glyphInfo->box.bounds.r * fontSize;
-                const float x_advance = glyphInfo->box.advance * fontSize;
-                const float y_bottom = glyphInfo->box.bounds.b * fontSize;
-                const float y_top = glyphInfo->box.bounds.t * fontSize;
+            const float x_left = glyphInfo->box.bounds.l * fontSize;
+            const float x_right = glyphInfo->box.bounds.r * fontSize;
+            const float x_advance = glyphInfo->box.advance * fontSize;
+            const float y_bottom = glyphInfo->box.bounds.b * fontSize;
+            const float y_top = glyphInfo->box.bounds.t * fontSize;
 
-                if (props != nullptr) {
-                    // check if any of the properties match
-                    if (curProp == nullptr || glyphOffset > curProp->end) {
-                        // find the first new prop (if any)
-                        for (;;) {
-                            curProp = getProp(propStart);
-                            if (curProp == nullptr) {
-                                // done, no more props
-                                props = nullptr;
-                                break;
-                            }
-                            if (glyphOffset < curProp->start) {
-                                curProp = nullptr;
-                                break;
-                            }
-                            if (glyphOffset >= curProp->start && glyphOffset <= curProp->end) {
-                                break;
-                            }
-                            ++propStart;
+            if (props != nullptr) {
+                // check if any of the properties match
+                if (curProp == nullptr || glyphOffset > curProp->end) {
+                    // find the first new prop (if any)
+                    for (;;) {
+                        curProp = getProp(propStart);
+                        if (curProp == nullptr) {
+                            // done, no more props
+                            props = nullptr;
+                            break;
                         }
-                    }
-                    scanMatching(glyphOffset);
-                    if (propCurrent != propMatching) {
-                        spdlog::info("text props changed {} {:#x}", glyphOffset, propMatching.to_ullong());
-                        propCurrent = propMatching;
-
-                        vbo->generate(allocator, cmdbuffer);
-
-                        vbos.push_back(TextVBO());
-                        vbo = &vbos.back();
-
-                        assert(view != VK_NULL_HANDLE);
-                        vbo->setView(view);
-                        vbo->setFirstLine(line.line);
-                        vbo->setLinePosition(linePos);
-
-                        const auto& newVboTextProp = curProp != nullptr ? *curProp : defaultTextProperty;
-                        makeTextFragUniformBuffer(cmdbuffer, newVboTextProp);
-                        vbo->setProperty(newVboTextProp);
+                        if (glyphOffset < curProp->start) {
+                            curProp = nullptr;
+                            break;
+                        }
+                        if (glyphOffset >= curProp->start && glyphOffset <= curProp->end) {
+                            break;
+                        }
+                        ++propStart;
                     }
                 }
+                scanMatching(glyphOffset);
+                if (propCurrent != propMatching) {
+                    spdlog::info("text props changed {} {:#x}", glyphOffset, propMatching.to_ullong());
+                    propCurrent = propMatching;
 
-                vbo->add(
-                    {
-                        cursor_x + x_left,
-                        floorf(-y_bottom) + baseLine + linePos,
-                        x_right - x_left + 1.f,
-                        floorf(y_bottom) - floorf(y_top) - 1.f
-                    }, glyphInfo->box);
+                    vbo->generate(allocator, cmdbuffer);
 
-                cursor_x += x_advance + x_tracking;
+                    vbos.push_back(TextVBO());
+                    vbo = &vbos.back();
 
-                ++generated;
+                    assert(view != VK_NULL_HANDLE);
+                    vbo->setView(view);
+                    vbo->setFirstLine(line.line);
+                    vbo->setLinePosition(linePos);
+
+                    const auto& newVboTextProp = curProp != nullptr ? *curProp : defaultTextProperty;
+                    makeTextFragUniformBuffer(cmdbuffer, newVboTextProp);
+                    vbo->setProperty(newVboTextProp);
+                }
             }
 
-            vbo->generate(allocator, cmdbuffer);
+            vbo->add(
+                {
+                    cursor_x + x_left,
+                    floorf(-y_bottom) + baseLine + linePos,
+                    x_right - x_left + 1.f,
+                    floorf(y_bottom) - floorf(y_top) - 1.f
+                }, glyphInfo->box);
 
-            // spdlog::info("generated so far {} {}", generated, vbo.size());
-            linePos += lineHeight;
+            cursor_x += x_advance + x_tracking;
+
+            ++generated;
         }
+
+        vbo->generate(allocator, cmdbuffer);
+
+        // spdlog::info("generated so far {} {}", generated, vbo.size());
+        linePos += lineHeight;
     }
 
     spdlog::info("textvbos {} {}", generated, missing);
@@ -781,7 +788,7 @@ void RendererImpl::recreateUniformBuffers()
         // make sure we recreate the per text property ubos
         // this could likely be optimized, right now this also makes all
         // the vbos be recreated as well
-        textVBOs.clear();
+        clearAllVBOs();
     }
 
     inFrameCallbacks.push_back([impl = this](VkCommandBuffer cmdbuffer) -> void {
@@ -1429,7 +1436,7 @@ void Renderer::thread_internal()
 
     window->onResize().disconnect(onResizeKey);
 
-    mImpl->textVBOs.clear();
+    mImpl->clearAllVBOs();
 
     mImpl->vkbSwapchain.destroy_image_views(mImpl->imageViews);
     vkb::destroy_swapchain(mImpl->vkbSwapchain);
@@ -1803,77 +1810,81 @@ void Renderer::render()
         mImpl->inFrameCallbacks.clear();
     }
 
-    if (!mImpl->textLines.empty() && mImpl->textVBOs.empty()) {
-        mImpl->generateVBOs(cmdbuffer);
-    }
-    if (!mImpl->textVBOs.empty() && mImpl->textVertUniformBuffer != VK_NULL_HANDLE) {
-        // draw some text
-        VkRenderPassBeginInfo renderPassInfo = {};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = mImpl->swapchainRenderPass;
-        renderPassInfo.framebuffer = mImpl->swapchainFramebuffers[mImpl->currentSwapchainImage];
-        renderPassInfo.renderArea = {
-            { 0, 0 },
-            { mImpl->scaledWidth, mImpl->scaledHeight }
-        };
-        const VkClearValue clear0 = {};
-        renderPassInfo.clearValueCount = 1;
-        renderPassInfo.pClearValues = &clear0;
-        vkCmdBeginRenderPass(cmdbuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    bool rendered = false;
+    for (auto& viewPair : mImpl->views) {
+        auto& view = viewPair.second;
+        if (!view.textLines.empty() && view.textVBOs.empty()) {
+            mImpl->generateVBOs(view, cmdbuffer);
+        }
+        if (!view.textVBOs.empty() && mImpl->textVertUniformBuffer != VK_NULL_HANDLE) {
+            rendered = true;
 
-        VkViewport viewport = {};
-        viewport.x = 0.f;
-        viewport.y = 0.f;
-        viewport.width = static_cast<float>(mImpl->scaledWidth);
-        viewport.height = static_cast<float>(mImpl->scaledHeight);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(cmdbuffer, 0, 1, &viewport);
+            // draw some text
+            VkRenderPassBeginInfo renderPassInfo = {};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            renderPassInfo.renderPass = mImpl->swapchainRenderPass;
+            renderPassInfo.framebuffer = mImpl->swapchainFramebuffers[mImpl->currentSwapchainImage];
+            renderPassInfo.renderArea = {
+                { 0, 0 },
+                { mImpl->scaledWidth, mImpl->scaledHeight }
+            };
+            const VkClearValue clear0 = {};
+            renderPassInfo.clearValueCount = 1;
+            renderPassInfo.pClearValues = &clear0;
+            vkCmdBeginRenderPass(cmdbuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        VkRect2D scissor = {};
-        scissor.offset = { 0, 0 };
-        scissor.extent = { mImpl->scaledWidth, mImpl->scaledHeight };
-        vkCmdSetScissor(cmdbuffer, 0, 1, &scissor);
+            VkViewport viewport = {};
+            viewport.x = 0.f;
+            viewport.y = 0.f;
+            viewport.width = static_cast<float>(mImpl->scaledWidth);
+            viewport.height = static_cast<float>(mImpl->scaledHeight);
+            viewport.minDepth = 0.0f;
+            viewport.maxDepth = 1.0f;
+            vkCmdSetViewport(cmdbuffer, 0, 1, &viewport);
 
-        std::array<VkDescriptorBufferInfo, 2> bufferDescriptorInfos = {};
-        std::array<VkDescriptorImageInfo, 2> imageDescriptorInfos = {};
-        std::array<VkWriteDescriptorSet, 4> writeDescriptorSets = {};
+            VkRect2D scissor = {};
+            scissor.offset = { 0, 0 };
+            scissor.extent = { mImpl->scaledWidth, mImpl->scaledHeight };
+            vkCmdSetScissor(cmdbuffer, 0, 1, &scissor);
 
-        vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->boxPipeline);
+            std::array<VkDescriptorBufferInfo, 2> bufferDescriptorInfos = {};
+            std::array<VkDescriptorImageInfo, 2> imageDescriptorInfos = {};
+            std::array<VkWriteDescriptorSet, 4> writeDescriptorSets = {};
 
-        bufferDescriptorInfos[0] = {
-            .buffer = mImpl->boxVertUniformBuffer,
-            .offset = 0,
-            .range = VK_WHOLE_SIZE
-        };
-        bufferDescriptorInfos[1] = {
-            .buffer = mImpl->boxFragUniformBuffer,
-            .offset = 0,
-            .range = VK_WHOLE_SIZE
-        };
+            vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->boxPipeline);
 
-        writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeDescriptorSets[0].dstBinding = 0;
-        writeDescriptorSets[0].descriptorCount = 1;
-        writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeDescriptorSets[0].pBufferInfo = &bufferDescriptorInfos[0];
+            bufferDescriptorInfos[0] = {
+                .buffer = mImpl->boxVertUniformBuffer,
+                .offset = 0,
+                .range = VK_WHOLE_SIZE
+            };
+            bufferDescriptorInfos[1] = {
+                .buffer = mImpl->boxFragUniformBuffer,
+                .offset = 0,
+                .range = VK_WHOLE_SIZE
+            };
 
-        writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeDescriptorSets[1].dstBinding = 1;
-        writeDescriptorSets[1].descriptorCount = 1;
-        writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeDescriptorSets[1].pBufferInfo = &bufferDescriptorInfos[1];
+            writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeDescriptorSets[0].dstBinding = 0;
+            writeDescriptorSets[0].descriptorCount = 1;
+            writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writeDescriptorSets[0].pBufferInfo = &bufferDescriptorInfos[0];
 
-        spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->boxPipelineLayout, 0, 2, writeDescriptorSets.data());
+            writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeDescriptorSets[1].dstBinding = 1;
+            writeDescriptorSets[1].descriptorCount = 1;
+            writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writeDescriptorSets[1].pBufferInfo = &bufferDescriptorInfos[1];
 
-        vkCmdDraw(cmdbuffer, 4, 1, 0, 0);
+            spurv_vk::vkCmdPushDescriptorSetKHR(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->boxPipelineLayout, 0, 2, writeDescriptorSets.data());
 
-        vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->textPipeline);
+            vkCmdDraw(cmdbuffer, 4, 1, 0, 0);
 
-        for (const auto& vboPair : mImpl->textVBOs) {
-            const auto& vbos = vboPair.second;
+            vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->textPipeline);
 
-            const auto firstLineFloat = mImpl->propertyValue<float>(vboPair.first, Property::FirstLine);
+            const auto& vbos = view.textVBOs;
+
+            const auto firstLineFloat = mImpl->propertyValue<float>(view, Property::FirstLine);
             const uint32_t firstLineLow = static_cast<uint32_t>(floorf(firstLineFloat));
             const uint32_t firstLineHigh = static_cast<uint32_t>(ceilf(firstLineFloat));
             const float firstLineDelta = firstLineFloat - floorf(firstLineFloat);// - firstLineFloat;
@@ -1969,7 +1980,8 @@ void Renderer::render()
         }
 
         vkCmdEndRenderPass(cmdbuffer);
-    } else {
+    }
+    if (!rendered) {
         VkImageMemoryBarrier presentBarrier = {};
         presentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         presentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -2186,7 +2198,7 @@ void Renderer::glyphsCreated(GlyphsCreated&& created)
             box->image = image;
             box->view = view;
         }
-        impl->textVBOs.clear();
+        impl->clearAllVBOs();
         spdlog::info("glyphs ready for use");
     });
 }
