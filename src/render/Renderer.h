@@ -57,6 +57,8 @@ public:
     void animatePropertyFloat(const std::string& ident, Property prop, float value, uint64_t ms, Ease ease);
     void animatePropertyFloat(std::string&& ident, Property prop, float value, uint64_t ms, Ease ease);
 
+    void renameIdentifier(const std::string& oldIdent, const std::string& newIdent);
+
     void afterCurrentFrame(std::function<void()>&& func);
     void afterTransfer(uint64_t value, std::function<void()>&& func);
 

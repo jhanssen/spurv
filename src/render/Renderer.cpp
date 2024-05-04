@@ -224,6 +224,8 @@ struct RendererImpl
     template<typename ValueType>
     ValueType propertyValue(const std::string& ident, Renderer::Property) const;
 
+    void renameIdentifier(const std::string& oldIdent, const std::string& newIdent);
+
     void updateAnimations();
 
     void checkFence(VkFence fence);
@@ -453,6 +455,23 @@ ValueType RendererImpl::propertyValue(const std::string& ident, Renderer::Proper
     const auto& props = renderProperties.at(ident);
     assert(std::holds_alternative<ValueType>(props[propNo]));
     return std::get<ValueType>(props[propNo]);
+}
+
+void RendererImpl::renameIdentifier(const std::string& oldIdent, const std::string& newIdent)
+{
+    if (oldIdent == newIdent) {
+        return;
+    }
+    auto swapEntry = [&oldIdent, &newIdent](auto& container) {
+        auto oldNew = std::move(container[newIdent]);
+        container[newIdent] = std::move(container[oldIdent]);
+        container[oldIdent] = std::move(oldNew);
+    };
+    swapEntry(textLines);
+    swapEntry(textProperties);
+    swapEntry(textVBOs);
+    swapEntry(renderProperties);
+    swapEntry(animatingProperties);
 }
 
 void RendererImpl::updateAnimations()
@@ -1704,6 +1723,13 @@ void Renderer::animatePropertyFloat(std::string&& ident, Property prop, float va
 {
     mEventLoop->post([ident = std::move(ident), prop, value, ms, ease, impl = mImpl]() {
         impl->animateProperty<float>(ident, prop, value, ms, ease);
+    });
+}
+
+void Renderer::renameIdentifier(const std::string& oldIdent, const std::string& newIdent)
+{
+    mEventLoop->post([oldIdent, newIdent, impl = mImpl]() {
+        impl->renameIdentifier(oldIdent, newIdent);
     });
 }
 
