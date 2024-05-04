@@ -595,7 +595,7 @@ void forEachProperty(const ScriptValue &value, const T &t)
     auto context = ScriptEngine::scriptEngine()->context();
     JSPropertyEnum *properties;
     uint32_t len;
-    std::unordered_set<std::string> seen;
+    unordered_dense::set<std::string> seen;
     if (!JS_GetOwnPropertyNames(context, &properties, &len, *value, 0)) {
         for (uint32_t i=0; i<len; ++i) {
             std::string name = JS_AtomToCString(context, properties[i].atom);
@@ -639,13 +639,13 @@ Result<std::vector<std::pair<std::string, ScriptValue>>> ScriptValue::toObject()
     return ret;
 }
 
-Result<std::unordered_map<std::string, ScriptValue>> ScriptValue::toMap() const
+Result<unordered_dense::map<std::string, ScriptValue>> ScriptValue::toMap() const
 {
     if (!(isObject())) {
         return spurv::makeError("Invalid type for toMap");
  }
 
-    std::unordered_map<std::string, ScriptValue> ret;
+    unordered_dense::map<std::string, ScriptValue> ret;
     forEachProperty(*this, [&ret](std::string &&name, ScriptValue &&value) -> void {
         ret[std::move(name)] = std::move(value);
     });

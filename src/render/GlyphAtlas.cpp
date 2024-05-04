@@ -241,7 +241,7 @@ void GlyphAtlas::generate(uint32_t from, uint32_t to, GlyphTimeline& timeline, V
     }
 }
 
-void GlyphAtlas::generate(const std::unordered_set<uint32_t>& glyphs, GlyphTimeline& timeline, VkCommandBuffer cmdbuffer)
+void GlyphAtlas::generate(const unordered_dense::set<uint32_t>& glyphs, GlyphTimeline& timeline, VkCommandBuffer cmdbuffer)
 {
     msdf_atlas::Charset charSet;
     for (auto g : glyphs) {

@@ -7,6 +7,7 @@
 #include <functional>
 #include <EnumClassBitmask.h>
 #include <Result.h>
+#include <UnorderedDense.h>
 
 namespace spurv {
 class ScriptValue
@@ -102,7 +103,7 @@ public:
     Result<uint32_t> toUint() const;
     Result<std::vector<ScriptValue>> toArray() const;
     Result<std::vector<std::pair<std::string, ScriptValue>>> toObject() const;
-    Result<std::unordered_map<std::string, ScriptValue>> toMap() const;
+    Result<unordered_dense::map<std::string, ScriptValue>> toMap() const;
 
     void forEach(std::function<void(const ScriptValue &value, int idx)> function);
 

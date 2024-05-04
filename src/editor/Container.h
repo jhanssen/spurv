@@ -2,9 +2,9 @@
 
 #include "Frame.h"
 #include "View.h"
+#include <UnorderedDense.h>
 #include <memory>
 #include <string>
-#include <unordered_set>
 #include <vector>
 #include <cstddef>
 
@@ -26,7 +26,7 @@ public:
     virtual void updateLayout(const Rect& rect) override;
 
 private:
-    std::unordered_set<std::shared_ptr<Frame>> mFrames;
+    unordered_dense::set<std::shared_ptr<Frame>> mFrames;
 
     friend class Editor;
 };

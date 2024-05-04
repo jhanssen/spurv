@@ -1,11 +1,11 @@
 #pragma once
 
-#include <variant>
-#include <string>
 #include <functional>
+#include <string>
+#include <variant>
 #include <vector>
-#include <unordered_map>
 #include <ScriptValue.h>
+#include <UnorderedDense.h>
 
 namespace spurv {
 class ScriptClassInstance
@@ -30,15 +30,15 @@ public:
     const std::string &name() const;
     const Constructor &constructor() const;
     Constructor &constructor();
-    const std::unordered_map<std::string, Method> &methods() const;
-    std::unordered_map<std::string, Method> &methods();
-    const std::unordered_map<std::string, std::variant<ScriptValue, Getter, std::pair<Getter, Setter>>> &properties() const;
-    std::unordered_map<std::string, std::variant<ScriptValue, Getter, std::pair<Getter, Setter>>> &properties();
+    const unordered_dense::map<std::string, Method> &methods() const;
+    unordered_dense::map<std::string, Method> &methods();
+    const unordered_dense::map<std::string, std::variant<ScriptValue, Getter, std::pair<Getter, Setter>>> &properties() const;
+    unordered_dense::map<std::string, std::variant<ScriptValue, Getter, std::pair<Getter, Setter>>> &properties();
 
-    const std::unordered_map<std::string, StaticMethod> &staticMethods() const;
-    std::unordered_map<std::string, StaticMethod> &staticMethods();
-    const std::unordered_map<std::string, ScriptValue> &staticProperties() const;
-    std::unordered_map<std::string, ScriptValue> &staticProperties();
+    const unordered_dense::map<std::string, StaticMethod> &staticMethods() const;
+    unordered_dense::map<std::string, StaticMethod> &staticMethods();
+    const unordered_dense::map<std::string, ScriptValue> &staticProperties() const;
+    unordered_dense::map<std::string, ScriptValue> &staticProperties();
 
     void addMethod(const std::string &name, Method &&method);
     void addProperty(const std::string &name, ScriptValue &&value);
@@ -49,9 +49,9 @@ public:
 private:
     std::string mName;
     Constructor mConstructor;
-    std::unordered_map<std::string, Method> mMethods;
-    std::unordered_map<std::string, std::variant<ScriptValue, Getter, std::pair<Getter, Setter>>> mProperties;
-    std::unordered_map<std::string, StaticMethod> mStaticMethods;
-    std::unordered_map<std::string, ScriptValue> mStaticProperties;
+    unordered_dense::map<std::string, Method> mMethods;
+    unordered_dense::map<std::string, std::variant<ScriptValue, Getter, std::pair<Getter, Setter>>> mProperties;
+    unordered_dense::map<std::string, StaticMethod> mStaticMethods;
+    unordered_dense::map<std::string, ScriptValue> mStaticProperties;
 };
 } // namespace spurv

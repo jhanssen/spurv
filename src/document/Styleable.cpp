@@ -1,5 +1,6 @@
 #include "Styleable.h"
 #include "Logger.h"
+#include <UnorderedDense.h>
 #include <cassert>
 
 using namespace spurv;
@@ -661,7 +662,7 @@ static inline std::size_t spacedNumbers(std::array<StyleNumber, Size>& array, co
 
 void Styleable::applyStylesheet()
 {
-    std::unordered_map<std::string, std::pair<uint64_t, std::string>> matching;
+    unordered_dense::map<std::string, std::pair<uint64_t, std::string>> matching;
 
     auto setColor = [this](ColorType type, std::optional<Color>&& color) -> void {
         mColors[static_cast<std::underlying_type_t<ColorType>>(type)] = std::move(color);

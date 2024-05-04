@@ -16,7 +16,7 @@
 #include <fmt/core.h>
 #include <vk_mem_alloc.h>
 #include <array>
-#include <unordered_set>
+#include <unordered_map>
 #include <vector>
 #include <cassert>
 #include <Thread.h>
@@ -154,7 +154,7 @@ struct RendererImpl
     GenericPool<VkCommandBuffer, 32> freeTransferCommandBuffers = {};
     GenericPool<StagingBuffer, 32> stagingBuffers = {};
 
-    std::unordered_map<VkFence, FenceInfo> fenceInfos = {};
+    unordered_dense::map<VkFence, FenceInfo> fenceInfos = {};
     GenericPool<VkFence, 5> freeFences = {};
     std::vector<std::function<void()>> afterFrameCallbacks = {};
     uint64_t highestAfterTransfer = 0;
@@ -170,7 +170,7 @@ struct RendererImpl
 
     VkBuffer textVertUniformBuffer = VK_NULL_HANDLE;
     VmaAllocation textVertUniformBufferAllocation = VK_NULL_HANDLE;
-    std::unordered_map<TextProperty, std::pair<VkBuffer, VmaAllocation>> textFragUniformBuffers;
+    unordered_dense::map<TextProperty, std::pair<VkBuffer, VmaAllocation>> textFragUniformBuffers;
     TextProperty defaultTextProperty = {};
 
     VkDescriptorSetLayout textUniformLayout = VK_NULL_HANDLE;
@@ -338,7 +338,7 @@ void RendererImpl::addTextLines(const std::string& ident, std::vector<TextLine>&
     spdlog::info("Got text lines {}", lines.size());
 
     GlyphAtlas* currentAtlas = nullptr;
-    std::unordered_set<hb_codepoint_t> missing = {};
+    unordered_dense::set<hb_codepoint_t> missing = {};
 
     for (const auto& line : lines) {
         auto& atlas = atlasFor(line.font);

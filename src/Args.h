@@ -1,8 +1,8 @@
 #pragma once
 
+#include <UnorderedDense.h>
 #include <string>
 #include <vector>
-#include <unordered_map>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -40,7 +40,7 @@ private:
     friend class ArgsParser;
 
 private:
-    std::unordered_map<std::string, std::any> mValues;
+    unordered_dense::map<std::string, std::any> mValues;
     std::vector<std::string> mFreeform;
 };
 

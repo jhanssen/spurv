@@ -7,6 +7,7 @@
 #include <quickjs.h>
 #include <EventLoop.h>
 #include <EventEmitter.h>
+#include <UnorderedDense.h>
 #include <uv.h>
 
 #include "ScriptValue.h"
@@ -149,7 +150,7 @@ private:
     };
     std::vector<std::unique_ptr<ProcessData>> mProcesses;
 
-    std::unordered_map<int, std::unique_ptr<FunctionData>> mFunctions;
+    unordered_dense::map<int, std::unique_ptr<FunctionData>> mFunctions;
 
     struct TimerData {
         EventLoop::TimerMode timerMode;
@@ -157,7 +158,7 @@ private:
         std::vector<ScriptValue> args;
     };
 
-    std::unordered_map<uint32_t, std::unique_ptr<TimerData>> mTimers;
+    unordered_dense::map<uint32_t, std::unique_ptr<TimerData>> mTimers;
 
     struct ScriptClassData {
         std::string name;
@@ -191,14 +192,14 @@ private:
         ScriptClass::Constructor construct;
     };
 
-    std::unordered_map<JSClassID, std::unique_ptr<ScriptClassData>> mClasses;
+    unordered_dense::map<JSClassID, std::unique_ptr<ScriptClassData>> mClasses;
     std::vector<std::unique_ptr<ScriptClassData::Constant>> mStaticClassConstants;
     struct StaticMethod {
         std::string name;
         ScriptClass::StaticMethod call;
     };
     std::vector<std::unique_ptr<StaticMethod>> mStaticClassMethods;
-    std::unordered_map<int, JSClassID> mConstructors;
+    unordered_dense::map<int, JSClassID> mConstructors;
 
     JSRuntime *mRuntime = nullptr;
     JSContext *mContext = nullptr;

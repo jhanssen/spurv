@@ -53,42 +53,42 @@ ScriptClass::Constructor &ScriptClass::constructor()
     return mConstructor;
 }
 
-const std::unordered_map<std::string, ScriptClass::Method> &ScriptClass::methods() const
+const unordered_dense::map<std::string, ScriptClass::Method> &ScriptClass::methods() const
 {
     return mMethods;
 }
 
-std::unordered_map<std::string, ScriptClass::Method> &ScriptClass::methods()
+unordered_dense::map<std::string, ScriptClass::Method> &ScriptClass::methods()
 {
     return mMethods;
 }
 
-const std::unordered_map<std::string, std::variant<ScriptValue, ScriptClass::Getter, std::pair<ScriptClass::Getter, ScriptClass::Setter>>> &ScriptClass::properties() const
+const unordered_dense::map<std::string, std::variant<ScriptValue, ScriptClass::Getter, std::pair<ScriptClass::Getter, ScriptClass::Setter>>> &ScriptClass::properties() const
 {
     return mProperties;
 }
 
-std::unordered_map<std::string, std::variant<ScriptValue, ScriptClass::Getter, std::pair<ScriptClass::Getter, ScriptClass::Setter>>> &ScriptClass::properties()
+unordered_dense::map<std::string, std::variant<ScriptValue, ScriptClass::Getter, std::pair<ScriptClass::Getter, ScriptClass::Setter>>> &ScriptClass::properties()
 {
     return mProperties;
 }
 
-const std::unordered_map<std::string, ScriptClass::StaticMethod> &ScriptClass::staticMethods() const
+const unordered_dense::map<std::string, ScriptClass::StaticMethod> &ScriptClass::staticMethods() const
 {
     return mStaticMethods;
 }
 
-std::unordered_map<std::string, ScriptClass::StaticMethod> &ScriptClass::staticMethods()
+unordered_dense::map<std::string, ScriptClass::StaticMethod> &ScriptClass::staticMethods()
 {
     return mStaticMethods;
 }
 
-const std::unordered_map<std::string, ScriptValue> &ScriptClass::staticProperties() const
+const unordered_dense::map<std::string, ScriptValue> &ScriptClass::staticProperties() const
 {
     return mStaticProperties;
 }
 
-std::unordered_map<std::string, ScriptValue> &ScriptClass::staticProperties()
+unordered_dense::map<std::string, ScriptValue> &ScriptClass::staticProperties()
 {
     return mStaticProperties;
 }

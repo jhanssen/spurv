@@ -1,12 +1,11 @@
 #pragma once
 
+#include <UnorderedDense.h>
 #include <volk.h>
 #include <vk_mem_alloc.h>
 #include <msdf-atlas-gen/msdf-atlas-gen.h>
 #include <filesystem>
 #include <limits>
-#include <unordered_map>
-#include <unordered_set>
 #include <thread>
 #include <mutex>
 #include <cstdint>
@@ -59,7 +58,7 @@ public:
     void setVulkanInfo(const GlyphVulkanInfo& info);
     void setFontFile(const std::filesystem::path& path);
     void generate(uint32_t from, uint32_t to, GlyphTimeline& timeline, VkCommandBuffer cmdbuf);
-    void generate(const std::unordered_set<uint32_t>& glyphs, GlyphTimeline& timeline, VkCommandBuffer cmdbuf);
+    void generate(const unordered_dense::set<uint32_t>& glyphs, GlyphTimeline& timeline, VkCommandBuffer cmdbuf);
 
     GlyphInfo* glyphBox(uint32_t unicode);
     const GlyphInfo* glyphBox(uint32_t unicode) const;
@@ -81,10 +80,10 @@ private:
 private:
     GlyphVulkanInfo mVulkanInfo = {};
     std::filesystem::path mFontFile;
-    std::unordered_map<uint32_t, GlyphInfo> mGlyphs;
+    unordered_dense::map<uint32_t, GlyphInfo> mGlyphs;
     uint32_t mMaxWidth = 0, mMaxHeight = 0;
     std::mutex mMutex;
-    std::unordered_map<std::thread::id, std::unique_ptr<PerThreadInfo>> mPerThread;
+    unordered_dense::map<std::thread::id, std::unique_ptr<PerThreadInfo>> mPerThread;
     static thread_local msdfgen::FreetypeHandle* tFreetype;
 };
 
