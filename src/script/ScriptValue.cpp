@@ -652,4 +652,92 @@ Result<std::unordered_map<std::string, ScriptValue>> ScriptValue::toMap() const
     return ret;
 }
 
+std::string ScriptValue::slowType() const
+{
+    if (isInvalid()) {
+        return "invalid";
+    }
+
+    if (isNull()) {
+        return "null";
+    }
+
+    if (isUndefined()) {
+        return "undefined";
+    }
+
+    if (isString()) {
+        return "string";
+    }
+
+    if (isBoolean()) {
+        return "bool";
+    }
+
+    if (isInt()) {
+        return "int";
+    }
+
+    if (isDouble()) {
+        return "double";
+    }
+
+    if (isNumber()) { // ???
+        return "number";
+    }
+
+    if (isError()) {
+        return "error";
+    }
+
+    if (isException()) {
+        return "exception";
+    }
+
+    if (isArray()) {
+        return "array";
+    }
+
+    if (isArrayBuffer()) {
+        return "arraybuffer";
+    }
+
+    if (isTypedArray()) {
+        return "typedarray";
+    }
+
+    if (isObject()) {
+        return "object";
+    }
+
+    if (isSymbol()) {
+        return "symbol";
+    }
+
+    if (isBigInt()) {
+        return "bigint";
+    }
+
+    if (isBigDecimal()) {
+        return "bigdecimal";
+    }
+
+    if (isBigFloat()) {
+        return "bigfloat";
+    }
+
+    if (isBigNum()) { // ???
+        return "bignum";
+    }
+
+    if (isConstructor()) {
+        return "constructor";
+    }
+
+    if (isFunction()) {
+        return "function";
+    }
+
+    return "unknown";
+}
 } // namespace spurv

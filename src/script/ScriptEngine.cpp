@@ -168,6 +168,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
 
     if (!args[1].isNullOrUndefined()) {
         if (!args[1].isObject()) {
+            spdlog::error("WTF? {}", args[1].slowType());
             return ScriptValue::makeError("Invalid env argument");
         }
         auto vec = *args[1].toObject();
@@ -914,11 +915,24 @@ ScriptEngine::ProcessData::~ProcessData()
     if (stderrPipe) {
         uv_close(reinterpret_cast<uv_handle_t*>(&*stderrPipe), nullptr);
     }
-
 }
 
 void ScriptEngine::executeMicrotasks()
 {
+    while (true) {
+        JSContext *ctx = nullptr;
+        int ret =  JS_ExecutePendingJob(mRuntime, &ctx);
+        if (!ret) {
+            break;
+        }
+        if (ret < 0) {
+            ScriptValue exception(JS_GetException(mContext));
+            // ### need a nice print exception
+            ScriptValue stack = exception.getProperty("stack");
+            spdlog::error("Got exception in microtask {}\n{}",
+                          exception.toString(), stack.toString());
+        }
+    }
 }
 
 } // namespace spurv

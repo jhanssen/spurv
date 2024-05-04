@@ -126,7 +126,7 @@ export class Process {
     start(args: string[], options?: ProcessOptions): Promise<ProcessResult>;
     start(commandOrArgs: string | string[], options?: ProcessOptions): Promise<ProcessResult> {
         return new Promise((resolve: (result: ProcessResult) => void, reject: (err: Error) => void) => {
-            if (!this.processId !== undefined) {
+            if (this.processId !== undefined) {
                 reject(new Error("Process is already running"));
                 return;
             }
@@ -148,6 +148,7 @@ export class Process {
             }
 
             console.log("startProcess", commandOrArgs, options, flags);
+            console.log("startProcess2", commandOrArgs, options?.env, options?.cwd, options?.stdin, flags);
             const ret = spurv.startProcess(commandOrArgs, options?.env, options?.cwd, options?.stdin, flags);
             console.log("got ret", ret);
             if (typeof ret === "string") {

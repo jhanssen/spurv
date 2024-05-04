@@ -54,6 +54,7 @@ public:
 
     bool isInvalid() const;
     bool isValid() const;
+    bool isUndefined() const;
     bool isNull() const;
     bool isNullOrUndefined() const;
     bool isString() const;
@@ -76,6 +77,8 @@ public:
     bool isBigDecimal() const;
     bool isFunction() const;
     bool isConstructor() const;
+
+    std::string slowType() const;
 
     ScriptValue &operator=(ScriptValue &&other);
 
@@ -127,6 +130,11 @@ inline bool ScriptValue::isValid() const
 inline bool ScriptValue::isNull() const
 {
     return mValue && JS_IsNull(*mValue);
+}
+
+inline bool ScriptValue::isUndefined() const
+{
+    return mValue && JS_IsUndefined(*mValue);
 }
 
 inline bool ScriptValue::isNullOrUndefined() const
