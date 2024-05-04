@@ -148,6 +148,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         child_stdio[0].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_WRITABLE_PIPE | UV_NONBLOCK_PIPE);
         data->stdinPipe = {};
         uv_pipe_init(loop, &(*data->stdinPipe), 1);
+        child_stdio[0].data.stream = reinterpret_cast<uv_stream_t *>(&(*data->stdinPipe));
     }
 
     if (!(flags & ProcessFlag::Stdout)) {
@@ -156,6 +157,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         child_stdio[1].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_NONBLOCK_PIPE);
         data->stdoutPipe = {};
         uv_pipe_init(loop, &(*data->stdoutPipe), 1);
+        child_stdio[1].data.stream = reinterpret_cast<uv_stream_t *>(&(*data->stdoutPipe));
     }
 
     if (!(flags & ProcessFlag::Stderr)) {
@@ -164,6 +166,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         child_stdio[2].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_NONBLOCK_PIPE);
         data->stderrPipe = {};
         uv_pipe_init(loop, &(*data->stderrPipe), 1);
+        child_stdio[2].data.stream = reinterpret_cast<uv_stream_t *>(&(*data->stderrPipe));
     }
 
     if (!args[1].isNullOrUndefined()) {
