@@ -3,13 +3,14 @@
 #include "GenericPool.h"
 #include "GlyphAtlas.h"
 #include "GraphicsPipeline.h"
-#include "TextVBO.h"
 #include "SemaphorePool.h"
+#include "TextVBO.h"
+#include <Chrono.h>
+#include <EventLoopUv.h>
 #include <Logger.h>
+#include <UnorderedDense.h>
 #include <VulkanCommon.h>
 #include <Window.h>
-#include <EventLoopUv.h>
-#include <Chrono.h>
 #include <uv.h>
 #include <VkBootstrap.h>
 #include <fmt/core.h>
@@ -121,7 +122,6 @@ struct RendererImpl
     uv_async_t stop;
 
     std::filesystem::path appPath;
-    Renderer::Boxes boxes;
 
     vkb::Device vkbDevice = {};
     vkb::Swapchain vkbSwapchain = {};
@@ -162,9 +162,9 @@ struct RendererImpl
     std::vector<std::function<void(VkCommandBuffer cmdbuffer)>> inFrameCallbacks = {};
 
     std::unordered_map<std::filesystem::path, GlyphAtlas> glyphAtlases = {};
-    std::vector<std::vector<TextLine>> textLines = {};
-    std::vector<std::vector<TextProperty>> textProperties = {};
-    std::vector<std::vector<TextVBO>> textVBOs = {};
+    unordered_dense::map<std::string, std::vector<TextLine>> textLines = {};
+    unordered_dense::map<std::string, std::vector<TextProperty>> textProperties = {};
+    unordered_dense::map<std::string, std::vector<TextVBO>> textVBOs = {};
 
     VkSampler textSampler = VK_NULL_HANDLE;
 
@@ -186,7 +186,7 @@ struct RendererImpl
     VkPipelineLayout boxPipelineLayout = VK_NULL_HANDLE;
     VkPipeline boxPipeline = VK_NULL_HANDLE;
 
-    std::vector<std::vector<std::variant<int32_t, float>>> renderProperties = {};
+    unordered_dense::map<std::string, std::vector<std::variant<int32_t, float>>> renderProperties = {};
 
     template<typename ValueType>
     struct AnimationData
@@ -203,26 +203,26 @@ struct RendererImpl
         bool running = false;
         std::variant<AnimationData<int32_t>, AnimationData<float>, std::nullopt_t> animation = std::nullopt;
     };
-    std::vector<std::vector<Animation>> animatingProperties = {};
+    unordered_dense::map<std::string, std::vector<Animation>> animatingProperties = {};
     uint64_t lastRender = 0;
 
     SizeF contentScale = { 1.f, 1.f };
 
     bool suboptimal = false, stopped = true;
 
-    void addTextLines(uint32_t box, std::vector<TextLine>&& lines);
-    void clearTextLines(uint32_t box);
-    void addTextProperties(uint32_t box, std::vector<TextProperty>&& properties);
-    void clearTextProperties(uint32_t box);
+    void addTextLines(const std::string& ident, std::vector<TextLine>&& lines);
+    void clearTextLines(const std::string& ident);
+    void addTextProperties(const std::string& ident, std::vector<TextProperty>&& properties);
+    void clearTextProperties(const std::string& ident);
 
     template<typename ValueType>
-    void setProperty(uint32_t box, Renderer::Property, ValueType value);
+    void setProperty(const std::string& ident, Renderer::Property, ValueType value);
 
     template<typename ValueType>
-    void animateProperty(uint32_t box, Renderer::Property prop, ValueType value, uint64_t ms, Ease ease);
+    void animateProperty(const std::string& ident, Renderer::Property prop, ValueType value, uint64_t ms, Ease ease);
 
     template<typename ValueType>
-    ValueType propertyValue(uint32_t box, Renderer::Property) const;
+    ValueType propertyValue(const std::string& ident, Renderer::Property) const;
 
     void updateAnimations();
 
@@ -331,7 +331,7 @@ GlyphAtlas& RendererImpl::atlasFor(const Font& font)
     return atlas;
 }
 
-void RendererImpl::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
+void RendererImpl::addTextLines(const std::string& ident, std::vector<TextLine>&& lines)
 {
     spdlog::info("Got text lines {}", lines.size());
 
@@ -369,46 +369,38 @@ void RendererImpl::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
         currentAtlas->generate(std::move(missing), transferTimeline, *cmdbuffer);
     }
 
-    if (box >= textLines.size()) {
-        textLines.resize(box + 1);
-    }
-    textLines[box] = std::move(lines);
+    textLines[ident] = std::move(lines);
     textVBOs.clear();
 }
 
-void RendererImpl::clearTextLines(uint32_t box)
+void RendererImpl::clearTextLines(const std::string& ident)
 {
-    if (box >= textLines.size()) {
+    auto it = textLines.find(ident);
+    if (it == textLines.end()) {
         return;
     }
-    textLines[box] = {};
+    textLines.erase(it);
 }
 
-void RendererImpl::addTextProperties(uint32_t box, std::vector<TextProperty>&& properties)
+void RendererImpl::addTextProperties(const std::string& ident, std::vector<TextProperty>&& properties)
 {
-    if (box >= textProperties.size()) {
-        textProperties.resize(box + 1);
-    }
-    textProperties[box] = std::move(properties);
+    textProperties[ident] = std::move(properties);
 }
 
-void RendererImpl::clearTextProperties(uint32_t box)
+void RendererImpl::clearTextProperties(const std::string& ident)
 {
-    if (box >= textProperties.size()) {
+    auto it = textProperties.find(ident);
+    if (it == textProperties.end()) {
         return;
     }
-    textProperties[box] = {};
+    textProperties.erase(it);
 }
 
 template<typename ValueType>
-void RendererImpl::setProperty(uint32_t box, Renderer::Property prop, ValueType value)
+void RendererImpl::setProperty(const std::string& ident, Renderer::Property prop, ValueType value)
 {
-    if (box >= renderProperties.size()) {
-        renderProperties.resize(box + 1);
-        animatingProperties.resize(box + 1);
-    }
-    auto& props = renderProperties[box];
-    auto& anims = animatingProperties[box];
+    auto& props = renderProperties[ident];
+    auto& anims = animatingProperties[ident];
     if (static_cast<std::underlying_type_t<Renderer::Property>>(prop) >= props.size()) {
         props.resize(static_cast<std::underlying_type_t<Renderer::Property>>(prop) + 1);
         anims.resize(static_cast<std::underlying_type_t<Renderer::Property>>(prop) + 1);
@@ -417,16 +409,14 @@ void RendererImpl::setProperty(uint32_t box, Renderer::Property prop, ValueType 
 }
 
 template<typename ValueType>
-void RendererImpl::animateProperty(uint32_t box, Renderer::Property property, ValueType value, uint64_t ms, Ease ease)
+void RendererImpl::animateProperty(const std::string& ident, Renderer::Property property, ValueType value, uint64_t ms, Ease ease)
 {
     using AnimationType = AnimationData<ValueType>;
 
-    assert(box < renderProperties.size() && box < animatingProperties.size());
-
     const auto propNo = static_cast<std::underlying_type_t<Renderer::Property>>(property);
 
-    auto& props = renderProperties[box];
-    auto& anims = animatingProperties[box];
+    auto& props = renderProperties[ident];
+    auto& anims = animatingProperties[ident];
 
     assert(propNo < props.size() && propNo < anims.size());
     auto& prop = props[propNo];
@@ -457,11 +447,10 @@ void RendererImpl::animateProperty(uint32_t box, Renderer::Property property, Va
 }
 
 template<typename ValueType>
-ValueType RendererImpl::propertyValue(uint32_t box, Renderer::Property property) const
+ValueType RendererImpl::propertyValue(const std::string& ident, Renderer::Property property) const
 {
-    assert(box < renderProperties.size() && box < animatingProperties.size());
     const auto propNo = static_cast<std::underlying_type_t<Renderer::Property>>(property);
-    const auto& props = renderProperties[box];
+    const auto& props = renderProperties.at(ident);
     assert(std::holds_alternative<ValueType>(props[propNo]));
     return std::get<ValueType>(props[propNo]);
 }
@@ -497,10 +486,9 @@ void RendererImpl::updateAnimations()
     };
 
     const auto now = timeNow();
-    for (std::size_t box = 0; box < animatingProperties.size(); ++box) {
-        assert(box < renderProperties.size());
-        auto& props = renderProperties[box];
-        auto& anims = animatingProperties[box];
+    for (auto it = animatingProperties.begin(); it != animatingProperties.end(); ++it) {
+        auto& props = renderProperties[it->first];
+        auto& anims = it->second;
         for (std::size_t propNo = 0; propNo < anims.size(); ++propNo) {
             assert(propNo < props.size());
             auto& prop = props[propNo];
@@ -572,17 +560,14 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
 
     spdlog::info("generating...");
 
-    for (std::size_t box = 0; box < textLines.size(); ++box) {
-        const auto& lines = textLines[box];
+    for (const auto& linesPair : textLines) {
+        const auto& lines = linesPair.second;
         if (lines.empty()) {
             continue;
         }
-        if (box >= textVBOs.size()) {
-            textVBOs.resize(box + 1);
-        }
 
-        const auto* props = box < textProperties.size() ? &textProperties[box] : nullptr;
-        auto getProp = [props](std::size_t propIdx) -> const TextProperty* {
+        auto props = &textProperties[linesPair.first];
+        auto getProp = [&props](std::size_t propIdx) -> const TextProperty* {
             if (props == nullptr) {
                 return nullptr;
             }
@@ -627,7 +612,7 @@ void RendererImpl::generateVBOs(VkCommandBuffer cmdbuffer)
         }
 
         float linePos = 0;
-        auto& vbos = textVBOs[box];
+        auto& vbos = textVBOs[linesPair.first];
         for (const auto& line : lines) {
             vbos.push_back(TextVBO());
             auto* vbo = &vbos.back();
@@ -1610,66 +1595,115 @@ void Renderer::stop()
     mThread.join();
 }
 
-void Renderer::setBoxes(Boxes&& boxes)
+void Renderer::addTextLines(const std::string& ident, std::vector<TextLine>&& lines)
 {
-    mEventLoop->post([boxes = std::move(boxes), impl = mImpl]() {
-        impl->boxes = std::move(boxes);
+    mEventLoop->post([ident, lines = std::move(lines), impl = mImpl]() mutable {
+        impl->addTextLines(ident, std::move(lines));
     });
 }
 
-void Renderer::addTextLines(uint32_t box, std::vector<TextLine>&& lines)
+void Renderer::addTextLines(std::string&& ident, std::vector<TextLine>&& lines)
 {
-    mEventLoop->post([box, lines = std::move(lines), impl = mImpl]() mutable {
-        impl->addTextLines(box, std::move(lines));
+    mEventLoop->post([ident = std::move(ident), lines = std::move(lines), impl = mImpl]() mutable {
+        impl->addTextLines(ident, std::move(lines));
     });
 }
 
-void Renderer::clearTextLines(uint32_t box)
+void Renderer::clearTextLines(const std::string& ident)
 {
-    mEventLoop->post([box, impl = mImpl]() {
-        impl->clearTextLines(box);
+    mEventLoop->post([ident, impl = mImpl]() {
+        impl->clearTextLines(ident);
     });
 }
 
-void Renderer::addTextProperties(uint32_t box, std::vector<TextProperty>&& properties)
+void Renderer::clearTextLines(std::string&& ident)
 {
-    mEventLoop->post([box, properties = std::move(properties), impl = mImpl]() mutable {
-        impl->addTextProperties(box, std::move(properties));
+    mEventLoop->post([ident = std::move(ident), impl = mImpl]() {
+        impl->clearTextLines(ident);
     });
 }
 
-void Renderer::clearTextProperties(uint32_t box)
+void Renderer::addTextProperties(const std::string& ident, std::vector<TextProperty>&& properties)
 {
-    mEventLoop->post([box, impl = mImpl]() {
-        impl->clearTextProperties(box);
+    mEventLoop->post([ident, properties = std::move(properties), impl = mImpl]() mutable {
+        impl->addTextProperties(ident, std::move(properties));
     });
 }
 
-void Renderer::setPropertyInt(uint32_t box, Property prop, int32_t value)
+void Renderer::addTextProperties(std::string&& ident, std::vector<TextProperty>&& properties)
 {
-    mEventLoop->post([box, prop, value, impl = mImpl]() {
-        impl->setProperty<int32_t>(box, prop, value);
+    mEventLoop->post([ident = std::move(ident), properties = std::move(properties), impl = mImpl]() mutable {
+        impl->addTextProperties(ident, std::move(properties));
     });
 }
 
-void Renderer::setPropertyFloat(uint32_t box, Property prop, float value)
+void Renderer::clearTextProperties(const std::string& ident)
 {
-    mEventLoop->post([box, prop, value, impl = mImpl]() {
-        impl->setProperty<float>(box, prop, value);
+    mEventLoop->post([ident, impl = mImpl]() {
+        impl->clearTextProperties(ident);
     });
 }
 
-void Renderer::animatePropertyInt(uint32_t box, Property prop, int32_t value, uint64_t ms, Ease ease)
+void Renderer::clearTextProperties(std::string&& ident)
 {
-    mEventLoop->post([box, prop, value, ms, ease, impl = mImpl]() {
-        impl->animateProperty<int32_t>(box, prop, value, ms, ease);
+    mEventLoop->post([ident = std::move(ident), impl = mImpl]() {
+        impl->clearTextProperties(ident);
     });
 }
 
-void Renderer::animatePropertyFloat(uint32_t box, Property prop, float value, uint64_t ms, Ease ease)
+void Renderer::setPropertyInt(const std::string& ident, Property prop, int32_t value)
 {
-    mEventLoop->post([box, prop, value, ms, ease, impl = mImpl]() {
-        impl->animateProperty<float>(box, prop, value, ms, ease);
+    mEventLoop->post([ident, prop, value, impl = mImpl]() {
+        impl->setProperty<int32_t>(ident, prop, value);
+    });
+}
+
+void Renderer::setPropertyInt(std::string&& ident, Property prop, int32_t value)
+{
+    mEventLoop->post([ident = std::move(ident), prop, value, impl = mImpl]() {
+        impl->setProperty<int32_t>(ident, prop, value);
+    });
+}
+
+void Renderer::setPropertyFloat(const std::string& ident, Property prop, float value)
+{
+    mEventLoop->post([ident, prop, value, impl = mImpl]() {
+        impl->setProperty<float>(ident, prop, value);
+    });
+}
+
+void Renderer::setPropertyFloat(std::string&& ident, Property prop, float value)
+{
+    mEventLoop->post([ident = std::move(ident), prop, value, impl = mImpl]() {
+        impl->setProperty<float>(ident, prop, value);
+    });
+}
+
+void Renderer::animatePropertyInt(const std::string& ident, Property prop, int32_t value, uint64_t ms, Ease ease)
+{
+    mEventLoop->post([ident, prop, value, ms, ease, impl = mImpl]() {
+        impl->animateProperty<int32_t>(ident, prop, value, ms, ease);
+    });
+}
+
+void Renderer::animatePropertyInt(std::string&& ident, Property prop, int32_t value, uint64_t ms, Ease ease)
+{
+    mEventLoop->post([ident = std::move(ident), prop, value, ms, ease, impl = mImpl]() {
+        impl->animateProperty<int32_t>(ident, prop, value, ms, ease);
+    });
+}
+
+void Renderer::animatePropertyFloat(const std::string& ident, Property prop, float value, uint64_t ms, Ease ease)
+{
+    mEventLoop->post([ident, prop, value, ms, ease, impl = mImpl]() {
+        impl->animateProperty<float>(ident, prop, value, ms, ease);
+    });
+}
+
+void Renderer::animatePropertyFloat(std::string&& ident, Property prop, float value, uint64_t ms, Ease ease)
+{
+    mEventLoop->post([ident = std::move(ident), prop, value, ms, ease, impl = mImpl]() {
+        impl->animateProperty<float>(ident, prop, value, ms, ease);
     });
 }
 
@@ -1810,10 +1844,10 @@ void Renderer::render()
 
         vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->textPipeline);
 
-        for (std::size_t box = 0; box < mImpl->textVBOs.size(); ++box) {
-            const auto& vbos = mImpl->textVBOs[box];
+        for (const auto& vboPair : mImpl->textVBOs) {
+            const auto& vbos = vboPair.second;
 
-            const auto firstLineFloat = mImpl->propertyValue<float>(box, Property::FirstLine);
+            const auto firstLineFloat = mImpl->propertyValue<float>(vboPair.first, Property::FirstLine);
             const uint32_t firstLineLow = static_cast<uint32_t>(floorf(firstLineFloat));
             const uint32_t firstLineHigh = static_cast<uint32_t>(ceilf(firstLineFloat));
             const float firstLineDelta = firstLineFloat - floorf(firstLineFloat);// - firstLineFloat;

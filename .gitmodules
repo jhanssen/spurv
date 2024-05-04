@@ -61,3 +61,6 @@
 [submodule "3rdparty/yoga"]
 	path = 3rdparty/yoga
 	url = https://github.com/facebook/yoga.git
+[submodule "3rdparty/unordered_dense"]
+	path = 3rdparty/unordered_dense
+	url = https://github.com/martinus/unordered_dense.git

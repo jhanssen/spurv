@@ -70,12 +70,6 @@ int main(int argc, char** argv, char** envp)
             Editor::instance()->load(std::filesystem::path(filename));
         });
     });
-    Renderer::instance()->setBoxes({ {
-                Box {
-                    { 0.8, 0.0, 0.8, 0.8 },
-                    { 0.3, 0.0, 0.3, 0.3 }
-                }
-            } });
     const int32_t ret = loop.run();
     ThreadPool::destroyMainThreadPool();
     Editor::destroy();

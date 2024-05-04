@@ -22,15 +22,15 @@ void View::processDocument()
     mFirstLine = 0;
 
     auto renderer = Renderer::instance();
-    renderer->setPropertyFloat(0, Renderer::Property::FirstLine, static_cast<float>(mFirstLine));
-    renderer->clearTextProperties(0);
+    renderer->setPropertyFloat("foobar", Renderer::Property::FirstLine, static_cast<float>(mFirstLine));
+    renderer->clearTextProperties("foobar");
     spdlog::info("view process doc {}", mDocument->numLines());
     if (mDocument->numLines() == 0) {
         // no text
-        renderer->clearTextLines(0);
+        renderer->clearTextLines("foobar");
     } else {
         auto textLines = mDocument->textForRange(0, std::min<std::size_t>(mDocument->numLines(), 500));
-        renderer->addTextLines(0, std::move(textLines));
+        renderer->addTextLines("foobar", std::move(textLines));
 
         // start animating the first line just for shits and giggles
         // auto loop = EventLoop::eventLoop();
