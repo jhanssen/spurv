@@ -50,7 +50,7 @@ public:
 
     bool matchesSelector(const std::string& selector) const;
     bool matchesSelector(const qss::Selector& selector) const;
-    static bool matchesSelector(const qss::Selector& selector1, const qss::Selector& selector2);
+    static bool matchesSelector(const Styleable* styleable, const qss::Selector& selector);
     static uint64_t selectorSpecificity(const qss::Selector& selector);
 
     enum class StylesheetMode : uint32_t {
@@ -110,10 +110,11 @@ protected:
     EventEmitter<void(const std::string&)> mOnNameChanged;
 
 private:
+    static bool matchesSelector(const Styleable* styleable, const qss::Selector& selector, std::size_t inputOffset);
+
+private:
     Styleable(const Styleable&) = delete;
     Styleable& operator=(const Styleable&) = delete;
-
-    static void buildSelector(qss::Selector& selector, const Styleable* styleable);
 };
 
 inline EventEmitter<void(const std::string&)>& Styleable::onNameChanged()

@@ -477,19 +477,17 @@ void Styleable::removeStyleableChild(Styleable* child)
     }
 }
 
-bool Styleable::matchesSelector(const qss::Selector& inputSelector, const qss::Selector& styleSelector)
+bool Styleable::matchesSelector(const Styleable* styleable, const qss::Selector& inputSelector, std::size_t inputOffset)
 {
-    auto inputCopy = inputSelector;
-    // spdlog::info("matches {} {}", inputCopy.toString(), styleSelector.toString());
-    const std::size_t count = styleSelector.fragmentCount();
-    if (inputCopy.fragmentCount() > count) {
+    if (inputOffset >= inputSelector.fragmentCount()) {
         return false;
     }
-    if (count == 0) {
-        return true;
-    }
 
-    auto matchSelectorElement = [](const qss::SelectorElement& inputElem, const qss::SelectorElement& styleElem) -> bool {
+    const Styleable* topStyleable = styleable;
+    auto inputCopy = inputSelector;
+    // spdlog::info("matches {} {}", inputCopy.toString(), styleSelector.toString());
+
+    auto matchSelectorElement = [](const qss::SelectorElement& styleElem, const qss::SelectorElement& inputElem) -> bool {
         const auto inputName = nameToStyleSelectorName(inputElem.name());
         const auto styleName = nameToStyleSelectorName(styleElem.name());
         if (styleName == StyleSelectorName::Unknown || styleName == StyleSelectorName::Star) {
@@ -536,6 +534,146 @@ bool Styleable::matchesSelector(const qss::Selector& inputSelector, const qss::S
         return true;
     };
 
+    auto gotoAdjacent = [&inputCopy](std::size_t off) -> std::size_t {
+        while (off > 2) {
+            if (inputCopy[off - 1].position() == qss::SelectorElement::ADJACENT) {
+                return off;
+            }
+            --off;
+        }
+        return std::numeric_limits<std::size_t>::max();
+    };
+
+    const auto inputCount = inputCopy.fragmentCount();
+    const auto count = inputCount - inputOffset;
+    for (std::size_t idx = count; idx > 0; --idx) {
+        auto* inputElem = &inputCopy[idx - 1];
+        const auto* styleElem = &styleable->mSelector[0];
+        assert(styleElem->position() == qss::SelectorElement::PARENT
+               || styleElem->position() == qss::SelectorElement::CHILD);
+
+        if (!matchSelectorElement(*styleElem, *inputElem)) {
+            idx = gotoAdjacent(idx);
+            if (idx != std::numeric_limits<std::size_t>::max()) {
+                styleable = topStyleable;
+                continue;
+            }
+            return false;
+        }
+        // remove the name and sub control, name we've already matched and sub control needs to be checked on the outside
+        inputElem->name(std::string {});
+        if (idx == count) {
+            inputElem->sub(std::string {});
+        }
+        if (!inputElem->isGeneralizedFrom(*styleElem)) {
+            idx = gotoAdjacent(idx);
+            if (idx != std::numeric_limits<std::size_t>::max()) {
+                styleable = topStyleable;
+                continue;
+            }
+            return false;
+        }
+
+        switch (inputElem->position()) {
+        case qss::SelectorElement::PARENT:
+        case qss::SelectorElement::ADJACENT:
+            // top level, done
+            return true;
+        case qss::SelectorElement::CHILD:
+            // direct child
+            styleable = styleable->mParent;
+            if (styleable == nullptr) {
+                // no match
+                idx = gotoAdjacent(idx);
+                if (idx != std::numeric_limits<std::size_t>::max()) {
+                    styleable = topStyleable;
+                    continue;
+                }
+                return false;
+            }
+            break;
+        case qss::SelectorElement::DESCENDANT: {
+            // general child, might match any of the parents
+            auto parent = styleable->mParent;
+            while (parent != nullptr) {
+                if (matchesSelector(parent, inputSelector, inputCount - idx + 1)) {
+                    return true;
+                }
+
+                parent = parent->mParent;
+            }
+            idx = gotoAdjacent(idx);
+            if (idx != std::numeric_limits<std::size_t>::max()) {
+                styleable = topStyleable;
+                continue;
+            }
+            return false; }
+        case qss::SelectorElement::SIBLING: {
+            // direct sibling
+            if (styleable->mParent == nullptr) {
+                // no match
+                idx = gotoAdjacent(idx);
+                if (idx != std::numeric_limits<std::size_t>::max()) {
+                    styleable = topStyleable;
+                    continue;
+                }
+                return false;
+            }
+            auto cit = std::find_if(styleable->mParent->mChildren.begin(), styleable->mParent->mChildren.end(),
+                                    [styleable](Styleable* child) {
+                                        return child == styleable;
+                                    });
+            if (cit == styleable->mParent->mChildren.end() || cit == styleable->mParent->mChildren.begin()) {
+                idx = gotoAdjacent(idx);
+                if (idx != std::numeric_limits<std::size_t>::max()) {
+                    styleable = topStyleable;
+                    continue;
+                }
+                return false;
+            }
+            --cit;
+            styleable = *cit;
+            break; }
+        case qss::SelectorElement::GENERAL_SIBLING: {
+            // general sibling
+            if (styleable->mParent == nullptr) {
+                // no match
+                idx = gotoAdjacent(idx);
+                if (idx != std::numeric_limits<std::size_t>::max()) {
+                    styleable = topStyleable;
+                    continue;
+                }
+                return false;
+            }
+            auto cit = std::find_if(styleable->mParent->mChildren.begin(), styleable->mParent->mChildren.end(),
+                                    [styleable](Styleable* child) {
+                                        return child == styleable;
+                                    });
+            if (cit == styleable->mParent->mChildren.end() || cit == styleable->mParent->mChildren.begin()) {
+                idx = gotoAdjacent(idx);
+                if (idx != std::numeric_limits<std::size_t>::max()) {
+                    styleable = topStyleable;
+                    continue;
+                }
+                return false;
+            }
+            --cit;
+            while (cit != styleable->mParent->mChildren.begin()) {
+                if (matchesSelector(*cit, inputSelector, inputCount - idx + 1)) {
+                    return true;
+                }
+                --cit;
+            }
+            idx = gotoAdjacent(idx);
+            if (idx != std::numeric_limits<std::size_t>::max()) {
+                styleable = topStyleable;
+                continue;
+            }
+            return false; }
+        }
+    }
+
+    /*
     size_t inputAdd = 0;
     const std::size_t inputSub = count - inputCopy.fragmentCount();
     for (std::size_t idx = count; idx - inputSub + inputAdd > 0; --idx) {
@@ -546,13 +684,15 @@ bool Styleable::matchesSelector(const qss::Selector& inputSelector, const qss::S
         //              styleElem->name(), static_cast<uint32_t>(styleElem->position()));
         assert(inputElem->position() == qss::SelectorElement::PARENT
                || inputElem->position() == qss::SelectorElement::CHILD
-               || inputElem->position() == qss::SelectorElement::DESCENDANT);
-        assert(styleElem->position() == qss::SelectorElement::PARENT
+               || inputElem->position() == qss::SelectorElement::DESCENDANT
+               || inputElem->position() == qss::SelectorElement::SIBLING
+               || inputElem->position() == qss::SelectorElement::GENERAL_SIBLING);
+        assert(styleElem->position() == qss::SelectorElement::SIBLING
                || styleElem->position() == qss::SelectorElement::CHILD);
         if (!matchSelectorElement(*inputElem, *styleElem)) {
             return false;
         }
-        // remove the name and sub control, name we've already matched and sub control needs to be check on the outside
+        // remove the name and sub control, name we've already matched and sub control needs to be checked on the outside
         inputElem->name(std::string {});
         if (idx == count) {
             inputElem->sub(std::string {});
@@ -571,7 +711,7 @@ bool Styleable::matchesSelector(const qss::Selector& inputSelector, const qss::S
             while (idx > 0) {
                 inputElem = &inputCopy[idx - 1 - inputSub + inputAdd];
                 styleElem = &styleSelector[idx - 1];
-                if (matchSelectorElement(*inputElem, *styleElem)) {
+                if (styleElem->position() == qss::SelectorElement::CHILD && matchSelectorElement(*inputElem, *styleElem)) {
                     qss::SelectorElement inputElemCopy = *inputElem;
                     inputElemCopy.name(std::string {});
                     if (inputElemCopy.isGeneralizedFrom(*styleElem)) {
@@ -589,32 +729,21 @@ bool Styleable::matchesSelector(const qss::Selector& inputSelector, const qss::S
                 return false;
             }
         }
+        // foo + bar > kake + bake
+        // if the input is a
     }
+    */
     return true;
 }
 
-void Styleable::buildSelector(qss::Selector& selector, const Styleable* styleable)
+bool Styleable::matchesSelector(const Styleable* styleable, const qss::Selector& inputSelector)
 {
-    if (styleable->mParent) {
-        buildSelector(selector, styleable->mParent);
-    }
-    const auto pos = selector.fragmentCount() > 0 ? qss::SelectorElement::CHILD : qss::SelectorElement::PARENT;
-    assert(styleable->mSelector.fragmentCount() == 1);
-    selector.append(styleable->mSelector[0], pos);
+    return matchesSelector(styleable, inputSelector, 0);
 }
 
 bool Styleable::matchesSelector(const qss::Selector& selector) const
 {
-    qss::Selector styleSelector;
-    buildSelector(styleSelector, this);
-
-    /*
-    const bool mm = matchesSelector(selector, styleSelector);
-    spdlog::info("- matched {}", mm);
-    return mm;
-    */
-
-    return matchesSelector(selector, styleSelector);
+    return matchesSelector(this, selector);
 }
 
 uint64_t Styleable::selectorSpecificity(const qss::Selector& selector)
