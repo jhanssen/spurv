@@ -1,6 +1,7 @@
 set(SOURCES
     Container.cpp
     Editor.cpp
+    Frame.cpp
     View.cpp
 )
 

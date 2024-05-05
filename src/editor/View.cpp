@@ -7,16 +7,9 @@
 
 using namespace spurv;
 
-uint64_t View::sViewNo = 0;
-
 View::View()
 {
     setSelector("view");
-    setName(fmt::format("spurv_view_{}", sViewNo++));
-    onNameChanged().connect([this](const std::string& oldName) {
-        auto renderer = Renderer::instance();
-        renderer->renameIdentifier(oldName, name());
-    });
 }
 
 View::~View()
@@ -79,6 +72,5 @@ void View::setDocument(const std::shared_ptr<Document>& doc)
 
 void View::updateLayout(const Rect& rect)
 {
-    auto renderer = Renderer::instance();
-    renderer->setGeometry(name(), rect);
+    Frame::updateLayout(rect);
 }

@@ -57,7 +57,7 @@ add_executable(spurv ${SOURCES}
     $<TARGET_OBJECTS:Spurv::Thread> $<TARGET_OBJECTS:Spurv::Document> $<TARGET_OBJECTS:Spurv::Editor>
     $<TARGET_OBJECTS:Spurv::Render> $<TARGET_OBJECTS:Spurv::Common> $<TARGET_OBJECTS:Spurv::Script>
 )
-target_link_libraries(spurv Spurv::Event Spurv::Document ${LIBS})
+target_link_libraries(spurv Spurv::Event Spurv::Document Spurv::Render ${LIBS})
 
 set_target_properties(spurv PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"

@@ -20,6 +20,7 @@ struct Color
 };
 
 std::optional<Color> parseColor(const std::string& color);
+std::optional<Color> parseColor(const char* color, std::size_t size);
 Color premultiplied(float r, float g, float b, float a);
 
 } // namespace spurv

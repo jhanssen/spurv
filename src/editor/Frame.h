@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Renderer.h>
 #include <Styleable.h>
 #include <string>
 #include <fmt/core.h>
@@ -18,16 +19,15 @@ public:
     Frame& operator=(Frame&&) = default;
 
     virtual void updateLayout(const Rect& rect) override;
+
+private:
+    void extractRenderViewData();
+
+private:
+    RenderViewData mRenderViewData = {};
+
+private:
+    static uint64_t sFrameNo;
 };
-
-inline Frame::Frame()
-{
-    setSelector("frame");
-}
-
-inline void Frame::updateLayout(const Rect& rect)
-{
-    (void)rect;
-}
 
 } // namespace spurv

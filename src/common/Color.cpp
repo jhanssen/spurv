@@ -3,12 +3,11 @@
 
 namespace spurv {
 
-std::optional<Color> parseColor(const std::string& color)
+std::optional<Color> parseColor(const char* color, std::size_t sz)
 {
-    const auto sz = color.size();
     if ((sz == 4 || sz == 5 || sz == 7 || sz == 9) && color[0] == '#') {
         char* end;
-        const auto n = strtol(color.c_str() + 1, &end, 16);
+        const auto n = strtol(color + 1, &end, 16);
         if (*end == '\0') {
             switch (sz) {
             case 4:
@@ -44,6 +43,11 @@ std::optional<Color> parseColor(const std::string& color)
         }
     }
     return {};
+}
+
+std::optional<Color> parseColor(const std::string& color)
+{
+    return parseColor(color.c_str(), color.size());
 }
 
 Color premultiplied(float r, float g, float b, float a)

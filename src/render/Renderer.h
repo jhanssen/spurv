@@ -25,6 +25,22 @@ struct GlyphsCreated;
 class GenericPoolBase;
 class GlyphAtlas;
 
+struct RenderViewData
+{
+    Rect frame;
+    Rect content;
+    Color backgroundColor;
+    Color viewColor;
+    Color borderColor = {};
+    Color shadowColor = {};
+    std::array<uint32_t, 4> borderRadius = {};
+    std::array<uint32_t, 2> shadowOffset = {};
+    float edgeSoftness = {};
+    float borderThickness = {};
+    float borderSoftness = {};
+    float shadowSoftness = {};
+};
+
 class Renderer
 {
 public:
@@ -43,8 +59,8 @@ public:
 
     EventEmitter<void()>& onReady();
 
-    void setGeometry(const std::string& ident, const Rect& geom);
-    void setGeometry(std::string&& ident, const Rect& geom);
+    void setRenderViewData(const std::string& ident, const RenderViewData& data);
+    void setRenderViewData(std::string&& ident, const RenderViewData& data);
 
     void addTextLines(const std::string& ident, std::vector<TextLine>&& lines);
     void addTextLines(std::string&& ident, std::vector<TextLine>&& lines);

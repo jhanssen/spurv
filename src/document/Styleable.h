@@ -78,13 +78,26 @@ public:
     enum class ColorType : uint32_t {
         Background,
         Foreground,
-        Border
+        Border,
+        Shadow
     };
     const std::optional<Color>& color(ColorType type) const;
     // left, top, right, bottom
     const std::array<uint32_t, 4>& borderRadius() const;
+    const std::array<uint32_t, 4>& border() const;
+    const std::array<uint32_t, 4>& padding() const;
+    const std::array<uint32_t, 4>& margin() const;
+
+    struct BoxShadow {
+        float hoffset = {};
+        float voffset = {};
+        float blur = {};
+        float spread = {};
+    };
+    const BoxShadow& boxShadow() const;
 
     EventEmitter<void(const std::string&)>& onNameChanged();
+    EventEmitter<void()>& onAppliedStylesheet();
 
 protected:
     void mergeParentStylesheet(const qss::Document& qss);
@@ -92,6 +105,7 @@ protected:
 
     qss::Selector& mutableSelector();
 
+    void clearStyleData();
     void applyStylesheet();
 
     void relayout();
@@ -99,15 +113,17 @@ protected:
 protected:
     qss::Selector mSelector;
     qss::Document mQss, mMergedQss;
-    std::array<std::optional<Color>, 3> mColors;
+    std::array<std::optional<Color>, 4> mColors;
     // left, top, right, bottom
-    std::array<uint32_t, 4> mBorderRadius = {};
+    std::array<uint32_t, 4> mBorder = {}, mBorderRadius = {}, mPadding = {}, mMargin = {};
+    BoxShadow mBoxShadow = {};
     YGNodeRef mYogaNode = nullptr;
 
     Styleable* mParent = nullptr;
     std::vector<Styleable*> mChildren;
 
     EventEmitter<void(const std::string&)> mOnNameChanged;
+    EventEmitter<void()> mOnAppliedStylesheet;
 
 private:
     static bool matchesSelector(const Styleable* styleable, const qss::Selector& selector, std::size_t inputOffset);
@@ -120,6 +136,11 @@ private:
 inline EventEmitter<void(const std::string&)>& Styleable::onNameChanged()
 {
     return mOnNameChanged;
+}
+
+inline EventEmitter<void()>& Styleable::onAppliedStylesheet()
+{
+    return mOnAppliedStylesheet;
 }
 
 inline void Styleable::setSelector(const qss::Selector& selector)
@@ -192,6 +213,26 @@ inline const std::optional<Color>& Styleable::color(ColorType type) const
 inline const std::array<uint32_t, 4>& Styleable::borderRadius() const
 {
     return mBorderRadius;
+}
+
+inline const std::array<uint32_t, 4>& Styleable::border() const
+{
+    return mBorder;
+}
+
+inline const std::array<uint32_t, 4>& Styleable::padding() const
+{
+    return mPadding;
+}
+
+inline const std::array<uint32_t, 4>& Styleable::margin() const
+{
+    return mMargin;
+}
+
+inline const Styleable::BoxShadow& Styleable::boxShadow() const
+{
+    return mBoxShadow;
 }
 
 } // namespace spurv

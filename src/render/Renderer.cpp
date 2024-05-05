@@ -134,7 +134,7 @@ struct Animation
 
 struct ViewData
 {
-    Rect geom = {};
+    RenderViewData renderData = {};
     std::vector<TextLine> textLines = {};
     std::vector<TextProperty> textProperties = {};
     std::vector<TextVBO> textVBOs = {};
@@ -222,7 +222,7 @@ struct RendererImpl
     void clearTextLines(const std::string& ident);
     void addTextProperties(const std::string& ident, std::vector<TextProperty>&& properties);
     void clearTextProperties(const std::string& ident);
-    void setGeometry(const std::string& ident, const Rect& rect);
+    void setRenderViewData(const std::string& ident, const RenderViewData& data);
 
     template<typename ValueType>
     void setProperty(const std::string& ident, Renderer::Property, ValueType value);
@@ -395,10 +395,10 @@ void RendererImpl::clearTextLines(const std::string& ident)
     view.textLines.clear();
 }
 
-void RendererImpl::setGeometry(const std::string& ident, const Rect& rect)
+void RendererImpl::setRenderViewData(const std::string& ident, const RenderViewData& data)
 {
     auto& view = views[ident];
-    view.geom = rect;
+    view.renderData = data;
 
     recreateUniformBuffers(ident, view);
 }
@@ -837,9 +837,11 @@ void RendererImpl::recreateUniformBuffers(const std::string& ident, ViewData& vi
 
         const TextVert textVertData = {
             // geometry
-            { 15.f, 15.f,
-              static_cast<float>(impl->width) - 30.f,
-              static_cast<float>(impl->height) - 30.f
+            {
+                static_cast<float>(frameView.renderData.content.x),
+                static_cast<float>(frameView.renderData.content.y),
+                static_cast<float>(frameView.renderData.content.width),
+                static_cast<float>(frameView.renderData.content.height)
             }
         };
         impl->writeUniformBuffer(cmdbuffer, frameView.textVertUniformBuffer, &textVertData, sizeof(TextVert), 0);
@@ -876,15 +878,20 @@ void RendererImpl::recreateUniformBuffers(const std::string& ident, ViewData& vi
 
         const BoxFrag boxFragData = {
             // background color
-            { 0.3f, 0.3f, 0.3f, 0.3f },
+            { frameView.renderData.backgroundColor.r, frameView.renderData.backgroundColor.g, frameView.renderData.backgroundColor.b, frameView.renderData.backgroundColor.a },
             // rect color
-            { 0.02f, 0.21f, 0.26f, 1.f },
+            { frameView.renderData.viewColor.r, frameView.renderData.viewColor.g, frameView.renderData.viewColor.b, frameView.renderData.viewColor.a },
             // border color
-            { 0.1f, 0.1f, 0.5f, 0.5f },
+            { frameView.renderData.borderColor.r, frameView.renderData.borderColor.g, frameView.renderData.borderColor.b, frameView.renderData.borderColor.a },
             // shadow color
-            { 0.1f, 0.1f, 0.1f, 0.1f },
+            { frameView.renderData.shadowColor.r, frameView.renderData.shadowColor.g, frameView.renderData.shadowColor.b, frameView.renderData.shadowColor.a },
             // corner radius
-            { 10.f, 10.f, 10.f, 10.f },
+            {
+                static_cast<float>(frameView.renderData.borderRadius[0]),
+                static_cast<float>(frameView.renderData.borderRadius[1]),
+                static_cast<float>(frameView.renderData.borderRadius[2]),
+                static_cast<float>(frameView.renderData.borderRadius[3])
+            },
             // viewport
             {
                 static_cast<float>(impl->width),
@@ -892,24 +899,27 @@ void RendererImpl::recreateUniformBuffers(const std::string& ident, ViewData& vi
             },
             // rect size
             {
-                static_cast<float>(impl->width) - 10.f,
-                static_cast<float>(impl->height) - 10.f
+                static_cast<float>(frameView.renderData.frame.width),
+                static_cast<float>(frameView.renderData.frame.height)
             },
             // rect center
             {
-                static_cast<float>(impl->width) / 2.f,
-                static_cast<float>(impl->height) / 2.f
+                static_cast<float>(frameView.renderData.frame.x) + (static_cast<float>(frameView.renderData.frame.width) / 2.f),
+                static_cast<float>(frameView.renderData.frame.y) + (static_cast<float>(frameView.renderData.frame.height) / 2.f)
             },
             // shadow offset
-            { 0.f, 10.f },
+            {
+                static_cast<float>(frameView.renderData.shadowOffset[0]),
+                static_cast<float>(frameView.renderData.shadowOffset[1])
+            },
             // edge softness
-            2.f,
+            frameView.renderData.edgeSoftness,
             // border thickness
-            5.f,
+            frameView.renderData.borderThickness,
             // border softness
-            2.f,
+            frameView.renderData.borderSoftness,
             // shadow softness
-            30.f
+            frameView.renderData.shadowSoftness
         };
         impl->writeUniformBuffer(cmdbuffer, frameView.boxFragUniformBuffer, &boxFragData, sizeof(BoxFrag), 0);
 
@@ -1777,17 +1787,17 @@ void Renderer::renameIdentifier(const std::string& oldIdent, const std::string& 
     });
 }
 
-void Renderer::setGeometry(const std::string& ident, const Rect& geom)
+void Renderer::setRenderViewData(const std::string& ident, const RenderViewData& data)
 {
-    mEventLoop->post([ident, geom, impl = mImpl]() {
-        impl->setGeometry(ident, geom);
+    mEventLoop->post([ident, data, impl = mImpl]() {
+        impl->setRenderViewData(ident, data);
     });
 }
 
-void Renderer::setGeometry(std::string&& ident, const Rect& geom)
+void Renderer::setRenderViewData(std::string&& ident, const RenderViewData& data)
 {
-    mEventLoop->post([ident = std::move(ident), geom, impl = mImpl]() {
-        impl->setGeometry(ident, geom);
+    mEventLoop->post([ident = std::move(ident), data, impl = mImpl]() {
+        impl->setRenderViewData(ident, data);
     });
 }
 
@@ -1934,6 +1944,16 @@ void Renderer::render()
             vkCmdDraw(cmdbuffer, 4, 1, 0, 0);
 
             vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->textPipeline);
+
+            scissor.offset = {
+                view.renderData.content.x,
+                view.renderData.content.y
+            };
+            scissor.extent = {
+                view.renderData.content.width,
+                view.renderData.content.height
+            };
+            vkCmdSetScissor(cmdbuffer, 0, 1, &scissor);
 
             const auto& vbos = view.textVBOs;
 

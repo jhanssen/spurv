@@ -177,10 +177,10 @@ void Editor::load(const std::filesystem::path& path)
             mDocuments.push_back(std::make_shared<Document>());
             auto view = std::make_shared<View>();
             mContainer->addFrame(view);
-            mContainer->addClass("border");
             view->setName("hello");
             view->setDocument(mDocuments.back());
             view->setActive(false);
+            view->addClass("border");
             mCurrentView = view;
             auto currentDoc = mCurrentView->document().get();
             currentDoc->setName("doccy");
@@ -188,10 +188,11 @@ void Editor::load(const std::filesystem::path& path)
             // currentDoc->matchesSelector("editor document");
             // view->matchesSelector("container > view#hello:!active");
 
-            mContainer->setStylesheet(
-                "editor { flex-direction: column;flex: 1; }\n"
-                "container.border { border: 10 #229922; }\n"
-                "editor > view { flex: 1; }\n"
+            setStylesheet(
+                "frame { border-radius: 10; box-shadow: 0 10 30 }\n"
+                "frame.border { border: 6 #229922; }\n"
+                "editor { flex-direction: column;flex: 1; padding: 5 }\n"
+                "editor > view { flex: 1; background-color: #ff0000; padding: 10 }\n"
                 "editor document { flex: 1; margin: 5   2; }");
 
             currentDoc->setFont(Font("Inconsolata", 25));

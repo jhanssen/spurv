@@ -120,6 +120,7 @@ enum class StyleRuleName {
     // BorderStyle,
     BorderColor,
     BorderRadius,
+    BoxShadow,
     Color,
     Flex,
     FlexBasis,
@@ -130,7 +131,8 @@ enum class StyleRuleName {
     FlexWrap,
     Gap,
     Margin,
-    Padding
+    Padding,
+    ShadowColor
 };
 
 static inline StyleRuleName nameToStyleRuleName(const std::string& name)
@@ -176,6 +178,9 @@ static inline StyleRuleName nameToStyleRuleName(const std::string& name)
         }
         break;
     case 10:
+        if (strncasecmp(name.c_str(), "box-shadow", 10) == 0) {
+            return StyleRuleName::BoxShadow;
+        }
         if (strncasecmp(name.c_str(), "flex-basis", 10) == 0) {
             return StyleRuleName::FlexBasis;
         }
@@ -194,6 +199,9 @@ static inline StyleRuleName nameToStyleRuleName(const std::string& name)
         // }
         if (strncasecmp(name.c_str(), "border-color", 12) == 0) {
             return StyleRuleName::BorderColor;
+        }
+        if (strncasecmp(name.c_str(), "shadow-color", 12) == 0) {
+            return StyleRuleName::ShadowColor;
         }
         break;
     case 13:
@@ -729,8 +737,18 @@ static inline std::size_t spacedNumbers(std::array<StyleNumber, Size>& array, co
     return numNumbers;
 }
 
+void Styleable::clearStyleData()
+{
+    mColors = {};
+    mBorder = {};
+    mBorderRadius = {};
+    mBoxShadow = {};
+}
+
 void Styleable::applyStylesheet()
 {
+    clearStyleData();
+
     unordered_dense::map<std::string, std::pair<uint64_t, std::string>> matching;
 
     auto setColor = [this](ColorType type, std::optional<Color>&& color) -> void {
@@ -772,11 +790,13 @@ void Styleable::applyStylesheet()
             while (skipper.cur != skipper.end) {
                 if (skipper.next - skipper.cur == 7 && strncasecmp(skipper.cur, "initial", 7) == 0) {
                     setColor(ColorType::Border, {});
+                    mBorder = {};
                     YGNodeStyleSetBorder(mYogaNode, YGEdgeAll, 0.f);
                 } else {
                     auto maybeNumber = nameToStyleNumber(skipper.cur);
                     if (maybeNumber.has_value()) {
                         if (!maybeNumber->percentage) {
+                            mBorder.fill(static_cast<uint32_t>(maybeNumber->number));
                             YGNodeStyleSetBorder(mYogaNode, YGEdgeAll, maybeNumber->number);
                         }
                     } else {
@@ -802,6 +822,7 @@ void Styleable::applyStylesheet()
                     }
                 } else if (std::holds_alternative<StyleFlexInitialInheritName>(grow)) {
                     if (std::get<StyleFlexInitialInheritName>(grow) == StyleFlexInitialInheritName::Initial) {
+                        mBorder = {};
                         YGNodeStyleSetBorder(mYogaNode, YGEdgeAll, 0.f);
                         numBorders = 0;
                         break;
@@ -813,21 +834,34 @@ void Styleable::applyStylesheet()
             }
             switch (numBorders) {
             case 1:
+                mBorder.fill(static_cast<uint32_t>(borders[0]));
                 YGNodeStyleSetBorder(mYogaNode, YGEdgeAll, borders[0]);
                 break;
             case 2:
+                mBorder[0] = static_cast<uint32_t>(borders[1]);
+                mBorder[1] = static_cast<uint32_t>(borders[0]);
+                mBorder[2] = static_cast<uint32_t>(borders[1]);
+                mBorder[3] = static_cast<uint32_t>(borders[0]);
                 YGNodeStyleSetBorder(mYogaNode, YGEdgeTop, borders[0]);
                 YGNodeStyleSetBorder(mYogaNode, YGEdgeBottom, borders[0]);
                 YGNodeStyleSetBorder(mYogaNode, YGEdgeLeft, borders[1]);
                 YGNodeStyleSetBorder(mYogaNode, YGEdgeRight, borders[1]);
                 break;
             case 3:
+                mBorder[0] = static_cast<uint32_t>(borders[1]);
+                mBorder[1] = static_cast<uint32_t>(borders[0]);
+                mBorder[2] = static_cast<uint32_t>(borders[1]);
+                mBorder[3] = static_cast<uint32_t>(borders[2]);
                 YGNodeStyleSetBorder(mYogaNode, YGEdgeTop, borders[0]);
                 YGNodeStyleSetBorder(mYogaNode, YGEdgeLeft, borders[1]);
                 YGNodeStyleSetBorder(mYogaNode, YGEdgeRight, borders[1]);
                 YGNodeStyleSetBorder(mYogaNode, YGEdgeBottom, borders[2]);
                 break;
             case 4:
+                mBorder[0] = static_cast<uint32_t>(borders[3]);
+                mBorder[1] = static_cast<uint32_t>(borders[0]);
+                mBorder[2] = static_cast<uint32_t>(borders[1]);
+                mBorder[3] = static_cast<uint32_t>(borders[2]);
                 YGNodeStyleSetBorder(mYogaNode, YGEdgeTop, borders[0]);
                 YGNodeStyleSetBorder(mYogaNode, YGEdgeRight, borders[1]);
                 YGNodeStyleSetBorder(mYogaNode, YGEdgeBottom, borders[2]);
@@ -888,6 +922,74 @@ void Styleable::applyStylesheet()
                     }
                     break;
                 }
+            }
+            break; }
+        case StyleRuleName::BoxShadow: {
+            if (ruleValue.size() == 7 && strncasecmp(ruleValue.c_str(), "initial", 7) == 0) {
+                setColor(ColorType::Shadow, {});
+                mBoxShadow = {};
+            } else {
+                setColor(ColorType::Shadow, {});
+                mBoxShadow = {};
+                // h-offset v-offset blur spread color
+                bool done = false;
+                uint32_t pos = 0;
+                StringSpaceSkipper skipper(ruleValue);
+                while (!done && skipper.cur != skipper.end) {
+                    switch (pos) {
+                    case 0:
+                        // h-offset
+                        mBoxShadow.hoffset = nameToStyleNumber(skipper.cur).value_or(StyleNumber {}).number;
+                        break;
+                    case 1:
+                        // v-offset
+                        mBoxShadow.voffset = nameToStyleNumber(skipper.cur).value_or(StyleNumber {}).number;
+                        break;
+                    case 2: {
+                        // blur or color
+                        auto blur = nameToStyleNumber(skipper.cur);
+                        if (blur.has_value()) {
+                            mBoxShadow.blur = blur.value().number;
+                        } else {
+                            auto color = parseColor(skipper.cur, skipper.next - skipper.cur);
+                            if (color.has_value()) {
+                                setColor(ColorType::Shadow, color.value());
+                                done = true;
+                            }
+                        }
+                        break; }
+                    case 3: {
+                        // spread or color
+                        auto spread = nameToStyleNumber(skipper.cur);
+                        if (spread.has_value()) {
+                            mBoxShadow.spread = spread.value().number;
+                        } else {
+                            auto color = parseColor(skipper.cur, skipper.next - skipper.cur);
+                            if (color.has_value()) {
+                                setColor(ColorType::Shadow, color.value());
+                                done = true;
+                            }
+                        }
+                        break; }
+                    case 4: {
+                        // color
+                        auto color = parseColor(skipper.cur, skipper.next - skipper.cur);
+                        if (color.has_value()) {
+                            setColor(ColorType::Shadow, color.value());
+                        }
+                        done = true;
+                        break; }
+                    }
+                    ++pos;
+                    skipper.advance();
+                }
+            }
+            break; }
+        case StyleRuleName::ShadowColor: {
+            if (ruleValue.size() == 7 && strncasecmp(ruleValue.c_str(), "initial", 7) == 0) {
+                setColor(ColorType::Shadow, {});
+            } else {
+                setColor(ColorType::Shadow, parseColor(ruleValue));
             }
             break; }
         case StyleRuleName::Color: {
@@ -1255,6 +1357,8 @@ void Styleable::applyStylesheet()
             break;
         }
     }
+
+    mOnAppliedStylesheet.emit();
 }
 
 void Styleable::relayout()
@@ -1273,6 +1377,44 @@ void Styleable::relayout()
     const float top = YGNodeLayoutGetTop(mYogaNode);
     const float width = YGNodeLayoutGetWidth(mYogaNode);
     const float height = YGNodeLayoutGetHeight(mYogaNode);
+
+    const float pleft = YGNodeLayoutGetPadding(mYogaNode, YGEdgeLeft);
+    const float ptop = YGNodeLayoutGetPadding(mYogaNode, YGEdgeTop);
+    const float pright = YGNodeLayoutGetPadding(mYogaNode, YGEdgeRight);
+    const float pbottom = YGNodeLayoutGetPadding(mYogaNode, YGEdgeBottom);
+
+    const float mleft = YGNodeLayoutGetMargin(mYogaNode, YGEdgeLeft);
+    const float mtop = YGNodeLayoutGetMargin(mYogaNode, YGEdgeTop);
+    const float mright = YGNodeLayoutGetMargin(mYogaNode, YGEdgeRight);
+    const float mbottom = YGNodeLayoutGetMargin(mYogaNode, YGEdgeBottom);
+
+    // const float bleft = YGNodeLayoutGetBorder(mYogaNode, YGEdgeLeft);
+    // const float btop = YGNodeLayoutGetBorder(mYogaNode, YGEdgeTop);
+    // const float bright = YGNodeLayoutGetBorder(mYogaNode, YGEdgeRight);
+    // const float bbottom = YGNodeLayoutGetBorder(mYogaNode, YGEdgeBottom);
+
+    mPadding = {
+        static_cast<uint32_t>(pleft),
+        static_cast<uint32_t>(ptop),
+        static_cast<uint32_t>(pright),
+        static_cast<uint32_t>(pbottom)
+    };
+
+    mMargin = {
+        static_cast<uint32_t>(mleft),
+        static_cast<uint32_t>(mtop),
+        static_cast<uint32_t>(mright),
+        static_cast<uint32_t>(mbottom)
+    };
+
+    /*
+    mBorder = {
+        static_cast<uint32_t>(bleft),
+        static_cast<uint32_t>(btop),
+        static_cast<uint32_t>(bright),
+        static_cast<uint32_t>(bbottom)
+    };
+    */
 
     spdlog::info("node {} {:.2f},{:.2f}+{:.2f}x{:.2f}",
                  mSelector.toString(),
