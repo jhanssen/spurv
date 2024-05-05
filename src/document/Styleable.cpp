@@ -673,66 +673,6 @@ bool Styleable::matchesSelector(const Styleable* styleable, const qss::Selector&
         }
     }
 
-    /*
-    size_t inputAdd = 0;
-    const std::size_t inputSub = count - inputCopy.fragmentCount();
-    for (std::size_t idx = count; idx - inputSub + inputAdd > 0; --idx) {
-        auto* inputElem = &inputCopy[idx - 1 - inputSub + inputAdd];
-        auto* styleElem = &styleSelector[idx - 1];
-        // spdlog::info("- elem match {} {} -- {} {}",
-        //              inputElem->name(), static_cast<uint32_t>(inputElem->position()),
-        //              styleElem->name(), static_cast<uint32_t>(styleElem->position()));
-        assert(inputElem->position() == qss::SelectorElement::PARENT
-               || inputElem->position() == qss::SelectorElement::CHILD
-               || inputElem->position() == qss::SelectorElement::DESCENDANT
-               || inputElem->position() == qss::SelectorElement::SIBLING
-               || inputElem->position() == qss::SelectorElement::GENERAL_SIBLING);
-        assert(styleElem->position() == qss::SelectorElement::SIBLING
-               || styleElem->position() == qss::SelectorElement::CHILD);
-        if (!matchSelectorElement(*inputElem, *styleElem)) {
-            return false;
-        }
-        // remove the name and sub control, name we've already matched and sub control needs to be checked on the outside
-        inputElem->name(std::string {});
-        if (idx == count) {
-            inputElem->sub(std::string {});
-        }
-        if (!inputElem->isGeneralizedFrom(*styleElem)) {
-            return false;
-        }
-        // if the input is a descendant then we need to find the next matching style element
-        if (inputElem->position() == qss::SelectorElement::DESCENDANT) {
-            if (idx == 1) {
-                // we're at the top element, everything is good
-                return true;
-            }
-
-            --idx;
-            while (idx > 0) {
-                inputElem = &inputCopy[idx - 1 - inputSub + inputAdd];
-                styleElem = &styleSelector[idx - 1];
-                if (styleElem->position() == qss::SelectorElement::CHILD && matchSelectorElement(*inputElem, *styleElem)) {
-                    qss::SelectorElement inputElemCopy = *inputElem;
-                    inputElemCopy.name(std::string {});
-                    if (inputElemCopy.isGeneralizedFrom(*styleElem)) {
-                        if (inputElemCopy.position() == qss::SelectorElement::DESCENDANT) {
-                            // this is a bit inefficient but we need to do the desendantness again
-                            ++idx;
-                        }
-                        break;
-                    }
-                }
-                ++inputAdd;
-                --idx;
-            }
-            if (idx == 0) {
-                return false;
-            }
-        }
-        // foo + bar > kake + bake
-        // if the input is a
-    }
-    */
     return true;
 }
 
