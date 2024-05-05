@@ -134,12 +134,21 @@ struct Animation
 
 struct ViewData
 {
-    RectF geom = {};
+    Rect geom = {};
     std::vector<TextLine> textLines = {};
     std::vector<TextProperty> textProperties = {};
     std::vector<TextVBO> textVBOs = {};
     std::vector<std::variant<int32_t, float>> renderProperties = {};
     std::vector<Animation> animatingProperties = {};
+
+    VkBuffer boxVertUniformBuffer = VK_NULL_HANDLE;
+    VmaAllocation boxVertUniformBufferAllocation = VK_NULL_HANDLE;
+    VkBuffer boxFragUniformBuffer = VK_NULL_HANDLE;
+    VmaAllocation boxFragUniformBufferAllocation = VK_NULL_HANDLE;
+
+    VkBuffer textVertUniformBuffer = VK_NULL_HANDLE;
+    VmaAllocation textVertUniformBufferAllocation = VK_NULL_HANDLE;
+    unordered_dense::map<TextProperty, std::pair<VkBuffer, VmaAllocation>> textFragUniformBuffers;
 };
 
 struct RendererImpl
@@ -193,19 +202,11 @@ struct RendererImpl
 
     VkSampler textSampler = VK_NULL_HANDLE;
 
-    VkBuffer textVertUniformBuffer = VK_NULL_HANDLE;
-    VmaAllocation textVertUniformBufferAllocation = VK_NULL_HANDLE;
-    unordered_dense::map<TextProperty, std::pair<VkBuffer, VmaAllocation>> textFragUniformBuffers;
     TextProperty defaultTextProperty = {};
 
     VkDescriptorSetLayout textUniformLayout = VK_NULL_HANDLE;
     VkPipelineLayout textPipelineLayout = VK_NULL_HANDLE;
     VkPipeline textPipeline = VK_NULL_HANDLE;
-
-    VkBuffer boxVertUniformBuffer = VK_NULL_HANDLE;
-    VmaAllocation boxVertUniformBufferAllocation = VK_NULL_HANDLE;
-    VkBuffer boxFragUniformBuffer = VK_NULL_HANDLE;
-    VmaAllocation boxFragUniformBufferAllocation = VK_NULL_HANDLE;
 
     VkDescriptorSetLayout boxUniformLayout = VK_NULL_HANDLE;
     VkPipelineLayout boxPipelineLayout = VK_NULL_HANDLE;
@@ -221,6 +222,7 @@ struct RendererImpl
     void clearTextLines(const std::string& ident);
     void addTextProperties(const std::string& ident, std::vector<TextProperty>&& properties);
     void clearTextProperties(const std::string& ident);
+    void setGeometry(const std::string& ident, const Rect& rect);
 
     template<typename ValueType>
     void setProperty(const std::string& ident, Renderer::Property, ValueType value);
@@ -241,12 +243,13 @@ struct RendererImpl
     void generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer);
     void clearAllVBOs();
     void recreateUniformBuffers();
+    void recreateUniformBuffers(const std::string& ident, ViewData& view);
     void writeUniformBuffer(VkCommandBuffer cmdbuffer, VkBuffer buffer, const void* data, std::size_t size, uint32_t bufferOffset);
     template<typename T>
     void writeUniformBuffer(VkCommandBuffer cmdbuffer, VkBuffer buffer, const T& data, uint32_t bufferOffset);
     GlyphAtlas& atlasFor(const Font& font);
-    void makeTextFragUniformBuffer(VkCommandBuffer cmdbuffer, const TextProperty& prop);
-    VkBuffer textFragUniformBuffer(const TextProperty& prop);
+    void makeTextFragUniformBuffer(ViewData& view, VkCommandBuffer cmdbuffer, const TextProperty& prop);
+    VkBuffer textFragUniformBuffer(ViewData& view, const TextProperty& prop);
 
     static void idleCallback(uv_idle_t* idle);
     static void processStop(uv_async_t* handle);
@@ -382,12 +385,22 @@ void RendererImpl::addTextLines(const std::string& ident, std::vector<TextLine>&
     auto& view = views[ident];
     view.textLines = std::move(lines);
     view.textVBOs.clear();
+
+    recreateUniformBuffers(ident, view);
 }
 
 void RendererImpl::clearTextLines(const std::string& ident)
 {
     auto& view = views[ident];
     view.textLines.clear();
+}
+
+void RendererImpl::setGeometry(const std::string& ident, const Rect& rect)
+{
+    auto& view = views[ident];
+    view.geom = rect;
+
+    recreateUniformBuffers(ident, view);
 }
 
 void RendererImpl::addTextProperties(const std::string& ident, std::vector<TextProperty>&& properties)
@@ -426,7 +439,11 @@ void RendererImpl::animateProperty(const std::string& ident, Renderer::Property 
     auto& props = view.renderProperties;
     auto& anims = view.animatingProperties;
 
-    assert(propNo < props.size() && propNo < anims.size());
+    if (propNo >= props.size()) {
+        return;
+    }
+    assert(props.size() == anims.size());
+
     auto& prop = props[propNo];
     assert(std::holds_alternative<ValueType>(prop));
     auto& anim = anims[propNo];
@@ -468,9 +485,21 @@ void RendererImpl::renameIdentifier(const std::string& oldIdent, const std::stri
     if (oldIdent == newIdent) {
         return;
     }
-    auto newCopy = std::move(views[newIdent]);
-    views[newIdent] = std::move(views[oldIdent]);
-    views[oldIdent] = std::move(newCopy);
+    auto oldIt = views.find(oldIdent);
+    if (oldIt == views.end()) {
+        // nothing do do?
+        return;
+    }
+    // optimize for the case where newIdent is not used
+    auto newIt = views.find(newIdent);
+    if (newIt == views.end()) {
+        views[newIdent] = std::move(oldIt->second);
+        views.erase(oldIt);
+    } else {
+        auto newCopy = std::move(newIt->second);
+        newIt->second = std::move(oldIt->second);
+        oldIt->second = std::move(newCopy);
+    }
 }
 
 void RendererImpl::updateAnimations()
@@ -528,20 +557,20 @@ void RendererImpl::updateAnimations()
     lastRender = now;
 }
 
-VkBuffer RendererImpl::textFragUniformBuffer(const TextProperty& prop)
+VkBuffer RendererImpl::textFragUniformBuffer(ViewData& view, const TextProperty& prop)
 {
-    auto it = textFragUniformBuffers.find(prop);
-    if (it != textFragUniformBuffers.end()) {
+    auto it = view.textFragUniformBuffers.find(prop);
+    if (it != view.textFragUniformBuffers.end()) {
         return it->second.first;
     }
 
     return VK_NULL_HANDLE;
 }
 
-void RendererImpl::makeTextFragUniformBuffer(VkCommandBuffer cmdbuffer, const TextProperty& prop)
+void RendererImpl::makeTextFragUniformBuffer(ViewData& view, VkCommandBuffer cmdbuffer, const TextProperty& prop)
 {
-    auto it = textFragUniformBuffers.find(prop);
-    if (it != textFragUniformBuffers.end()) {
+    auto it = view.textFragUniformBuffers.find(prop);
+    if (it != view.textFragUniformBuffers.end()) {
         return;
     }
 
@@ -569,7 +598,7 @@ void RendererImpl::makeTextFragUniformBuffer(VkCommandBuffer cmdbuffer, const Te
 
     writeUniformBuffer(cmdbuffer, buffer, &textFragData, sizeof(TextFrag), 0);
 
-    textFragUniformBuffers[prop] = std::make_pair(buffer, allocation);
+    view.textFragUniformBuffers[prop] = std::make_pair(buffer, allocation);
 }
 
 void RendererImpl::clearAllVBOs()
@@ -644,7 +673,7 @@ void RendererImpl::generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer)
         vbos.push_back(TextVBO());
         auto* vbo = &vbos.back();
         const auto& vboTextProp = curProp != nullptr ? *curProp : defaultTextProperty;
-        makeTextFragUniformBuffer(cmdbuffer, vboTextProp);
+        makeTextFragUniformBuffer(view, cmdbuffer, vboTextProp);
         vbo->setProperty(vboTextProp);
         vbo->setFirstLine(line.line);
         vbo->setLinePosition(linePos);
@@ -659,7 +688,7 @@ void RendererImpl::generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer)
         const float baseLine = ceilf(fontExtents.ascender / 64.f);
         const float x_tracking = std::max(floorf(fontSize / 10.f), 1.f);
 
-        VkImageView view = VK_NULL_HANDLE;
+        VkImageView imageView = VK_NULL_HANDLE;
         uint32_t glyph_count;
         float cursor_x = 0.f;
         hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(line.buffer, &glyph_count);
@@ -670,11 +699,11 @@ void RendererImpl::generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer)
                 ++missing;
                 continue;
             }
-            if (view == VK_NULL_HANDLE) {
-                view = glyphInfo->view;
-                vbo->setView(view);
+            if (imageView == VK_NULL_HANDLE) {
+                imageView = glyphInfo->view;
+                vbo->setView(imageView);
             }
-            assert(view == glyphInfo->view);
+            assert(imageView == glyphInfo->view);
 
             const float x_left = glyphInfo->box.bounds.l * fontSize;
             const float x_right = glyphInfo->box.bounds.r * fontSize;
@@ -713,13 +742,13 @@ void RendererImpl::generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer)
                     vbos.push_back(TextVBO());
                     vbo = &vbos.back();
 
-                    assert(view != VK_NULL_HANDLE);
-                    vbo->setView(view);
+                    assert(imageView != VK_NULL_HANDLE);
+                    vbo->setView(imageView);
                     vbo->setFirstLine(line.line);
                     vbo->setLinePosition(linePos);
 
                     const auto& newVboTextProp = curProp != nullptr ? *curProp : defaultTextProperty;
-                    makeTextFragUniformBuffer(cmdbuffer, newVboTextProp);
+                    makeTextFragUniformBuffer(view, cmdbuffer, newVboTextProp);
                     vbo->setProperty(newVboTextProp);
                 }
             }
@@ -746,20 +775,20 @@ void RendererImpl::generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer)
     spdlog::info("textvbos {} {}", generated, missing);
 }
 
-void RendererImpl::recreateUniformBuffers()
+void RendererImpl::recreateUniformBuffers(const std::string& ident, ViewData& view)
 {
     // delete old buffers if they exist
-    if (textVertUniformBuffer != VK_NULL_HANDLE || !textFragUniformBuffers.empty()
-        || boxVertUniformBuffer != VK_NULL_HANDLE || boxFragUniformBuffer != VK_NULL_HANDLE) {
+    if (view.textVertUniformBuffer != VK_NULL_HANDLE || !view.textFragUniformBuffers.empty()
+        || view.boxVertUniformBuffer != VK_NULL_HANDLE || view.boxFragUniformBuffer != VK_NULL_HANDLE) {
         Renderer::instance()->afterCurrentFrame([
             impl = this,
-            textVertBuffer = textVertUniformBuffer,
-            textVertAlloc = textVertUniformBufferAllocation,
-            textFragBuffers = std::move(textFragUniformBuffers),
-            boxVertBuffer = boxVertUniformBuffer,
-            boxVertAlloc = boxVertUniformBufferAllocation,
-            boxFragBuffer = boxFragUniformBuffer,
-            boxFragAlloc = boxFragUniformBufferAllocation
+            textVertBuffer = view.textVertUniformBuffer,
+            textVertAlloc = view.textVertUniformBufferAllocation,
+            textFragBuffers = std::move(view.textFragUniformBuffers),
+            boxVertBuffer = view.boxVertUniformBuffer,
+            boxVertAlloc = view.boxVertUniformBufferAllocation,
+            boxFragBuffer = view.boxFragUniformBuffer,
+            boxFragAlloc = view.boxFragUniformBufferAllocation
             ]() -> void {
             if (textVertBuffer != VK_NULL_HANDLE) {
                 assert(textVertAlloc != VK_NULL_HANDLE);
@@ -777,13 +806,13 @@ void RendererImpl::recreateUniformBuffers()
                 vmaDestroyBuffer(impl->allocator, boxFragBuffer, boxFragAlloc);
             }
         });
-        textVertUniformBuffer = VK_NULL_HANDLE;
-        textVertUniformBufferAllocation = VK_NULL_HANDLE;
-        textFragUniformBuffers.clear();
-        boxVertUniformBuffer = VK_NULL_HANDLE;
-        boxVertUniformBufferAllocation = VK_NULL_HANDLE;
-        boxFragUniformBuffer = VK_NULL_HANDLE;
-        boxFragUniformBufferAllocation = VK_NULL_HANDLE;
+        view.textVertUniformBuffer = VK_NULL_HANDLE;
+        view.textVertUniformBufferAllocation = VK_NULL_HANDLE;
+        view.textFragUniformBuffers.clear();
+        view.boxVertUniformBuffer = VK_NULL_HANDLE;
+        view.boxVertUniformBufferAllocation = VK_NULL_HANDLE;
+        view.boxFragUniformBuffer = VK_NULL_HANDLE;
+        view.boxFragUniformBufferAllocation = VK_NULL_HANDLE;
 
         // make sure we recreate the per text property ubos
         // this could likely be optimized, right now this also makes all
@@ -791,7 +820,8 @@ void RendererImpl::recreateUniformBuffers()
         clearAllVBOs();
     }
 
-    inFrameCallbacks.push_back([impl = this](VkCommandBuffer cmdbuffer) -> void {
+    inFrameCallbacks.push_back([impl = this, key = ident](VkCommandBuffer cmdbuffer) -> void {
+        auto& frameView = impl->views[key];
         // create uniform buffers
 
         // create the text vert ubo
@@ -803,7 +833,7 @@ void RendererImpl::recreateUniformBuffers()
         VmaAllocationCreateInfo bufferAllocationInfo = {};
         bufferAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->textVertUniformBuffer, &impl->textVertUniformBufferAllocation, nullptr));
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &frameView.textVertUniformBuffer, &frameView.textVertUniformBufferAllocation, nullptr));
 
         const TextVert textVertData = {
             // geometry
@@ -812,9 +842,9 @@ void RendererImpl::recreateUniformBuffers()
               static_cast<float>(impl->height) - 30.f
             }
         };
-        impl->writeUniformBuffer(cmdbuffer, impl->textVertUniformBuffer, &textVertData, sizeof(TextVert), 0);
+        impl->writeUniformBuffer(cmdbuffer, frameView.textVertUniformBuffer, &textVertData, sizeof(TextVert), 0);
 
-        auto& defaultTextFragBuffer = impl->textFragUniformBuffers[impl->defaultTextProperty];
+        auto& defaultTextFragBuffer = frameView.textFragUniformBuffers[impl->defaultTextProperty];
         // create the text frag ubo
         bufferInfo.size = sizeof(TextFrag);
         VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &defaultTextFragBuffer.first, &defaultTextFragBuffer.second, nullptr));
@@ -829,7 +859,7 @@ void RendererImpl::recreateUniformBuffers()
 
         // create the box vert ubo
         bufferInfo.size = sizeof(BoxVert);
-        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->boxVertUniformBuffer, &impl->boxVertUniformBufferAllocation, nullptr));
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &frameView.boxVertUniformBuffer, &frameView.boxVertUniformBufferAllocation, nullptr));
 
         const BoxVert boxVertData = {
             // geometry
@@ -838,11 +868,11 @@ void RendererImpl::recreateUniformBuffers()
               static_cast<float>(impl->height)
             }
         };
-        impl->writeUniformBuffer(cmdbuffer, impl->boxVertUniformBuffer, &boxVertData, sizeof(BoxVert), 0);
+        impl->writeUniformBuffer(cmdbuffer, frameView.boxVertUniformBuffer, &boxVertData, sizeof(BoxVert), 0);
 
         // create the box frag ubo
         bufferInfo.size = sizeof(BoxFrag);
-        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &impl->boxFragUniformBuffer, &impl->boxFragUniformBufferAllocation, nullptr));
+        VK_CHECK_SUCCESS(vmaCreateBuffer(impl->allocator, &bufferInfo, &bufferAllocationInfo, &frameView.boxFragUniformBuffer, &frameView.boxFragUniformBufferAllocation, nullptr));
 
         const BoxFrag boxFragData = {
             // background color
@@ -857,8 +887,8 @@ void RendererImpl::recreateUniformBuffers()
             { 10.f, 10.f, 10.f, 10.f },
             // viewport
             {
-              static_cast<float>(impl->width),
-              static_cast<float>(impl->height)
+                static_cast<float>(impl->width),
+                static_cast<float>(impl->height)
             },
             // rect size
             {
@@ -881,10 +911,17 @@ void RendererImpl::recreateUniformBuffers()
             // shadow softness
             30.f
         };
-        impl->writeUniformBuffer(cmdbuffer, impl->boxFragUniformBuffer, &boxFragData, sizeof(BoxFrag), 0);
+        impl->writeUniformBuffer(cmdbuffer, frameView.boxFragUniformBuffer, &boxFragData, sizeof(BoxFrag), 0);
 
         spdlog::info("Created uniform buffers");
     });
+}
+
+void RendererImpl::recreateUniformBuffers()
+{
+    for (auto& viewPair : views) {
+        recreateUniformBuffers(viewPair.first, viewPair.second);
+    }
 }
 
 void RendererImpl::writeUniformBuffer(VkCommandBuffer cmdbuffer, VkBuffer buffer, const void* data, std::size_t size, uint32_t bufferOffset)
@@ -1740,6 +1777,20 @@ void Renderer::renameIdentifier(const std::string& oldIdent, const std::string& 
     });
 }
 
+void Renderer::setGeometry(const std::string& ident, const Rect& geom)
+{
+    mEventLoop->post([ident, geom, impl = mImpl]() {
+        impl->setGeometry(ident, geom);
+    });
+}
+
+void Renderer::setGeometry(std::string&& ident, const Rect& geom)
+{
+    mEventLoop->post([ident = std::move(ident), geom, impl = mImpl]() {
+        impl->setGeometry(ident, geom);
+    });
+}
+
 void Renderer::render()
 {
     if (mImpl->vkbSwapchain.swapchain == VK_NULL_HANDLE) {
@@ -1816,22 +1867,24 @@ void Renderer::render()
         if (!view.textLines.empty() && view.textVBOs.empty()) {
             mImpl->generateVBOs(view, cmdbuffer);
         }
-        if (!view.textVBOs.empty() && mImpl->textVertUniformBuffer != VK_NULL_HANDLE) {
-            rendered = true;
+        if (!view.textVBOs.empty() && view.textVertUniformBuffer != VK_NULL_HANDLE) {
+            if (!rendered) {
+                // draw some text
+                VkRenderPassBeginInfo renderPassInfo = {};
+                renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                renderPassInfo.renderPass = mImpl->swapchainRenderPass;
+                renderPassInfo.framebuffer = mImpl->swapchainFramebuffers[mImpl->currentSwapchainImage];
+                renderPassInfo.renderArea = {
+                    { 0, 0 },
+                    { mImpl->scaledWidth, mImpl->scaledHeight }
+                };
+                const VkClearValue clear0 = {};
+                renderPassInfo.clearValueCount = 1;
+                renderPassInfo.pClearValues = &clear0;
+                vkCmdBeginRenderPass(cmdbuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-            // draw some text
-            VkRenderPassBeginInfo renderPassInfo = {};
-            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            renderPassInfo.renderPass = mImpl->swapchainRenderPass;
-            renderPassInfo.framebuffer = mImpl->swapchainFramebuffers[mImpl->currentSwapchainImage];
-            renderPassInfo.renderArea = {
-                { 0, 0 },
-                { mImpl->scaledWidth, mImpl->scaledHeight }
-            };
-            const VkClearValue clear0 = {};
-            renderPassInfo.clearValueCount = 1;
-            renderPassInfo.pClearValues = &clear0;
-            vkCmdBeginRenderPass(cmdbuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+                rendered = true;
+            }
 
             VkViewport viewport = {};
             viewport.x = 0.f;
@@ -1854,12 +1907,12 @@ void Renderer::render()
             vkCmdBindPipeline(cmdbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->boxPipeline);
 
             bufferDescriptorInfos[0] = {
-                .buffer = mImpl->boxVertUniformBuffer,
+                .buffer = view.boxVertUniformBuffer,
                 .offset = 0,
                 .range = VK_WHOLE_SIZE
             };
             bufferDescriptorInfos[1] = {
-                .buffer = mImpl->boxFragUniformBuffer,
+                .buffer = view.boxFragUniformBuffer,
                 .offset = 0,
                 .range = VK_WHOLE_SIZE
             };
@@ -1918,7 +1971,7 @@ void Renderer::render()
                 if (vbo.view() == VK_NULL_HANDLE) {
                     continue;
                 }
-                auto fragbuf = mImpl->textFragUniformBuffer(vbo.property());
+                auto fragbuf = mImpl->textFragUniformBuffer(view, vbo.property());
                 if (fragbuf == VK_NULL_HANDLE) {
                     continue;
                 }
@@ -1928,7 +1981,7 @@ void Renderer::render()
                 vkCmdBindVertexBuffers(cmdbuffer, 0, 1, &vtxbuf, &vtxoff);
 
                 bufferDescriptorInfos[0] = {
-                    .buffer = mImpl->textVertUniformBuffer,
+                    .buffer = view.textVertUniformBuffer,
                     .offset = 0,
                     .range = VK_WHOLE_SIZE
                 };
@@ -1979,7 +2032,9 @@ void Renderer::render()
             }
         }
 
-        vkCmdEndRenderPass(cmdbuffer);
+        if (rendered) {
+            vkCmdEndRenderPass(cmdbuffer);
+        }
     }
     if (!rendered) {
         VkImageMemoryBarrier presentBarrier = {};

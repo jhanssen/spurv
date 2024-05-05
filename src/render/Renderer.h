@@ -1,18 +1,22 @@
 #pragma once
 
+#include "Easing.h"
+
 #include <EventEmitter.h>
 #include <EventLoop.h>
+#include <Geometry.h>
 #include <TextLine.h>
 #include <TextProperty.h>
-#include "Easing.h"
-#include <condition_variable>
-#include <mutex>
-#include <thread>
-#include <memory>
-#include <optional>
-#include <cstdint>
-#include <cassert>
+
 #include <volk.h>
+
+#include <cassert>
+#include <condition_variable>
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <thread>
 
 namespace spurv {
 
@@ -38,6 +42,9 @@ public:
     static EventLoop* eventLoop();
 
     EventEmitter<void()>& onReady();
+
+    void setGeometry(const std::string& ident, const Rect& geom);
+    void setGeometry(std::string&& ident, const Rect& geom);
 
     void addTextLines(const std::string& ident, std::vector<TextLine>&& lines);
     void addTextLines(std::string&& ident, std::vector<TextLine>&& lines);

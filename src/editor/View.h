@@ -33,6 +33,8 @@ private:
     uint64_t mFirstLine = 0;
     bool mActive = false;
 
+    static uint64_t sViewNo;
+
 private:
     View(const View&) = delete;
     View& operator=(const View&) = delete;

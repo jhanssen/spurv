@@ -3,13 +3,20 @@
 #include <Renderer.h>
 #include <ScriptClass.h>
 #include <ScriptEngine.h>
+#include <Formatting.h>
 
 using namespace spurv;
 
+uint64_t View::sViewNo = 0;
 
 View::View()
 {
     setSelector("view");
+    setName(fmt::format("spurv_view_{}", sViewNo++));
+    onNameChanged().connect([this](const std::string& oldName) {
+        auto renderer = Renderer::instance();
+        renderer->renameIdentifier(oldName, name());
+    });
 }
 
 View::~View()
@@ -21,16 +28,17 @@ void View::processDocument()
     // reset view to top, and make the renderer start churning on the data
     mFirstLine = 0;
 
+    const std::string& nm = name();
     auto renderer = Renderer::instance();
-    renderer->setPropertyFloat("foobar", Renderer::Property::FirstLine, static_cast<float>(mFirstLine));
-    renderer->clearTextProperties("foobar");
+    renderer->setPropertyFloat(nm, Renderer::Property::FirstLine, static_cast<float>(mFirstLine));
+    renderer->clearTextProperties(nm);
     spdlog::info("view process doc {}", mDocument->numLines());
     if (mDocument->numLines() == 0) {
         // no text
-        renderer->clearTextLines("foobar");
+        renderer->clearTextLines(nm);
     } else {
         auto textLines = mDocument->textForRange(0, std::min<std::size_t>(mDocument->numLines(), 500));
-        renderer->addTextLines("foobar", std::move(textLines));
+        renderer->addTextLines(nm, std::move(textLines));
 
         // start animating the first line just for shits and giggles
         // auto loop = EventLoop::eventLoop();
@@ -71,5 +79,6 @@ void View::setDocument(const std::shared_ptr<Document>& doc)
 
 void View::updateLayout(const Rect& rect)
 {
-    (void)rect;
+    auto renderer = Renderer::instance();
+    renderer->setGeometry(name(), rect);
 }

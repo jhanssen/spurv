@@ -65,7 +65,7 @@ private:
     std::string mName;
     qss::Document mQss;
     uint32_t mWidth = 0, mHeight = 0;
-    View* mCurrentView = nullptr;
+    std::shared_ptr<View> mCurrentView = {};
     EventEmitter<void()> mOnReady;
     EditorImpl* mImpl;
 

@@ -25,6 +25,7 @@ std::unique_ptr<Editor> Editor::sInstance = {};
 class ViewInstance : public ScriptClassInstance
 {
 public:
+    std::shared_ptr<View> view {};
     int32_t pos { 0 };
 };
 
@@ -64,8 +65,9 @@ void Editor::thread_internal()
         auto mainEventLoop = static_cast<MainEventLoop*>(EventLoop::mainEventLoop());
         mScriptEngine = std::make_unique<ScriptEngine>(mEventLoop.get(), mImpl->appPath);
         ScriptClass clazz("View",
-                          [](ScriptClassInstance *&instance, std::vector<ScriptValue> &&/*args*/) -> std::optional<std::string> {
+                          [this](ScriptClassInstance *&instance, std::vector<ScriptValue> &&/*args*/) -> std::optional<std::string> {
                               ViewInstance *v = new ViewInstance;
+                              v->view = mCurrentView;
                               instance = v;
                               return {};
                           });
@@ -73,7 +75,7 @@ void Editor::thread_internal()
         clazz.addMethod("scrollDown", [](ScriptClassInstance *instance, std::vector<ScriptValue> &&) -> ScriptValue {
             ViewInstance *v = static_cast<ViewInstance *>(instance);
             auto renderer = Renderer::instance();
-            renderer->animatePropertyFloat("foobar", Renderer::Property::FirstLine, static_cast<float>(++v->pos), 100, Ease::InOutQuad);
+            renderer->animatePropertyFloat(v->view->name(), Renderer::Property::FirstLine, static_cast<float>(++v->pos), 100, Ease::InOutQuad);
             return {};
         });
 
@@ -82,7 +84,7 @@ void Editor::thread_internal()
             ViewInstance *v = static_cast<ViewInstance *>(instance);
             if (v->pos > 0) {
                 auto renderer = Renderer::instance();
-                renderer->animatePropertyFloat("foobar", Renderer::Property::FirstLine, static_cast<float>(--v->pos), 100, Ease::InOutQuad);
+                renderer->animatePropertyFloat(v->view->name(), Renderer::Property::FirstLine, static_cast<float>(--v->pos), 100, Ease::InOutQuad);
             }
             return {};
         });
@@ -179,7 +181,7 @@ void Editor::load(const std::filesystem::path& path)
             view->setName("hello");
             view->setDocument(mDocuments.back());
             view->setActive(false);
-            mCurrentView = view.get();
+            mCurrentView = view;
             auto currentDoc = mCurrentView->document().get();
             currentDoc->setName("doccy");
 

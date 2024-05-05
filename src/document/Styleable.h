@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Color.h>
+#include <EventEmitter.h>
 #include <Geometry.h>
 #include <qssdocument.h>
 #include <yoga/Yoga.h>
@@ -83,6 +84,8 @@ public:
     // left, top, right, bottom
     const std::array<uint32_t, 4>& borderRadius() const;
 
+    EventEmitter<void(const std::string&)>& onNameChanged();
+
 protected:
     void mergeParentStylesheet(const qss::Document& qss);
     void unmergeParentStylesheet();
@@ -104,12 +107,19 @@ protected:
     Styleable* mParent = nullptr;
     std::vector<Styleable*> mChildren;
 
+    EventEmitter<void(const std::string&)> mOnNameChanged;
+
 private:
     Styleable(const Styleable&) = delete;
     Styleable& operator=(const Styleable&) = delete;
 
     static void buildSelector(qss::Selector& selector, const Styleable* styleable);
 };
+
+inline EventEmitter<void(const std::string&)>& Styleable::onNameChanged()
+{
+    return mOnNameChanged;
+}
 
 inline void Styleable::setSelector(const qss::Selector& selector)
 {
@@ -143,7 +153,9 @@ inline const qss::Document& Styleable::stylesheet() const
 
 inline void Styleable::setName(const std::string& name)
 {
+    const std::string oldName = mSelector[0].id();
     mutableSelector()[0].id(name);
+    mOnNameChanged.emit(oldName);
 }
 
 inline std::string Styleable::name() const
