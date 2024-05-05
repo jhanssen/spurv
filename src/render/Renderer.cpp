@@ -198,7 +198,7 @@ struct RendererImpl
     std::vector<std::function<void(VkCommandBuffer cmdbuffer)>> inFrameCallbacks = {};
 
     std::unordered_map<std::filesystem::path, GlyphAtlas> glyphAtlases = {};
-    unordered_dense::map<std::string, ViewData> views = {};
+    unordered_dense::map<uint64_t, ViewData> views = {};
 
     VkSampler textSampler = VK_NULL_HANDLE;
 
@@ -218,22 +218,22 @@ struct RendererImpl
 
     bool suboptimal = false, stopped = true;
 
-    void addTextLines(const std::string& ident, std::vector<TextLine>&& lines);
-    void clearTextLines(const std::string& ident);
-    void addTextProperties(const std::string& ident, std::vector<TextProperty>&& properties);
-    void clearTextProperties(const std::string& ident);
-    void setRenderViewData(const std::string& ident, const RenderViewData& data);
+    void addTextLines(uint64_t ident, std::vector<TextLine>&& lines);
+    void clearTextLines(uint64_t ident);
+    void addTextProperties(uint64_t ident, std::vector<TextProperty>&& properties);
+    void clearTextProperties(uint64_t ident);
+    void setRenderViewData(uint64_t ident, const RenderViewData& data);
 
     template<typename ValueType>
-    void setProperty(const std::string& ident, Renderer::Property, ValueType value);
+    void setProperty(uint64_t ident, Renderer::Property, ValueType value);
 
     template<typename ValueType>
-    void animateProperty(const std::string& ident, Renderer::Property prop, ValueType value, uint64_t ms, Ease ease);
+    void animateProperty(uint64_t ident, Renderer::Property prop, ValueType value, uint64_t ms, Ease ease);
 
     template<typename ValueType>
     ValueType propertyValue(const ViewData& view, Renderer::Property) const;
 
-    void renameIdentifier(const std::string& oldIdent, const std::string& newIdent);
+    void frameDeleted(uint64_t ident);
 
     void updateAnimations();
 
@@ -243,7 +243,7 @@ struct RendererImpl
     void generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer);
     void clearAllVBOs();
     void recreateUniformBuffers();
-    void recreateUniformBuffers(const std::string& ident, ViewData& view);
+    void recreateUniformBuffers(uint64_t ident, ViewData& view);
     void writeUniformBuffer(VkCommandBuffer cmdbuffer, VkBuffer buffer, const void* data, std::size_t size, uint32_t bufferOffset);
     template<typename T>
     void writeUniformBuffer(VkCommandBuffer cmdbuffer, VkBuffer buffer, const T& data, uint32_t bufferOffset);
@@ -344,7 +344,7 @@ GlyphAtlas& RendererImpl::atlasFor(const Font& font)
     return atlas;
 }
 
-void RendererImpl::addTextLines(const std::string& ident, std::vector<TextLine>&& lines)
+void RendererImpl::addTextLines(uint64_t ident, std::vector<TextLine>&& lines)
 {
     spdlog::info("Got text lines {}", lines.size());
 
@@ -389,13 +389,13 @@ void RendererImpl::addTextLines(const std::string& ident, std::vector<TextLine>&
     recreateUniformBuffers(ident, view);
 }
 
-void RendererImpl::clearTextLines(const std::string& ident)
+void RendererImpl::clearTextLines(uint64_t ident)
 {
     auto& view = views[ident];
     view.textLines.clear();
 }
 
-void RendererImpl::setRenderViewData(const std::string& ident, const RenderViewData& data)
+void RendererImpl::setRenderViewData(uint64_t ident, const RenderViewData& data)
 {
     auto& view = views[ident];
     view.renderData = data;
@@ -403,20 +403,20 @@ void RendererImpl::setRenderViewData(const std::string& ident, const RenderViewD
     recreateUniformBuffers(ident, view);
 }
 
-void RendererImpl::addTextProperties(const std::string& ident, std::vector<TextProperty>&& properties)
+void RendererImpl::addTextProperties(uint64_t ident, std::vector<TextProperty>&& properties)
 {
     auto& view = views[ident];
     view.textProperties = std::move(properties);
 }
 
-void RendererImpl::clearTextProperties(const std::string& ident)
+void RendererImpl::clearTextProperties(uint64_t ident)
 {
     auto& view = views[ident];
     view.textProperties.clear();
 }
 
 template<typename ValueType>
-void RendererImpl::setProperty(const std::string& ident, Renderer::Property prop, ValueType value)
+void RendererImpl::setProperty(uint64_t ident, Renderer::Property prop, ValueType value)
 {
     auto& view = views[ident];
     auto& props = view.renderProperties;
@@ -429,7 +429,7 @@ void RendererImpl::setProperty(const std::string& ident, Renderer::Property prop
 }
 
 template<typename ValueType>
-void RendererImpl::animateProperty(const std::string& ident, Renderer::Property property, ValueType value, uint64_t ms, Ease ease)
+void RendererImpl::animateProperty(uint64_t ident, Renderer::Property property, ValueType value, uint64_t ms, Ease ease)
 {
     using AnimationType = AnimationData<ValueType>;
 
@@ -480,26 +480,14 @@ ValueType RendererImpl::propertyValue(const ViewData& view, Renderer::Property p
     return std::get<ValueType>(props[propNo]);
 }
 
-void RendererImpl::renameIdentifier(const std::string& oldIdent, const std::string& newIdent)
+void RendererImpl::frameDeleted(uint64_t ident)
 {
-    if (oldIdent == newIdent) {
-        return;
-    }
-    auto oldIt = views.find(oldIdent);
-    if (oldIt == views.end()) {
+    auto it = views.find(ident);
+    if (it == views.end()) {
         // nothing do do?
         return;
     }
-    // optimize for the case where newIdent is not used
-    auto newIt = views.find(newIdent);
-    if (newIt == views.end()) {
-        views[newIdent] = std::move(oldIt->second);
-        views.erase(oldIt);
-    } else {
-        auto newCopy = std::move(newIt->second);
-        newIt->second = std::move(oldIt->second);
-        oldIt->second = std::move(newCopy);
-    }
+    views.erase(it);
 }
 
 void RendererImpl::updateAnimations()
@@ -775,7 +763,7 @@ void RendererImpl::generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer)
     spdlog::info("textvbos {} {}", generated, missing);
 }
 
-void RendererImpl::recreateUniformBuffers(const std::string& ident, ViewData& view)
+void RendererImpl::recreateUniformBuffers(uint64_t ident, ViewData& view)
 {
     // delete old buffers if they exist
     if (view.textVertUniformBuffer != VK_NULL_HANDLE || !view.textFragUniformBuffers.empty()
@@ -1668,136 +1656,73 @@ void Renderer::stop()
     mThread.join();
 }
 
-void Renderer::addTextLines(const std::string& ident, std::vector<TextLine>&& lines)
+void Renderer::addTextLines(uint64_t ident, std::vector<TextLine>&& lines)
 {
     mEventLoop->post([ident, lines = std::move(lines), impl = mImpl]() mutable {
         impl->addTextLines(ident, std::move(lines));
     });
 }
 
-void Renderer::addTextLines(std::string&& ident, std::vector<TextLine>&& lines)
-{
-    mEventLoop->post([ident = std::move(ident), lines = std::move(lines), impl = mImpl]() mutable {
-        impl->addTextLines(ident, std::move(lines));
-    });
-}
-
-void Renderer::clearTextLines(const std::string& ident)
+void Renderer::clearTextLines(uint64_t ident)
 {
     mEventLoop->post([ident, impl = mImpl]() {
         impl->clearTextLines(ident);
     });
 }
 
-void Renderer::clearTextLines(std::string&& ident)
-{
-    mEventLoop->post([ident = std::move(ident), impl = mImpl]() {
-        impl->clearTextLines(ident);
-    });
-}
-
-void Renderer::addTextProperties(const std::string& ident, std::vector<TextProperty>&& properties)
+void Renderer::addTextProperties(uint64_t ident, std::vector<TextProperty>&& properties)
 {
     mEventLoop->post([ident, properties = std::move(properties), impl = mImpl]() mutable {
         impl->addTextProperties(ident, std::move(properties));
     });
 }
 
-void Renderer::addTextProperties(std::string&& ident, std::vector<TextProperty>&& properties)
-{
-    mEventLoop->post([ident = std::move(ident), properties = std::move(properties), impl = mImpl]() mutable {
-        impl->addTextProperties(ident, std::move(properties));
-    });
-}
-
-void Renderer::clearTextProperties(const std::string& ident)
+void Renderer::clearTextProperties(uint64_t ident)
 {
     mEventLoop->post([ident, impl = mImpl]() {
         impl->clearTextProperties(ident);
     });
 }
 
-void Renderer::clearTextProperties(std::string&& ident)
-{
-    mEventLoop->post([ident = std::move(ident), impl = mImpl]() {
-        impl->clearTextProperties(ident);
-    });
-}
-
-void Renderer::setPropertyInt(const std::string& ident, Property prop, int32_t value)
+void Renderer::setPropertyInt(uint64_t ident, Property prop, int32_t value)
 {
     mEventLoop->post([ident, prop, value, impl = mImpl]() {
         impl->setProperty<int32_t>(ident, prop, value);
     });
 }
 
-void Renderer::setPropertyInt(std::string&& ident, Property prop, int32_t value)
-{
-    mEventLoop->post([ident = std::move(ident), prop, value, impl = mImpl]() {
-        impl->setProperty<int32_t>(ident, prop, value);
-    });
-}
-
-void Renderer::setPropertyFloat(const std::string& ident, Property prop, float value)
+void Renderer::setPropertyFloat(uint64_t ident, Property prop, float value)
 {
     mEventLoop->post([ident, prop, value, impl = mImpl]() {
         impl->setProperty<float>(ident, prop, value);
     });
 }
 
-void Renderer::setPropertyFloat(std::string&& ident, Property prop, float value)
-{
-    mEventLoop->post([ident = std::move(ident), prop, value, impl = mImpl]() {
-        impl->setProperty<float>(ident, prop, value);
-    });
-}
-
-void Renderer::animatePropertyInt(const std::string& ident, Property prop, int32_t value, uint64_t ms, Ease ease)
+void Renderer::animatePropertyInt(uint64_t ident, Property prop, int32_t value, uint64_t ms, Ease ease)
 {
     mEventLoop->post([ident, prop, value, ms, ease, impl = mImpl]() {
         impl->animateProperty<int32_t>(ident, prop, value, ms, ease);
     });
 }
 
-void Renderer::animatePropertyInt(std::string&& ident, Property prop, int32_t value, uint64_t ms, Ease ease)
-{
-    mEventLoop->post([ident = std::move(ident), prop, value, ms, ease, impl = mImpl]() {
-        impl->animateProperty<int32_t>(ident, prop, value, ms, ease);
-    });
-}
-
-void Renderer::animatePropertyFloat(const std::string& ident, Property prop, float value, uint64_t ms, Ease ease)
+void Renderer::animatePropertyFloat(uint64_t ident, Property prop, float value, uint64_t ms, Ease ease)
 {
     mEventLoop->post([ident, prop, value, ms, ease, impl = mImpl]() {
         impl->animateProperty<float>(ident, prop, value, ms, ease);
     });
 }
 
-void Renderer::animatePropertyFloat(std::string&& ident, Property prop, float value, uint64_t ms, Ease ease)
-{
-    mEventLoop->post([ident = std::move(ident), prop, value, ms, ease, impl = mImpl]() {
-        impl->animateProperty<float>(ident, prop, value, ms, ease);
-    });
-}
-
-void Renderer::renameIdentifier(const std::string& oldIdent, const std::string& newIdent)
-{
-    mEventLoop->post([oldIdent, newIdent, impl = mImpl]() {
-        impl->renameIdentifier(oldIdent, newIdent);
-    });
-}
-
-void Renderer::setRenderViewData(const std::string& ident, const RenderViewData& data)
+void Renderer::setRenderViewData(uint64_t ident, const RenderViewData& data)
 {
     mEventLoop->post([ident, data, impl = mImpl]() {
         impl->setRenderViewData(ident, data);
     });
 }
 
-void Renderer::setRenderViewData(std::string&& ident, const RenderViewData& data)
+void Renderer::frameDeleted(uint64_t ident)
 {
-    mEventLoop->post([ident = std::move(ident), data, impl = mImpl]() {
-        impl->setRenderViewData(ident, data);
+    mEventLoop->post([ident, impl = mImpl]() {
+        impl->frameDeleted(ident);
     });
 }
 

@@ -59,28 +59,19 @@ public:
 
     EventEmitter<void()>& onReady();
 
-    void setRenderViewData(const std::string& ident, const RenderViewData& data);
-    void setRenderViewData(std::string&& ident, const RenderViewData& data);
+    void frameDeleted(uint64_t ident);
 
-    void addTextLines(const std::string& ident, std::vector<TextLine>&& lines);
-    void addTextLines(std::string&& ident, std::vector<TextLine>&& lines);
-    void clearTextLines(const std::string& ident);
-    void clearTextLines(std::string&& ident);
-    void addTextProperties(const std::string& ident, std::vector<TextProperty>&& lines);
-    void addTextProperties(std::string&& ident, std::vector<TextProperty>&& lines);
-    void clearTextProperties(const std::string& ident);
-    void clearTextProperties(std::string&& ident);
+    void setRenderViewData(uint64_t ident, const RenderViewData& data);
 
-    void setPropertyInt(const std::string& ident, Property prop, int32_t value);
-    void setPropertyInt(std::string&& ident, Property prop, int32_t value);
-    void setPropertyFloat(const std::string& ident, Property prop, float value);
-    void setPropertyFloat(std::string&& ident, Property prop, float value);
-    void animatePropertyInt(const std::string& ident, Property prop, int32_t value, uint64_t ms, Ease ease);
-    void animatePropertyInt(std::string&& ident, Property prop, int32_t value, uint64_t ms, Ease ease);
-    void animatePropertyFloat(const std::string& ident, Property prop, float value, uint64_t ms, Ease ease);
-    void animatePropertyFloat(std::string&& ident, Property prop, float value, uint64_t ms, Ease ease);
+    void addTextLines(uint64_t ident, std::vector<TextLine>&& lines);
+    void clearTextLines(uint64_t ident);
+    void addTextProperties(uint64_t ident, std::vector<TextProperty>&& lines);
+    void clearTextProperties(uint64_t ident);
 
-    void renameIdentifier(const std::string& oldIdent, const std::string& newIdent);
+    void setPropertyInt(uint64_t ident, Property prop, int32_t value);
+    void setPropertyFloat(uint64_t ident, Property prop, float value);
+    void animatePropertyInt(uint64_t ident, Property prop, int32_t value, uint64_t ms, Ease ease);
+    void animatePropertyFloat(uint64_t ident, Property prop, float value, uint64_t ms, Ease ease);
 
     void afterCurrentFrame(std::function<void()>&& func);
     void afterTransfer(uint64_t value, std::function<void()>&& func);

@@ -75,7 +75,7 @@ void Editor::thread_internal()
         clazz.addMethod("scrollDown", [](ScriptClassInstance *instance, std::vector<ScriptValue> &&) -> ScriptValue {
             ViewInstance *v = static_cast<ViewInstance *>(instance);
             auto renderer = Renderer::instance();
-            renderer->animatePropertyFloat(v->view->name(), Renderer::Property::FirstLine, static_cast<float>(++v->pos), 100, Ease::InOutQuad);
+            renderer->animatePropertyFloat(v->view->frameNo(), Renderer::Property::FirstLine, static_cast<float>(++v->pos), 100, Ease::InOutQuad);
             return {};
         });
 
@@ -84,7 +84,7 @@ void Editor::thread_internal()
             ViewInstance *v = static_cast<ViewInstance *>(instance);
             if (v->pos > 0) {
                 auto renderer = Renderer::instance();
-                renderer->animatePropertyFloat(v->view->name(), Renderer::Property::FirstLine, static_cast<float>(--v->pos), 100, Ease::InOutQuad);
+                renderer->animatePropertyFloat(v->view->frameNo(), Renderer::Property::FirstLine, static_cast<float>(--v->pos), 100, Ease::InOutQuad);
             }
             return {};
         });

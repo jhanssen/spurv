@@ -21,7 +21,7 @@ void View::processDocument()
     // reset view to top, and make the renderer start churning on the data
     mFirstLine = 0;
 
-    const std::string& nm = name();
+    const uint64_t nm = frameNo();
     auto renderer = Renderer::instance();
     renderer->setPropertyFloat(nm, Renderer::Property::FirstLine, static_cast<float>(mFirstLine));
     renderer->clearTextProperties(nm);

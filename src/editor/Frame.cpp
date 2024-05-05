@@ -6,16 +6,52 @@ using namespace spurv;
 uint64_t Frame::sFrameNo = 0;
 
 Frame::Frame()
+    : mFrameNo(++sFrameNo)
 {
     setSelector("frame");
-    setName(fmt::format("spurv_frame_{}", sFrameNo++));
-    onNameChanged().connect([this](const std::string& oldName) {
-        auto renderer = Renderer::instance();
-        renderer->renameIdentifier(oldName, name());
-    });
-    onAppliedStylesheet().connect([this]() {
+    mOnAppliedStylesheetKey = onAppliedStylesheet().connect([this]() {
         extractRenderViewData();
     });
+}
+
+Frame::Frame(Frame&& other)
+    : mFrameNo(other.mFrameNo), mRenderViewData(std::move(other.mRenderViewData))
+{
+    other.mFrameNo = 0;
+    other.mOnAppliedStylesheetKey = {};
+    other.onAppliedStylesheet().disconnectAll();
+
+    mOnAppliedStylesheetKey = onAppliedStylesheet().connect([this]() {
+        extractRenderViewData();
+    });
+}
+
+Frame::~Frame()
+{
+    if (mOnAppliedStylesheetKey != EventLoop::ConnectKey {}) {
+        onAppliedStylesheet().disconnect(mOnAppliedStylesheetKey);
+    }
+    if (mFrameNo != 0) {
+        auto renderer = Renderer::instance();
+        renderer->frameDeleted(mFrameNo);
+    }
+}
+
+Frame& Frame::operator=(Frame&& other)
+{
+    if (mFrameNo != 0) {
+        auto renderer = Renderer::instance();
+        renderer->frameDeleted(mFrameNo);
+    }
+
+    mFrameNo = other.mFrameNo;
+    mRenderViewData = std::move(other.mRenderViewData);
+
+    other.mFrameNo = 0;
+    other.mOnAppliedStylesheetKey = {};
+    other.onAppliedStylesheet().disconnectAll();
+
+    return *this;
 }
 
 void Frame::extractRenderViewData()
@@ -35,7 +71,7 @@ void Frame::extractRenderViewData()
         static_cast<uint32_t>(bs.voffset)
     };
     mRenderViewData.shadowSoftness = bs.blur;
-    spdlog::debug("extracted render data bwidth {:.2f} bradius {} {}", mRenderViewData.borderThickness, mRenderViewData.borderRadius[0], mSelector.toString());
+    spdlog::debug("extracted render data bwidth {:.2f} bradius {} {} {}", mRenderViewData.borderThickness, mRenderViewData.borderRadius[0], mSelector.toString(), frameNo());
 }
 
 void Frame::updateLayout(const Rect& rect)
@@ -59,6 +95,6 @@ void Frame::updateLayout(const Rect& rect)
     }
 
     auto renderer = Renderer::instance();
-    spdlog::debug("setting render view data {}", name());
-    renderer->setRenderViewData(name(), mRenderViewData);
+    spdlog::debug("setting render view data {} {}", name(), frameNo());
+    renderer->setRenderViewData(mFrameNo, mRenderViewData);
 }
