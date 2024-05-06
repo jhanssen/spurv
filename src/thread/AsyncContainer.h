@@ -73,6 +73,8 @@ void AsyncContainerTuple<Type, Tuple, Num>::finalize(uint64_t pendingKey, Type&&
     auto pit = mPending.begin();
     while (pit != mPending.end()) {
         if (pit->second.first == pendingKey) {
+            auto tuple = pit->first;
+
             auto cit = mPendingCallbacks.find(pendingKey);
             assert(cit != mPendingCallbacks.end());
             // do this in a loop since calling the callback may result in a new element being added
@@ -88,9 +90,14 @@ void AsyncContainerTuple<Type, Tuple, Num>::finalize(uint64_t pendingKey, Type&&
                     return;
                 }
             }
-            mCached[std::move(pit->first)] = std::make_pair(std::move(result), pit->second.second);
+            // refind pit, the iterator might have moved on us
+            pit = mPending.find(tuple);
+            assert(pit != mPending.end());
+
+            mCached[std::move(tuple)] = std::make_pair(std::move(result), pit->second.second);
             mPending.erase(pit);
             mPendingCallbacks.erase(cit);
+
             if (mCached.size() > Num) {
                 // remove first entry with a ref of 1
                 trim();
