@@ -26,7 +26,7 @@ void Cursor::setDocument(const std::shared_ptr<Document>& doc)
     mDocument = doc;
 }
 
-void Cursor::setLine(std::size_t line, uint32_t cluster)
+void Cursor::setPosition(std::size_t line, uint32_t cluster)
 {
     if (!mDocument) {
         return;

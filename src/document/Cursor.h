@@ -24,7 +24,7 @@ public:
     const std::shared_ptr<Document> document() const;
 
     void setOffset(std::size_t cluster);
-    void setLine(std::size_t line, uint32_t cluster = 0);
+    void setPosition(std::size_t line, uint32_t cluster);
 
     std::size_t offset() const;
     std::size_t line() const;

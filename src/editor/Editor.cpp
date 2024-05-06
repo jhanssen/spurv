@@ -201,9 +201,9 @@ void Editor::load(const std::filesystem::path& path)
             auto navigateDoc = [currentDoc]() {
                 Cursor cursor(currentDoc);
                 spdlog::warn("(1) cursor at {} {}", cursor.line(), cursor.cluster());
-                cursor.setLine(24, 5);
+                cursor.setPosition(24, 5);
                 spdlog::warn("(2) cursor at {} {}", cursor.line(), cursor.cluster());
-                cursor.setLine(25, 0);
+                cursor.setPosition(25, 0);
                 spdlog::warn("(3) cursor at {} {}", cursor.line(), cursor.cluster());
                 cursor.navigate(Cursor::Navigate::WordForward);
                 spdlog::warn("(4) cursor at {} {}", cursor.line(), cursor.cluster());
@@ -215,7 +215,7 @@ void Editor::load(const std::filesystem::path& path)
                 spdlog::warn("(7) cursor at {} {}", cursor.line(), cursor.cluster());
                 cursor.navigate(Cursor::Navigate::WordBackward);
                 spdlog::warn("(8) cursor at {} {}", cursor.line(), cursor.cluster());
-                cursor.setLine(26, 0);
+                cursor.setPosition(26, 0);
                 spdlog::warn("(9) cursor at {} {}", cursor.line(), cursor.cluster());
                 cursor.navigate(Cursor::Navigate::WordBackward);
                 spdlog::warn("(10) cursor at {} {}", cursor.line(), cursor.cluster());
