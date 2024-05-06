@@ -119,7 +119,6 @@ inline void ScriptEngine::sendOutputEvent(uv_stream_t *stream, ssize_t nread, co
     object.setProperty(engine->mAtoms.type, ScriptValue(type));
     object.setProperty(engine->mAtoms.pid, ScriptValue(pd->proc->pid));
     if (nread == UV_EOF) {
-        free(buf->base);
         object.setProperty(engine->mAtoms.end, ScriptValue(true));
     } else {
         object.setProperty(engine->mAtoms.end, ScriptValue(false));
@@ -230,6 +229,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
     const std::vector<ScriptValue> argv = *args[0].toArray();
 
     data->options.args = new char*[argv.size() + 1];
+    data->options.args[argv.size()] = nullptr;
     memset(data->options.args, 0, sizeof(char *) * argv.size() + 1);
 
     for (size_t i=0; i<argv.size(); ++i) {
@@ -244,8 +244,6 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
 
     data->proc = {};
     const int ret = uv_spawn(loop, &(*data->proc), &data->options);
-    data->options.env = nullptr; // seems we're not supposed to free it
-    data->options.args = nullptr; // seems we're not supposed to free it
     if (ret) {
         // failed to launch
         const char *err = uv_strerror(ret);
@@ -944,20 +942,22 @@ ScriptValue ScriptEngine::exit(std::vector<ScriptValue> &&args)
 
 ScriptEngine::ProcessData::~ProcessData()
 {
-    if (proc) {
-        uv_close(reinterpret_cast<uv_handle_t *>(&*proc), nullptr);
-    }
-
     if (stdinPipe) {
         uv_close(reinterpret_cast<uv_handle_t*>(&*stdinPipe), nullptr);
     }
 
     if (stdoutPipe) {
+        uv_read_stop(reinterpret_cast<uv_stream_t *>(&*stdoutPipe));
         uv_close(reinterpret_cast<uv_handle_t*>(&*stdoutPipe), nullptr);
     }
 
     if (stderrPipe) {
+        uv_read_stop(reinterpret_cast<uv_stream_t *>(&*stderrPipe));
         uv_close(reinterpret_cast<uv_handle_t*>(&*stderrPipe), nullptr);
+    }
+
+    if (proc) {
+        uv_close(reinterpret_cast<uv_handle_t *>(&*proc), nullptr);
     }
 
     if (options.env) {
