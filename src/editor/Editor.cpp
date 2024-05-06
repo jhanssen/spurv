@@ -196,7 +196,7 @@ void Editor::load(const std::filesystem::path& path)
                 "editor > view { flex: 1; background-color: #ff0000; padding: 10 }\n"
                 "editor document { flex: 1; margin: 5   2; }");
 
-            currentDoc->setFont(Font("Verdana", 25));
+            currentDoc->setFont(Font("Inconsolata", 25));
 
             auto navigateDoc = [currentDoc]() {
                 Cursor cursor(currentDoc);
