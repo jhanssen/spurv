@@ -15,6 +15,7 @@
 
 namespace spurv {
 
+class Cursor;
 struct DocumentSelectorInternal;
 
 class Document : public Styleable
@@ -27,8 +28,8 @@ public:
     ~Document();
 
     void load(const std::filesystem::path& path);
-    void load(const std::u32string& data);
-    void load(std::u32string&& data);
+    void load(const std::u16string& data);
+    void load(std::u16string&& data);
 
     // styling
     void setFont(const Font& font);
@@ -92,7 +93,7 @@ private:
     enum class Commit { Finalize, Reinitialize };
     void commit(Commit mode, std::size_t offset = std::numeric_limits<std::size_t>::max());
 
-    void loadChunk(std::u32string&& data);
+    void loadChunk(std::u16string&& data);
     void loadComplete();
 
     void removeSelector(const DocumentSelectorInternal* selector);
@@ -105,7 +106,7 @@ private:
     Rope mRope;
 
     enum { ChunkSize = 1000 };
-    std::u32string mChunk;
+    std::u16string mChunk;
     std::size_t mChunkStart = 0, mChunkOffset = 0;
     std::size_t mDocumentSize = 0, mDocumentLines = 0;
     std::vector<std::shared_ptr<DocumentSelectorInternal>> mSelectors = {};
@@ -113,6 +114,7 @@ private:
     bool mReady = false;
     EventEmitter<void()> mOnReady;
 
+    friend class Cursor;
     friend struct DocumentSelectorInternal;
 };
 

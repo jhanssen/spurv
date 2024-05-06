@@ -16,16 +16,16 @@ namespace proj
   std::invalid_argument ERROR_OOB_ROPE = std::invalid_argument("Error: string index out of bounds");
 
   // Default constructor - produces a rope representing the empty string
-  rope::rope(void) : rope(u32string {})
+  rope::rope(void) : rope(u16string {})
   {}
-  
+
   // Construct a rope from the given string
-  rope::rope(const u32string& str) {
+  rope::rope(const u16string& str) {
     this->root_ = make_unique<rope_node>(str);
   }
-  
+
   // Construct a rope from the given string
-  rope::rope(u32string&& str) {
+  rope::rope(u16string&& str) {
     this->root_ = make_unique<rope_node>(std::move(str));
   }
 
@@ -48,19 +48,19 @@ namespace proj
   }
 
   // Get the string stored in the rope
-  u32string rope::toString(void) const {
+  u16string rope::toString(void) const {
     if(this->root_ == nullptr)
       return {};
     return this->root_->treeToString();
   }
-  
+
   // Get the length of the stored string
   size_t rope::length(void) const {
     if(this->root_ == nullptr)
       return 0;
     return this->root_->getLength();
   }
-  
+
   // Get the character at the given position in the represented string
   char32_t rope::at(size_t index) const {
     if(this->root_ == nullptr)
@@ -69,19 +69,19 @@ namespace proj
   }
 
   // Return the substring of length (len) beginning at the specified index
-  u32string rope::substring(size_t start, size_t len) const {
+  u16string rope::substring(size_t start, size_t len) const {
     size_t actualLength = this->length();
     if (start > actualLength || (start+len) > actualLength) throw ERROR_OOB_ROPE;
     return this->root_->getSubstring(start, len);
   }
 
   // Insert the given string into the rope, beginning at the specified index (i)
-  void rope::insert(size_t i, const u32string& str) {
+  void rope::insert(size_t i, const u16string& str) {
     this->insert(i,rope(str));
   }
 
   // Insert the given string into the rope, beginning at the specified index (i)
-  void rope::insert(size_t i, u32string&& str) {
+  void rope::insert(size_t i, u16string&& str) {
     this->insert(i,rope(std::move(str)));
   }
 
@@ -109,13 +109,13 @@ namespace proj
   }
 
   // Append the argument to the existing rope
-  void rope::append(const u32string& str) {
+  void rope::append(const u16string& str) {
     rope tmp = rope(str);
     this->root_ = make_unique<rope_node>(std::move(this->root_), std::move(tmp.root_));
   }
 
   // Append the argument to the existing rope
-  void rope::append(u32string&& str) {
+  void rope::append(u16string&& str) {
     rope tmp = rope(std::move(str));
     this->root_ = make_unique<rope_node>(std::move(this->root_), std::move(tmp.root_));
   }

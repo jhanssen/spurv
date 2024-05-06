@@ -19,6 +19,7 @@ set(LIBS
     msdf-atlas-gen::msdf-atlas-gen
     simdutf::simdutf
     spdlog::spdlog
+    uni-algo::uni-algo
     unordered_dense::unordered_dense
     vk-bootstrap::vk-bootstrap
     qss::qss

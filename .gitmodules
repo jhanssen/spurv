@@ -64,3 +64,6 @@
 [submodule "3rdparty/unordered_dense"]
 	path = 3rdparty/unordered_dense
 	url = https://github.com/martinus/unordered_dense.git
+[submodule "3rdparty/uni-algo"]
+	path = 3rdparty/uni-algo
+	url = https://github.com/uni-algo/uni-algo.git

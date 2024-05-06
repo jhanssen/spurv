@@ -23,13 +23,15 @@ public:
     enum class Mode { Single, Chunked };
     void reset(Mode mode);
 
-    void calculate(std::u32string&& data, std::vector<Linebreak>&& linebreaks);
+    void calculate(std::u16string&& data, std::vector<Linebreak>&& linebreaks);
     void finalize();
 
     struct LineInfo
     {
         hb_buffer_t* buffer = nullptr;
-        std::size_t start = 0, end = 0;
+        std::size_t startOffset = 0, endOffset = 0;
+        std::size_t startCluster = 0, endCluster = 0;
+        std::vector<std::size_t> wordBreaks = {};
         Font font = {};
     };
     const LineInfo& lineAt(std::size_t idx) const;

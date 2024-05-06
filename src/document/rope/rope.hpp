@@ -13,12 +13,12 @@
 
 namespace proj
 {
-  using std::u32string;
+  using std::u16string;
 
   // A rope represents a string as a binary tree wherein the leaves contain fragments of the
   //   string. More accurately, a rope consists of a pointer to a root rope_node, which
   //   describes a binary tree of string fragments.
-  
+
   // Examples:
   //
   //        X        |  null root pointer, represents empty string
@@ -32,20 +32,20 @@ namespace proj
   //  "some" "text"  |  root is an internal node formed by the concatenation of two distinct
   //    /\     /\    |  ropes containing the strings "some" and "text"
   //   X  X   X  X   |
-  
+
   class rope {
-    
+
   public:
-    
+
     using node_handle = std::unique_ptr<rope_node>;
-    
+
     // CONSTRUCTORS
     // Default constructor - produces a rope representing the empty string
     rope(void);
     // Construct a rope from the given string
-    rope(const u32string&);
+    rope(const u16string&);
     // Construct a rope from the given string
-    rope(u32string&&);
+    rope(u16string&&);
     // Copy constructor
     rope(const rope&);
     // Move constructor
@@ -54,13 +54,13 @@ namespace proj
     rope(node_handle&&);
 
     // Get the string stored in the rope
-    u32string toString(void) const;
+    u16string toString(void) const;
     // Get the length of the stored string
     size_t length(void) const;
     // Get the character at the given position in the represented string
     char32_t at(size_t index) const;
     // Return the substring of length (len) beginning at the specified index
-    u32string substring(size_t start, size_t len) const;
+    u16string substring(size_t start, size_t len) const;
     // Determine if rope is balanced
     bool isBalanced(void) const;
     // Balance the rope
@@ -71,13 +71,13 @@ namespace proj
 
     // MUTATORS
     // Insert the given string/rope/node into the rope, beginning at the specified index (i)
-    void insert(size_t i, const u32string& str);
-    void insert(size_t i, u32string&& str);
+    void insert(size_t i, const u16string& str);
+    void insert(size_t i, u16string&& str);
     void insert(size_t i, const rope& r);
     void insert(size_t i, node_handle&& r);
     // Concatenate the existing string/rope/node with the argument
-    void append(const u32string&);
-    void append(u32string&&);
+    void append(const u16string&);
+    void append(u16string&&);
     void append(const rope&);
     void append(node_handle&&);
     // Remove the substring of (len) characters beginning at index (start)

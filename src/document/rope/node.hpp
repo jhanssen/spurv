@@ -14,8 +14,8 @@
 
 namespace proj
 {
-  using std::u32string;
-  
+  using std::u16string;
+
   // A rope_node represents a string as a binary tree of string fragments
   //
   // A rope_node consists of:
@@ -33,18 +33,18 @@ namespace proj
   //     contained in (the leaf nodes of) its left subtree
 
   class rope_node {
-    
+
   public:
     using handle = std::unique_ptr<rope_node>;
     using linebreak = spurv::Linebreak;
-    
+
     // CONSTRUCTORS
     // Construct internal node by concatenating the given nodes
     rope_node(handle l, handle r);
     // Construct leaf node from the given string
-    rope_node(const u32string& str);
+    rope_node(const u16string& str);
     // Construct leaf node from the given string
-    rope_node(u32string&& str);
+    rope_node(u16string&& str);
     // Copy constructor
     rope_node(const rope_node&);
 
@@ -52,9 +52,9 @@ namespace proj
     size_t getLength(void) const;
     char32_t getCharByIndex(size_t) const;
     // Get the substring of (len) chars beginning at index (start)
-    u32string getSubstring(size_t start, size_t len) const;
+    u16string getSubstring(size_t start, size_t len) const;
     // Get string contained in current node and its children
-    u32string treeToString(void) const;
+    u16string treeToString(void) const;
 
     std::vector<linebreak> linebreaks() const;
     std::vector<linebreak> lastLinebreaks() const;
@@ -80,7 +80,7 @@ namespace proj
     size_t weight_;
     handle left_;
     handle right_;
-    u32string fragment_;
+    u16string fragment_;
     std::vector<linebreak> linebreaks_;
     
   }; // class rope_node

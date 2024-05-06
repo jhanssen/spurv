@@ -2,6 +2,7 @@
 #include <EventLoop.h>
 #include <Logger.h>
 #include <ThreadPool.h>
+#include <uni_algo/ranges_word.h>
 #include <mutex>
 #include <cassert>
 #include <cstring>
@@ -9,7 +10,7 @@
 namespace spurv {
 struct LayoutChunk
 {
-    std::u32string data;
+    std::u16string data;
     Font font;
 };
 
@@ -93,15 +94,46 @@ void LayoutJob::runJob(std::shared_ptr<LayoutJob> job, std::size_t prevProcessed
 
             // for each linebreak
             std::size_t prev = 0, accum = 0;
+            std::size_t prevEndCluster = 0;
             for (const auto& lb : linebreaks) {
-                const auto line = std::u32string_view(chunk.data.begin() + prev, chunk.data.begin() + (lb.first - processedStart));
+                const auto line = std::u16string_view(chunk.data.begin() + prev, chunk.data.begin() + (lb.first - processedStart));
+
+                std::vector<std::size_t> words;
+                auto u16words = una::views::word::utf16(line);
+                auto u16wordit = u16words.begin();
+                if (u16wordit != u16words.end()) {
+                    words.push_back(u16wordit.begin() - line.begin());
+                    while (u16wordit != u16words.end()) {
+                        words.push_back(u16wordit.end() - line.begin());
+                        ++u16wordit;
+                    }
+                }
 
                 hb_buffer_t* buf = hb_buffer_create();
-                hb_buffer_add_utf32(buf, reinterpret_cast<const uint32_t*>(line.data()),
+                // hb_buffer_set_cluster_level(buf, HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS);
+                hb_buffer_add_utf16(buf, reinterpret_cast<const uint16_t*>(line.data()),
                                     line.size(), 0, line.size());
                 hb_buffer_guess_segment_properties(buf);
                 hb_shape(chunk.font.font(), buf, nullptr, 0);
-                buffers.push_back({ buf, processedStart + prevProcessed + accum, processedStart + line.size() + prevProcessed + accum, chunk.font });
+                uint32_t glyphCount;
+                uint32_t highLineCluster = 0;
+                auto glyphInfo = hb_buffer_get_glyph_infos(buf, &glyphCount);
+                for (uint32_t gi = 0; gi < glyphCount; ++gi) {
+                    if (glyphInfo[gi].cluster > highLineCluster) {
+                        highLineCluster = glyphInfo[gi].cluster;
+                    }
+                }
+
+                buffers.push_back({
+                        buf,
+                        processedStart + prevProcessed + accum,
+                        processedStart + line.size() + prevProcessed + accum,
+                        prevEndCluster,
+                        prevEndCluster + static_cast<std::size_t>(highLineCluster + 1),
+                        std::move(words),
+                        chunk.font
+                    });
+                prevEndCluster += highLineCluster + 1;
                 prev = lb.first - processedStart + 1;
                 accum = lb.first - processedStart;
             }
@@ -147,7 +179,7 @@ void Layout::reset(Mode mode)
     mOnReady.disconnectAll();
 }
 
-void Layout::calculate(std::u32string&& data, std::vector<Linebreak>&& linebreaks)
+void Layout::calculate(std::u16string&& data, std::vector<Linebreak>&& linebreaks)
 {
     if (!mFont.isValid()) {
         spdlog::error("Layout font is not valid");

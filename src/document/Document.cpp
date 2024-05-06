@@ -68,8 +68,8 @@ void Document::load(const std::filesystem::path& path)
         if (f) {
             std::size_t bufOffset = 0;
             char buf[32768];
-            char32_t utf32buf[32768];
-            std::u32string chunk;
+            char16_t utf16buf[32768];
+            std::u16string chunk;
             while (!feof(f)) {
                 int r = fread(buf + bufOffset, 1, sizeof(buf) - bufOffset, f);
                 if (r > 0) {
@@ -78,13 +78,13 @@ void Document::load(const std::filesystem::path& path)
                     }
                     switch (encoding) {
                     case simdutf::Latin1: {
-                        const std::size_t words = simdutf::convert_latin1_to_utf32(buf, r, utf32buf);
-                        chunk = std::u32string(utf32buf, words);
+                        const std::size_t words = simdutf::convert_latin1_to_utf16(buf, r, utf16buf);
+                        chunk = std::u16string(utf16buf, words);
                         break; }
                     case simdutf::UTF8: {
                         const std::size_t utf8len = simdutf::trim_partial_utf8(buf, r);
-                        assert(utf8len < sizeof(utf32buf));
-                        const std::size_t words = simdutf::convert_utf8_to_utf32(buf, utf8len, utf32buf);
+                        assert(utf8len < sizeof(utf16buf));
+                        const std::size_t words = simdutf::convert_utf8_to_utf16(buf, utf8len, utf16buf);
                         if (utf8len != static_cast<std::size_t>(r)) {
                             assert(utf8len < static_cast<std::size_t>(r));
                             memmove(buf, buf + utf8len, r - utf8len);
@@ -92,25 +92,20 @@ void Document::load(const std::filesystem::path& path)
                         } else {
                             bufOffset = 0;
                         }
-                        chunk = std::u32string(utf32buf, words);
-                        break; }
-                    case simdutf::UTF16_LE: {
-                        const std::size_t utf16len = simdutf::trim_partial_utf16le(reinterpret_cast<char16_t*>(buf), r / sizeof(char16_t));
-                        const std::size_t words = simdutf::convert_utf16le_to_utf32(reinterpret_cast<char16_t*>(buf), utf16len, utf32buf);
-                        const std::size_t utf16len8 = utf16len * sizeof(char16_t);
-                        if (utf16len8 != static_cast<std::size_t>(r)) {
-                            assert(utf16len8 < static_cast<std::size_t>(r));
-                            memmove(buf, buf + utf16len8, r - utf16len8);
-                            bufOffset = r - utf16len8;
-                        } else {
-                            bufOffset = 0;
-                        }
-                        chunk = std::u32string(utf32buf, words);
+                        chunk = std::u16string(utf16buf, words);
                         break; }
                     case simdutf::UTF16_BE: {
-                        const std::size_t utf16len = simdutf::trim_partial_utf16be(reinterpret_cast<char16_t*>(buf), r / sizeof(char16_t));
-                        const std::size_t words = simdutf::convert_utf16be_to_utf32(reinterpret_cast<char16_t*>(buf), utf16len, utf32buf);
+                        // assume we're a little endian system, flip the bytes
+                        // ### could probably optimize this
+                        const std::size_t utf16len = r / sizeof(char16_t);
+                        for (std::size_t n = 0; n < utf16len; ++n) {
+                            *(reinterpret_cast<uint16_t*>(buf) + n) = __builtin_bswap16(*(reinterpret_cast<uint16_t*>(buf) + n));
+                        }
+                        [[ fallthrough ]]; }
+                    case simdutf::UTF16_LE: {
+                        const std::size_t utf16len = r / sizeof(char16_t);
                         const std::size_t utf16len8 = utf16len * sizeof(char16_t);
+                        chunk = std::u16string(reinterpret_cast<char16_t*>(buf), utf16len);
                         if (utf16len8 != static_cast<std::size_t>(r)) {
                             assert(utf16len8 < static_cast<std::size_t>(r));
                             memmove(buf, buf + utf16len8, r - utf16len8);
@@ -118,7 +113,6 @@ void Document::load(const std::filesystem::path& path)
                         } else {
                             bufOffset = 0;
                         }
-                        chunk = std::u32string(utf32buf, words);
                         break; }
                     case simdutf::UTF32_BE: {
                         // assume we're a little endian system, flip the bytes
@@ -130,8 +124,8 @@ void Document::load(const std::filesystem::path& path)
                         [[ fallthrough ]]; }
                     case simdutf::UTF32_LE: {
                         const std::size_t utf32len = r / sizeof(char32_t);
-                        const std::size_t utf32len8 = r * sizeof(char32_t);
-                        chunk = std::u32string(reinterpret_cast<char32_t*>(buf), utf32len);
+                        const std::size_t utf32len8 = utf32len * sizeof(char32_t);
+                        const std::size_t words = simdutf::convert_utf32_to_utf16(reinterpret_cast<char32_t*>(buf), utf32len, utf16buf);
                         if (utf32len8 != static_cast<std::size_t>(r)) {
                             assert(utf32len8 < static_cast<std::size_t>(r));
                             memmove(buf, buf + utf32len8, r - utf32len8);
@@ -139,6 +133,7 @@ void Document::load(const std::filesystem::path& path)
                         } else {
                             bufOffset = 0;
                         }
+                        chunk = std::u16string(utf16buf, words);
                         break; }
                     case simdutf::unspecified:
                         spdlog::info("No text encoding detected");
@@ -163,7 +158,7 @@ void Document::load(const std::filesystem::path& path)
     });
 }
 
-void Document::load(const std::u32string& data)
+void Document::load(const std::u16string& data)
 {
     mDocumentSize = data.size();
     mRope = Rope(data);
@@ -177,7 +172,7 @@ void Document::load(const std::u32string& data)
     initialize(0);
 }
 
-void Document::load(std::u32string&& data)
+void Document::load(std::u16string&& data)
 {
     mDocumentSize = data.size();
     mRope = Rope(std::move(data));
@@ -191,7 +186,7 @@ void Document::load(std::u32string&& data)
     initialize(0);
 }
 
-void Document::loadChunk(std::u32string&& data)
+void Document::loadChunk(std::u16string&& data)
 {
     mDocumentSize += data.size();
     mRope.append(data);
@@ -245,7 +240,7 @@ TextLine Document::textForLine(std::size_t line) const
     if (line < mLayout.numLines()) {
         const auto& ll = mLayout.lineAt(line);
         return {
-            line, ll.start,
+            line, ll.startOffset,
             hb_buffer_reference(ll.buffer),
             ll.font
         };
@@ -271,7 +266,7 @@ std::vector<TextLine> Document::textForRange(std::size_t start, std::size_t end)
     for (std::size_t l = start; l < end; ++l) {
         const auto& ll = mLayout.lineAt(l);
         out.push_back({
-                l, ll.start,
+                l, ll.startOffset,
                 hb_buffer_reference(ll.buffer),
                 ll.font
             });
@@ -321,15 +316,15 @@ std::vector<TextProperty> Document::propertiesForRange(std::size_t start, std::s
     const auto pitend = mSelectors.cend();
     while (pit != pitend) {
         const auto& ptr = *pit;
-        if (sinfo.start > ptr->end) {
+        if (sinfo.startOffset > ptr->end) {
             ++pit;
             continue;
         }
-        if (einfo.end < ptr->start) {
+        if (einfo.endOffset < ptr->start) {
             break;
         }
 
-        assert(ptr->start < einfo.end && sinfo.start < ptr->end);
+        assert(ptr->start < einfo.endOffset && sinfo.startOffset < ptr->end);
         props.push_back(propertyForSelector(ptr->start, ptr->end, ptr->name));
         ++pit;
     }

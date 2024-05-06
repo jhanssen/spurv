@@ -1,5 +1,6 @@
 #include "Editor.h"
 #include "View.h"
+#include <Cursor.h>
 #include <Logger.h>
 #include <MainEventLoop.h>
 #include <Renderer.h>
@@ -182,7 +183,7 @@ void Editor::load(const std::filesystem::path& path)
             view->setActive(false);
             view->addClass("border");
             mCurrentView = view;
-            auto currentDoc = mCurrentView->document().get();
+            auto currentDoc = mCurrentView->document();
             currentDoc->setName("doccy");
 
             // currentDoc->matchesSelector("editor document");
@@ -195,7 +196,45 @@ void Editor::load(const std::filesystem::path& path)
                 "editor > view { flex: 1; background-color: #ff0000; padding: 10 }\n"
                 "editor document { flex: 1; margin: 5   2; }");
 
-            currentDoc->setFont(Font("Inconsolata", 25));
+            currentDoc->setFont(Font("Verdana", 25));
+
+            auto navigateDoc = [currentDoc]() {
+                Cursor cursor(currentDoc);
+                spdlog::warn("(1) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.setLine(24, 5);
+                spdlog::warn("(2) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.setLine(25, 0);
+                spdlog::warn("(3) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.navigate(Cursor::Navigate::WordForward);
+                spdlog::warn("(4) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.navigate(Cursor::Navigate::WordForward);
+                spdlog::warn("(5) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.navigate(Cursor::Navigate::WordForward);
+                spdlog::warn("(6) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.navigate(Cursor::Navigate::WordForward);
+                spdlog::warn("(7) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.navigate(Cursor::Navigate::WordBackward);
+                spdlog::warn("(8) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.setLine(26, 0);
+                spdlog::warn("(9) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.navigate(Cursor::Navigate::WordBackward);
+                spdlog::warn("(10) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.navigate(Cursor::Navigate::LineUp);
+                spdlog::warn("(11) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.navigate(Cursor::Navigate::LineUp);
+                spdlog::warn("(12) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.navigate(Cursor::Navigate::LineDown);
+                spdlog::warn("(13) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.navigate(Cursor::Navigate::LineDown);
+                spdlog::warn("(14) cursor at {} {}", cursor.line(), cursor.cluster());
+                cursor.navigate(Cursor::Navigate::ClusterForward);
+                spdlog::warn("(15) cursor at {} {}", cursor.line(), cursor.cluster());
+            };
+            if (currentDoc->isReady()) {
+                navigateDoc();
+            } else {
+                currentDoc->onReady().connect(std::move(navigateDoc));
+            }
 
             relayout();
 

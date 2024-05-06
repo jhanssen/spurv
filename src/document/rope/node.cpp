@@ -26,14 +26,14 @@ namespace proj
   }
 
   // Construct leaf node from the given string
-  rope_node::rope_node(const std::u32string& str)
+  rope_node::rope_node(const std::u16string& str)
     : weight_(str.length()), left_(nullptr), right_(nullptr), fragment_(str)
   {
       rebuildLinebreaks();
   }
-  
+
   // Construct leaf node from the given string
-  rope_node::rope_node(std::u32string&& str)
+  rope_node::rope_node(std::u16string&& str)
     : weight_(str.length()), left_(nullptr), right_(nullptr), fragment_(std::move(str))
   {
       rebuildLinebreaks();
@@ -53,12 +53,12 @@ namespace proj
       rebuildLinebreaks();
     }
   }
-  
+
   // Determine whether a node is a leaf
   bool rope_node::isLeaf(void) const {
     return this->left_ == nullptr && this->right_ == nullptr;
   }
-  
+
   // Get string length by adding the weight of the root and all nodes in
   //   path to rightmost child
   size_t rope_node::getLength() const {
@@ -67,7 +67,7 @@ namespace proj
     size_t tmp = (this->right_ == nullptr) ? 0 : this->right_->getLength();
     return this->weight_ + tmp;
   }
-  
+
   // Get the character at the given index
   char32_t rope_node::getCharByIndex(size_t index) const {
     size_t w = this->weight_;
@@ -89,7 +89,7 @@ namespace proj
   }
 
   // Get the substring of (len) chars beginning at index (start)
-  u32string rope_node::getSubstring(size_t start, size_t len) const {
+  u16string rope_node::getSubstring(size_t start, size_t len) const {
     size_t w = this->weight_;
     if (this->isLeaf()) {
       if(len < w) {
@@ -100,29 +100,29 @@ namespace proj
     } else {
       // check if start index in left subtree
       if (start < w) {
-        u32string lResult = (this->left_ == nullptr) ? u32string {} : this->left_->getSubstring(start,len);
+        u16string lResult = (this->left_ == nullptr) ? u16string {} : this->left_->getSubstring(start,len);
         if ((start + len) > w) {
           // get number of characters in left subtree
           size_t tmp =  w - start;
-          u32string rResult = (this->right_ == nullptr) ? u32string {} : this->right_->getSubstring(w,len-tmp);
+          u16string rResult = (this->right_ == nullptr) ? u16string {} : this->right_->getSubstring(w,len-tmp);
           return lResult.append(std::move(rResult));
         } else {
           return lResult;
         }
       // if start index is in the right subtree...
       } else {
-        return (this->right_ == nullptr) ? u32string {} : this->right_->getSubstring(start-w,len);
+        return (this->right_ == nullptr) ? u16string {} : this->right_->getSubstring(start-w,len);
       }
     }
   }
-  
+
   // Get string contained in current node and its children
-  u32string rope_node::treeToString(void) const {
+  u16string rope_node::treeToString(void) const {
     if(this->isLeaf()) {
       return this->fragment_;
     }
-    u32string lResult = (this->left_ == nullptr) ? u32string {} : this->left_->treeToString();
-    u32string rResult = (this->right_ == nullptr) ? u32string {} : this->right_->treeToString();
+    u16string lResult = (this->left_ == nullptr) ? u16string {} : this->left_->treeToString();
+    u16string rResult = (this->right_ == nullptr) ? u16string {} : this->right_->treeToString();
     return lResult.append(std::move(rResult));
   }
 
