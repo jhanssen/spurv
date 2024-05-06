@@ -1,8 +1,7 @@
 #pragma once
 
 #include "EventLoop.h"
-#include <FunctionTraits/TypeTraits.h>
-#include <functional>
+#include <FunctionBuilder.h>
 #include <thread>
 #include <mutex>
 #include <vector>
@@ -10,19 +9,6 @@
 #include <cassert>
 
 namespace spurv {
-
-template<typename T>
-using FunctionTraits = StdExt::FunctionTraits<T>;
-
-template<typename T>
-struct FunctionBuilder;
-
-template<typename ...Ts>
-struct FunctionBuilder<std::tuple<Ts...>>
-{
-    // consider requiring c++23 and use std::move_only_function
-    using Type = std::function<void(Ts...)>;
-};
 
 template<typename T>
 class EventEmitter
