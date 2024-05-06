@@ -13,16 +13,18 @@ type Events = "stdout" | "stderr";
 type ProcessStdoutEventHandler = (event: ProcessStdoutEvent) => void;
 type ProcessStderrEventHandler = (event: ProcessStderrEvent) => void;
 type EventHandlers = ProcessStdoutEventHandler | ProcessStderrEventHandler;
-
 export class Process {
     private stdoutHandlers: Array<(event: ProcessStdoutEvent) => void>;
     private stderrHandlers: Array<(event: ProcessStderrEvent) => void>;
     private processId?: number;
     private stdinClosed?: boolean;
 
+    flags: spurv.ProcessFlags;
+
     constructor() {
         this.stdoutHandlers = [];
         this.stderrHandlers = [];
+        this.flags = spurv.ProcessFlags.None;
     }
 
     get pid(): number | undefined {
@@ -65,8 +67,8 @@ export class Process {
         this.offImpl(type, handler);
     }
 
-    emit(type: Events & "stdout", event: ProcessStdoutEvent): void;
-    emit(type: Events & "stderr", event: ProcessStderrEvent): void;
+    emit(type: Events & "stdout", event: ProcessStdoutEvent): boolean;
+    emit(type: Events & "stderr", event: ProcessStderrEvent): boolean;
     emit(type: Events, event: ProcessFinishedEvent | ProcessStdoutEvent | ProcessStderrEvent): boolean {
         let ret = false;
         switch (type) {
@@ -210,15 +212,20 @@ spurv.setProcessHandler(
                 data.finish(event.exitCode, event.error);
                 break;
             case "stdout":
-                data.process.emit("stdout", event);
-                // ### maybe not add it if there's listeners? This API is getting a little weird
-                if (event.data) {
+                if (
+                    (!data.process.emit("stdout", event) ||
+                        data.process.flags & spurv.ProcessFlags.ForceOutputInResult) &&
+                    event.data
+                ) {
                     data.add(event.type, event.data);
                 }
                 break;
             case "stderr":
-                data.process.emit("stderr", event);
-                if (event.data) {
+                if (
+                    (!data.process.emit("stderr", event) ||
+                        data.process.flags & spurv.ProcessFlags.ForceOutputInResult) &&
+                    event.data
+                ) {
                     data.add(event.type, event.data);
                 }
                 break;

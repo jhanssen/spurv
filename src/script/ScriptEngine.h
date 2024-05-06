@@ -124,6 +124,7 @@ private:
     static JSValue classStaticConstant(JSContext *ctx, JSValueConst this_val, int magic);
     static JSValue classMethod(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
     static JSValue classStaticMethod(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
+    static void sendOutputEvent(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf, const char *type);
 
     thread_local static ScriptEngine *tScriptEngine;
     EventLoop *mEventLoop;
@@ -140,6 +141,11 @@ private:
 
         uv_stdio_container_t child_stdio[3];
         uv_process_options_s options = {};
+
+        char *stdoutBuf { nullptr };
+        size_t stdoutBufSize { 0 };
+        char *stderrBuf { nullptr };
+        size_t stderrBufSize { 0 };
 
         bool stringReturnValues { false };
         std::optional<uv_process_t> proc;

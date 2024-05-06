@@ -25,6 +25,7 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
 #undef ScriptAtom
 
     mGlobal = ScriptValue(JS_GetGlobalObject(mContext));
+    printf("[ScriptEngine.cpp:%d]: initScriptBufferSourceIds();\n", __LINE__); fflush(stdout);
     initScriptBufferSourceIds();
     mSpurv = ScriptValue(std::vector<std::pair<std::string, ScriptValue>>());
     mGlobal.setProperty(mAtoms.spurv, mSpurv.clone());
@@ -109,6 +110,29 @@ struct IsEnumBitmask<ProcessFlag> {
     static constexpr bool enable = true;
 };
 
+// static
+inline void ScriptEngine::sendOutputEvent(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf, const char *type)
+{
+    ScriptEngine *engine = ScriptEngine::scriptEngine();
+    ProcessData *pd = static_cast<ProcessData *>(stream->data);
+    ScriptValue object(ScriptValue::Object);
+    object.setProperty(engine->mAtoms.type, ScriptValue(type));
+    object.setProperty(engine->mAtoms.pid, ScriptValue(pd->proc->pid));
+    if (nread == UV_EOF) {
+        free(buf->base);
+        object.setProperty(engine->mAtoms.end, ScriptValue(true));
+    } else {
+        object.setProperty(engine->mAtoms.end, ScriptValue(false));
+        if (pd->stringReturnValues) {
+            object.setProperty(engine->mAtoms.data, ScriptValue(buf->base, nread));
+        } else {
+            object.setProperty(engine->mAtoms.data, ScriptValue::makeArrayBuffer(buf->base, nread));
+        }
+    }
+    engine->mProcessHandler.call(std::move(object));
+    spdlog::error("read callback {} {}", nread, buf->len);
+}
+
 ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
 {
     if (args.size() < 5 || !args[0].isArray() || !args[4].isNumber()) {
@@ -121,6 +145,9 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
     memset(&data->options, 0, sizeof(data->options));
 
     ProcessFlag flags = static_cast<ProcessFlag>(*args[4].toInt());
+    if (flags & ProcessFlag::Strings) {
+        data->stringReturnValues = true;
+    }
 
     data->options.stdio = data->child_stdio;
     data->options.stdio_count = 3;
@@ -129,29 +156,32 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         data->child_stdio[0].flags = UV_IGNORE;
     } else {
         // ### flag for blocking reads?
-        data->child_stdio[0].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_WRITABLE_PIPE | UV_NONBLOCK_PIPE);
+        data->child_stdio[0].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_WRITABLE_PIPE | UV_NONBLOCK_PIPE);
         data->stdinPipe = {};
         uv_pipe_init(loop, &(*data->stdinPipe), 1);
         data->child_stdio[0].data.stream = reinterpret_cast<uv_stream_t *>(&(*data->stdinPipe));
+        data->child_stdio[0].data.stream->data = data.get();
     }
 
     if (!(flags & ProcessFlag::Stdout)) {
         data->child_stdio[1].flags = UV_IGNORE;
     } else {
-        data->child_stdio[1].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_NONBLOCK_PIPE);
+        data->child_stdio[1].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_WRITABLE_PIPE | UV_NONBLOCK_PIPE);
         data->stdoutPipe = {};
         uv_pipe_init(loop, &(*data->stdoutPipe), 1);
         // need to open
         data->child_stdio[1].data.stream = reinterpret_cast<uv_stream_t *>(&(*data->stdoutPipe));
+        data->child_stdio[1].data.stream->data = data.get();
     }
 
     if (!(flags & ProcessFlag::Stderr)) {
         data->child_stdio[2].flags = UV_IGNORE;
     } else {
-        data->child_stdio[2].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_NONBLOCK_PIPE);
+        data->child_stdio[2].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_WRITABLE_PIPE | UV_NONBLOCK_PIPE);
         data->stderrPipe = {};
         uv_pipe_init(loop, &(*data->stderrPipe), 1);
         data->child_stdio[2].data.stream = reinterpret_cast<uv_stream_t *>(&(*data->stderrPipe));
+        data->child_stdio[2].data.stream->data = data.get();
     }
 
     if (!args[1].isNullOrUndefined()) {
@@ -214,6 +244,8 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
 
     data->proc = {};
     const int ret = uv_spawn(loop, &(*data->proc), &data->options);
+    data->options.env = nullptr; // seems we're not supposed to free it
+    data->options.args = nullptr; // seems we're not supposed to free it
     if (ret) {
         // failed to launch
         const char *err = uv_strerror(ret);
@@ -223,16 +255,33 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
     }
     const int pid = data->proc->pid;
     if (flags & ProcessFlag::Stdout) {
-        int readStartRet = uv_read_start(data->child_stdio[1].data.stream, [](uv_handle_t *, size_t size, uv_buf_t *buf) {
-            // ### this could try to not copy when sending it back to JS
-            spdlog::error("alloc callback {}", size);
-            buf->base = static_cast<char *>(malloc(size));
-            buf->len = size;
-        }, [](uv_stream_t *, ssize_t nread, const uv_buf_t *buf) {
-            spdlog::error("read callback {} {}", nread, buf->len);
+        uv_read_start(data->child_stdio[1].data.stream, [](uv_handle_t *stream, size_t suggestedSize, uv_buf_t *buf) {
+            ProcessData *data = static_cast<ProcessData *>(stream->data);
+            if (!data->stdoutBuf) {
+                data->stdoutBuf = new char[suggestedSize];
+                data->stdoutBufSize = suggestedSize;
+            }
+            buf->base = data->stdoutBuf;
+            buf->len = data->stdoutBufSize;
+        }, [](uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+            ScriptEngine::sendOutputEvent(stream, nread, buf, "stdout");
         });
-        spdlog::error("uv_read_start {}", readStartRet);
     }
+
+    if (flags & ProcessFlag::Stderr) {
+        uv_read_start(data->child_stdio[2].data.stream, [](uv_handle_t *stream, size_t suggestedSize, uv_buf_t *buf) {
+            ProcessData *data = static_cast<ProcessData *>(stream->data);
+            if (!data->stderrBuf) {
+                data->stderrBuf = new char[suggestedSize];
+                data->stderrBufSize = suggestedSize;
+            }
+            buf->base = data->stderrBuf;
+            buf->len = data->stderrBufSize;
+        }, [](uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+            ScriptEngine::sendOutputEvent(stream, nread, buf, "stderr");
+        });
+   }
+
     // typedef void (*uv_alloc_cb)(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
     //    typedef void (*uv_read_cb)(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
     // dummy_buf = uv_buf_init("a", 1);
@@ -493,6 +542,7 @@ void ScriptEngine::initScriptBufferSourceIds()
         const ScriptBufferSource idx;
     } const types[] = {
         { "DataView", ScriptBufferSource::DataView },
+        { "Int32Array", ScriptBufferSource::Int32Array },
         { "Int16Array", ScriptBufferSource::Int16Array },
         { "Int8Array", ScriptBufferSource::Int8Array },
         { "BigInt64Array", ScriptBufferSource::BigInt64Array },
@@ -922,6 +972,14 @@ ScriptEngine::ProcessData::~ProcessData()
             free(options.args[i]);
         }
         delete[] options.args;
+    }
+
+    if (stdoutBuf) {
+        delete[] stdoutBuf;
+    }
+
+    if (stderrBuf) {
+        delete[] stderrBuf;
     }
 }
 
