@@ -141,6 +141,7 @@ private:
     struct ProcessData {
         ~ProcessData();
 
+        std::string executable;
         uv_stdio_container_t child_stdio[3];
         uv_process_options_s options = {};
 
@@ -154,7 +155,14 @@ private:
         std::optional<uv_pipe_t> stdinPipe;
         std::optional<uv_pipe_t> stdoutPipe;
         std::optional<uv_pipe_t> stderrPipe;
-        std::vector<unsigned char> pendingStdin;
+        struct Write {
+            Write(std::string &&bytes);
+
+            std::string data;
+            uv_write_t req;
+            uv_buf_t buffer;
+        };
+        std::vector<std::unique_ptr<Write>> stdinWrites;
     };
     std::vector<std::unique_ptr<ProcessData>> mProcesses;
 

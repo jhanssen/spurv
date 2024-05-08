@@ -132,18 +132,19 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
 
     if (args[2].isArrayBuffer() || args[3].isTypedArray()) {
         auto arrayBufferData = *args[2].arrayBufferData(); // ### can this fail?
-        data->pendingStdin.resize(arrayBufferData.second);
-        memcpy(data->pendingStdin.data(), arrayBufferData.first, arrayBufferData.second);
+        std::string pendingStdin(arrayBufferData.second, ' ');
+        memcpy(pendingStdin.data(), arrayBufferData.first, arrayBufferData.second);
+        data->stdinWrites.emplace_back(std::make_unique<ProcessData::Write>(std::move(pendingStdin)));
+        data->stdinWrites.back()->req.data = data.get();
     } else if (!args[2].isNullOrUndefined()) {
         auto str = args[2].toString();
         if (!str.ok()) {
             return ScriptValue::makeError("Invalid stdin argument");
         }
-        const auto string = *str;
-        data->pendingStdin.resize(string.size());
-        memcpy(data->pendingStdin.data(), string.c_str(), string.size());
+        auto string = *str;
+        data->stdinWrites.push_back(std::make_unique<ProcessData::Write>(std::move(string)));
+        data->stdinWrites.back()->req.data = data.get();
     }
-    // ### Need to handle stdin
 
     const std::vector<ScriptValue> argv = *args[0].toArray();
 
@@ -174,6 +175,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
     if (flags & ProcessFlag::Stdout) {
         uv_read_start(data->child_stdio[1].data.stream, [](uv_handle_t *stream, size_t suggestedSize, uv_buf_t *buf) {
             ProcessData *data = static_cast<ProcessData *>(stream->data);
+            assert(data);
             if (!data->stdoutBuf) {
                 data->stdoutBuf = new char[suggestedSize];
                 data->stdoutBufSize = suggestedSize;
@@ -188,6 +190,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
     if (flags & ProcessFlag::Stderr) {
         uv_read_start(data->child_stdio[2].data.stream, [](uv_handle_t *stream, size_t suggestedSize, uv_buf_t *buf) {
             ProcessData *data = static_cast<ProcessData *>(stream->data);
+            assert(data);
             if (!data->stderrBuf) {
                 data->stderrBuf = new char[suggestedSize];
                 data->stderrBufSize = suggestedSize;
@@ -199,11 +202,25 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         });
     }
 
-    // typedef void (*uv_alloc_cb)(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
-    //    typedef void (*uv_read_cb)(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
-    // dummy_buf = uv_buf_init("a", 1);
-    // struct child_worker *worker = &workers[round_robin_counter];
-    // uv_write2(write_req, (uv_stream_t*) &worker->pipe, &dummy_buf, 1, (uv_stream_t*) client, NULL);
+    if (!data->stdinWrites.empty()) {
+        auto &first = data->stdinWrites[0];
+        int ret = uv_write(&first->req, data->child_stdio[0].data.stream, &first->buffer, 1, [](uv_write_t *req, int status) {
+            ProcessData *data = static_cast<ProcessData *>(req->data);
+            assert(data);
+            if (status) {
+                spdlog::error("Failed to write data to process {} {}", data->executable, status);
+            }
+            for (auto it = data->stdinWrites.begin(); it != data->stdinWrites.end(); ++it) {
+                if (&(*it)->req == req) {
+                    data->stdinWrites.erase(it);
+                    return;
+                }
+            }
+        });
+        if (ret) {
+            spdlog::error("Failed to queue write to process {} {}", data->executable, ret);
+        }
+    }
 
     mProcesses.push_back(std::move(data));
     return ScriptValue(pid);
@@ -321,5 +338,13 @@ ScriptEngine::ProcessData::~ProcessData()
         delete[] stderrBuf;
     }
 }
+
+ScriptEngine::ProcessData::Write::Write(std::string &&bytes)
+    : data(std::move(bytes))
+{
+    memset(&req, 0, sizeof(req));
+    buffer = uv_buf_init(data.data(), data.size());
+}
+
 } // namespace spurv
 
