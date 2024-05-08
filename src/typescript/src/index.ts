@@ -58,14 +58,51 @@ spurv.setKeyEventHandler(async (event: spurv.KeyEvent): Promise<void> => {
             console.log("trying process");
             const proc = new Process();
             proc.on("stdout", (stdoutEv: ProcessStdoutEvent) => {
-                console.log("got stdout", stdoutEv.data, stdoutEv.end);
+                if (stdoutEv.end) {
+                    console.log("got stdout end", stdoutEv.end);
+                } else {
+                    console.log("got stdout", stdoutEv.data);
+                }
             });
             proc.on("stderr", (stderrEv: ProcessStderrEvent) => {
-                console.error("got stderr", stderrEv.data, stderrEv.end);
+                if (stderrEv.end) {
+                    console.log("got stderr end", stderrEv.end);
+                } else {
+                    console.log("got stderr", stderrEv.data);
+                }
             });
 
             try {
                 const ret = await proc.start(["cat"], { strings: true, stdout: true, stderr: true, stdin: "foobar" });
+                console.log("got ret", ret);
+            } catch (err: unknown) {
+                console.error("got err", err);
+            }
+        } else if (event.key === spurv.Key.O) {
+            console.log("trying process 2");
+            const proc = new Process();
+            proc.on("stdout", (stdoutEv: ProcessStdoutEvent) => {
+                if (stdoutEv.end) {
+                    console.log("got stdout end", stdoutEv.end);
+                } else {
+                    console.log("got stdout", stdoutEv.data);
+                }
+            });
+            proc.on("stderr", (stderrEv: ProcessStderrEvent) => {
+                if (stderrEv.end) {
+                    console.log("got stderr end", stderrEv.end);
+                } else {
+                    console.log("got stderr", stderrEv.data);
+                }
+            });
+
+            try {
+                const ret = await proc.start("/tmp/foobar", {
+                    strings: true,
+                    stdout: true,
+                    stderr: true,
+                    stdin: "foobar"
+                });
                 console.log("got ret", ret);
             } catch (err: unknown) {
                 console.error("got err", err);
@@ -99,3 +136,4 @@ console.error("2", zot2);
 //     error("about to exit");
 //     exit(10);
 // }, 2000);
+

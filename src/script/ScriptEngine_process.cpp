@@ -13,22 +13,6 @@ ScriptValue ScriptEngine::setProcessHandler(std::vector<ScriptValue> &&args)
     return {};
 }
 
-namespace {
-// Duplicated in typescript
-enum class ProcessFlag {
-    None = 0x0,
-    StdinClosed = 0x1,
-    Stdout = 0x2,
-    Stderr = 0x4,
-    Strings = 0x8
-};
-} // anonymous namespace
-
-template <>
-struct IsEnumBitmask<ProcessFlag> {
-    static constexpr bool enable = true;
-};
-
 // static
 inline void ScriptEngine::sendOutputEvent(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf, const char *type)
 {
@@ -41,14 +25,14 @@ inline void ScriptEngine::sendOutputEvent(uv_stream_t *stream, ssize_t nread, co
         object.setProperty(engine->mAtoms.end, ScriptValue(true));
     } else {
         object.setProperty(engine->mAtoms.end, ScriptValue(false));
-        if (pd->stringReturnValues) {
+        if (pd->flags & ProcessFlag::Strings) {
             object.setProperty(engine->mAtoms.data, ScriptValue(buf->base, nread));
         } else {
             object.setProperty(engine->mAtoms.data, ScriptValue::makeArrayBuffer(buf->base, nread));
         }
     }
+    spdlog::error("read callback {} {} {:#04x}", nread, buf->len, pd->flags);
     engine->mProcessHandler.call(std::move(object));
-    spdlog::error("read callback {} {}", nread, buf->len);
 }
 
 ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
@@ -62,15 +46,12 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
     std::unique_ptr<ProcessData> data = std::make_unique<ProcessData>();
     memset(&data->options, 0, sizeof(data->options));
 
-    ProcessFlag flags = static_cast<ProcessFlag>(*args[4].toInt());
-    if (flags & ProcessFlag::Strings) {
-        data->stringReturnValues = true;
-    }
+    data->flags = static_cast<ProcessFlag>(*args[4].toInt());
 
     data->options.stdio = data->child_stdio;
     data->options.stdio_count = 3;
 
-    if (flags & ProcessFlag::StdinClosed) {
+    if (data->flags & ProcessFlag::StdinClosed) {
         data->child_stdio[0].flags = UV_IGNORE;
     } else {
         // ### flag for blocking reads?
@@ -81,7 +62,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         data->child_stdio[0].data.stream->data = data.get();
     }
 
-    if (!(flags & ProcessFlag::Stdout)) {
+    if (!(data->flags & ProcessFlag::Stdout)) {
         data->child_stdio[1].flags = UV_IGNORE;
     } else {
         data->child_stdio[1].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_WRITABLE_PIPE | UV_NONBLOCK_PIPE);
@@ -92,7 +73,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         data->child_stdio[1].data.stream->data = data.get();
     }
 
-    if (!(flags & ProcessFlag::Stderr)) {
+    if (!(data->flags & ProcessFlag::Stderr)) {
         data->child_stdio[2].flags = UV_IGNORE;
     } else {
         data->child_stdio[2].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_WRITABLE_PIPE | UV_NONBLOCK_PIPE);
@@ -130,14 +111,14 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         }
     }
 
-    if (args[2].isArrayBuffer() || args[3].isTypedArray()) {
+    if (args[3].isArrayBuffer() || args[3].isTypedArray()) {
         auto arrayBufferData = *args[2].arrayBufferData(); // ### can this fail?
         std::string pendingStdin(arrayBufferData.second, ' ');
         memcpy(pendingStdin.data(), arrayBufferData.first, arrayBufferData.second);
         data->stdinWrites.emplace_back(std::make_unique<ProcessData::Write>(std::move(pendingStdin)));
         data->stdinWrites.back()->req.data = data.get();
-    } else if (!args[2].isNullOrUndefined()) {
-        auto str = args[2].toString();
+    } else if (!args[3].isNullOrUndefined()) {
+        auto str = args[3].toString();
         if (!str.ok()) {
             return ScriptValue::makeError("Invalid stdin argument");
         }
@@ -176,7 +157,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         return ScriptValue(error);
     }
     const int pid = data->proc->pid;
-    if (flags & ProcessFlag::Stdout) {
+    if (data->flags & ProcessFlag::Stdout) {
         uv_read_start(data->child_stdio[1].data.stream, [](uv_handle_t *stream, size_t suggestedSize, uv_buf_t *buf) {
             ProcessData *data = static_cast<ProcessData *>(stream->data);
             assert(data);
@@ -191,7 +172,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         });
     }
 
-    if (flags & ProcessFlag::Stderr) {
+    if (data->flags & ProcessFlag::Stderr) {
         uv_read_start(data->child_stdio[2].data.stream, [](uv_handle_t *stream, size_t suggestedSize, uv_buf_t *buf) {
             ProcessData *data = static_cast<ProcessData *>(stream->data);
             assert(data);
@@ -207,7 +188,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
     }
 
     if (!data->stdinWrites.empty()) {
-        data->hadStdinFromOptions = true;
+        data->flags |= ProcessFlag::HadStdinFromOptions;
         auto &first = data->stdinWrites[0];
         const int ret = uv_write(&first->req, data->child_stdio[0].data.stream, &first->buffer, 1, &ScriptEngine::onWriteFinished);
         if (ret) {
@@ -233,9 +214,8 @@ void ScriptEngine::onWriteFinished(uv_write_t *req, int status)
     data->stdinWrites.erase(data->stdinWrites.begin());
 
     if (data->stdinWrites.empty()) {
-        if (data->hadStdinFromOptions || data->stdinCloseCalled) {
+        if (data->flags & (ProcessFlag::HadStdinFromOptions|ProcessFlag::StdinClosed)) {
             uv_close(reinterpret_cast<uv_handle_t*>(&*data->stdinPipe), nullptr);
-            data->stdinPipe = {};
         }
         return;
     }
@@ -283,7 +263,7 @@ ScriptValue ScriptEngine::writeToProcessStdin(std::vector<ScriptValue> &&args)
 
     const auto &data = *it;
 
-    if (!data->stdinPipe || data->stdinCloseCalled) {
+    if (!data->stdinPipe || data->flags & ProcessFlag::StdinClosed) {
         return ScriptValue::makeError(fmt::format("stdin has been closed for {} {}",
                                                   data->executable, data->proc->pid));
     }
@@ -331,13 +311,12 @@ ScriptValue ScriptEngine::closeProcessStdin(std::vector<ScriptValue> &&args)
     }
 
     const auto &data = *it;
-    data->stdinCloseCalled = true;
+    data->flags |= ProcessFlag::StdinClosed;
 
     if (data->stdinPipe) {
         if (data->stdinWrites.empty()) {
             // can I just close it before the callbacks have happened?
             uv_close(reinterpret_cast<uv_handle_t*>(&*data->stdinPipe), nullptr);
-            data->stdinPipe = {};
         }
     }
 

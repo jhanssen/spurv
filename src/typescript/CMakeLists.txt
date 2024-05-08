@@ -11,6 +11,7 @@ set(TS_DEPS
     src/Process.ts
     src/concatArrayBuffers.ts
     src/formatArrayBuffer.ts
+    src/ProcessStderrEvent.ts
     src/ProcessStdoutEvent.ts
     src/index.ts
     src/test.ts

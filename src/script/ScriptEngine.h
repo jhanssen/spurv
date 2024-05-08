@@ -17,6 +17,22 @@
 #include "ScriptClass.h"
 
 namespace spurv {
+enum class ProcessFlag {
+    None = 0x00,
+    StdinClosed = 0x01,
+    Stdout = 0x02,
+    Stderr = 0x04,
+    Strings = 0x08,
+    // these are not in js
+    HadStdinFromOptions = 0x10,
+    Synchronous = 0x20
+};
+
+template <>
+struct IsEnumBitmask<ProcessFlag> {
+    static constexpr bool enable = true;
+};
+
 class ScriptEngine
 {
 public:
@@ -153,9 +169,7 @@ private:
         char *stderrBuf { nullptr };
         size_t stderrBufSize { 0 };
 
-        bool stringReturnValues { false };
-        bool hadStdinFromOptions { false };
-        bool stdinCloseCalled { false };
+        ProcessFlag flags { ProcessFlag::None };
 
         std::optional<uv_process_t> proc;
         std::optional<uv_pipe_t> stdinPipe;

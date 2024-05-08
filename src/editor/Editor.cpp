@@ -107,9 +107,9 @@ void Editor::thread_internal()
         mConnectKeys[0] = mainEventLoop->onKey().connect([this](int key, int scancode, int action, int mods, const std::optional<std::string> &keyName) {
             mScriptEngine->onKey(key, scancode, action, mods, keyName);
         });
-        mConnectKeys[1] = mainEventLoop->onUnicode().connect([](uint32_t uc) {
-            spdlog::error("editor uc {}", uc);
-        });
+        // mConnectKeys[1] = mainEventLoop->onUnicode().connect([](uint32_t uc) {
+        //     spdlog::error("editor uc {}", uc);
+        // });
         mConnectKeys[2] = window->onResize().connect([this](uint32_t w, uint32_t h) {
             mWidth = w;
             mHeight = h;

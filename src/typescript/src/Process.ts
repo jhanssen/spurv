@@ -152,7 +152,7 @@ export class Process {
             console.log("startProcess", commandOrArgs, options, flags);
             console.log("startProcess2", commandOrArgs, options?.env, options?.cwd, options?.stdin, flags);
             const ret = spurv.startProcess(commandOrArgs, options?.env, options?.cwd, options?.stdin, flags);
-            console.log("got ret", ret);
+            console.log("got pid or error", ret);
             if (typeof ret === "string") {
                 reject(new Error(ret));
             } else {
