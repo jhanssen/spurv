@@ -8,6 +8,10 @@ import type { ProcessStdoutEvent } from "./ProcessStdoutEvent";
 Object.defineProperty(globalThis, "Process", Process);
 installConsole();
 
+queueMicrotask(() => {
+    console.log("BALLS");
+});
+
 let view: spurv.View | undefined;
 spurv.setKeyEventHandler(async (event: spurv.KeyEvent): Promise<void> => {
     try {

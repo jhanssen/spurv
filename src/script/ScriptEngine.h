@@ -106,7 +106,7 @@ private:
     ScriptValue clearTimeout(std::vector<ScriptValue> &&args);
 
     // queueMicrotask(callback: () => void): void;
-    // ScriptValue queueMicrotask(std::vector<ScriptValue> &&args);
+    ScriptValue queueMicrotask(std::vector<ScriptValue> &&args);
 
     // exit(number?: number): void;
     ScriptValue exit(std::vector<ScriptValue> &&args);
@@ -124,7 +124,9 @@ private:
     static JSValue classStaticConstant(JSContext *ctx, JSValueConst this_val, int magic);
     static JSValue classMethod(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
     static JSValue classStaticMethod(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
+    static JSValue queuedMicrotask(JSContext *ctx, int argc, JSValueConst *argv);
     static void sendOutputEvent(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf, const char *type);
+
 
     thread_local static ScriptEngine *tScriptEngine;
     EventLoop *mEventLoop;

@@ -19,6 +19,7 @@
     ScriptAtom(message)                         \
     ScriptAtom(mods)                            \
     ScriptAtom(pid)                             \
+    ScriptAtom(queueMicrotask)                  \
     ScriptAtom(scancode)                        \
     ScriptAtom(setInterval)                     \
     ScriptAtom(setKeyEventHandler)              \

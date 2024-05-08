@@ -49,6 +49,7 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
     bindSpurvFunction(mAtoms.setKeyEventHandler, std::bind(&ScriptEngine::setKeyEventHandler, this, std::placeholders::_1));
     bindSpurvFunction(mAtoms.exit, std::bind(&ScriptEngine::exit, this, std::placeholders::_1));
     bindGlobalFunction(mAtoms.setTimeout, std::bind(&ScriptEngine::setTimeout, this, std::placeholders::_1));
+    bindGlobalFunction(mAtoms.queueMicrotask, std::bind(&ScriptEngine::queueMicrotask, this, std::placeholders::_1));
     bindGlobalFunction(mAtoms.setInterval, std::bind(&ScriptEngine::setInterval, this, std::placeholders::_1));
     bindGlobalFunction(mAtoms.clearTimeout, std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
     bindGlobalFunction(mAtoms.clearInterval, std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
@@ -524,6 +525,17 @@ JSValue ScriptEngine::classStaticMethod(JSContext *ctx, JSValueConst /*this_val*
 }
 
 // static
+JSValue ScriptEngine::queuedMicrotask(JSContext *ctx, int argc, JSValueConst *argv)
+{
+    assert(argc == 1);
+    assert(JS_IsFunction(ctx, argv[0]));
+    ScriptEngine::CallScope scope(ScriptEngine::scriptEngine()); // ### should this be here?
+    JSValue ret = JS_Call(scope.context, argv[0], *ScriptValue::undefined(), 0, nullptr);
+    JS_FreeValue(ctx, argv[0]);
+    return ret;
+}
+
+// static
 JSValue ScriptEngine::classGetterSetterSetter(JSContext *ctx, JSValueConst this_val, JSValueConst val, int magic)
 {
     const JSClassID id = JS_GetClassID(this_val);
@@ -630,6 +642,17 @@ ScriptValue ScriptEngine::setTimeout(std::vector<ScriptValue> &&args)
     return setTimeoutImpl(EventLoop::TimerMode::SingleShot, std::move(args));
 }
 
+ScriptValue ScriptEngine::queueMicrotask(std::vector<ScriptValue> &&args)
+{
+    if (args.empty() || !args[0].isFunction()) {
+        return ScriptValue::makeError("First argument must be a function");
+    }
+
+    JSValue value = args[0].leakValue();
+    JS_EnqueueJob(mContext, &ScriptEngine::queuedMicrotask, 1, &value);
+    return {};
+}
+
 ScriptValue ScriptEngine::setInterval(std::vector<ScriptValue> &&args)
 {
     return setTimeoutImpl(EventLoop::TimerMode::Repeat, std::move(args));
@@ -682,4 +705,3 @@ void ScriptEngine::executeMicrotasks()
     }
 }
 } // namespace spurv
-
