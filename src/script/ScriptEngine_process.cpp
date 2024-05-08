@@ -157,9 +157,13 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         if (!str.ok()) {
             return ScriptValue::makeError("Invalid arguments");
         }
+        if (!i) {
+            data->executable = findExecutable(*str);
+            str = data->executable;
+        }
         data->options.args[i] = strdup(str->c_str());
     }
-    data->options.file = data->options.args[0];
+    data->options.file = data->executable.c_str();
     data->options.exit_cb = ScriptEngine::onProcessExit;
 
     data->proc = {};
@@ -203,20 +207,9 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
     }
 
     if (!data->stdinWrites.empty()) {
+        data->hadStdinFromOptions = true;
         auto &first = data->stdinWrites[0];
-        int ret = uv_write(&first->req, data->child_stdio[0].data.stream, &first->buffer, 1, [](uv_write_t *req, int status) {
-            ProcessData *data = static_cast<ProcessData *>(req->data);
-            assert(data);
-            if (status) {
-                spdlog::error("Failed to write data to process {} {}", data->executable, status);
-            }
-            for (auto it = data->stdinWrites.begin(); it != data->stdinWrites.end(); ++it) {
-                if (&(*it)->req == req) {
-                    data->stdinWrites.erase(it);
-                    return;
-                }
-            }
-        });
+        const int ret = uv_write(&first->req, data->child_stdio[0].data.stream, &first->buffer, 1, &ScriptEngine::onWriteFinished);
         if (ret) {
             spdlog::error("Failed to queue write to process {} {}", data->executable, ret);
         }
@@ -224,6 +217,25 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
 
     mProcesses.push_back(std::move(data));
     return ScriptValue(pid);
+}
+
+// static
+void ScriptEngine::onWriteFinished(uv_write_t *req, int status)
+{
+    ProcessData *data = static_cast<ProcessData *>(req->data);
+    assert(data);
+    if (status) {
+        spdlog::error("Failed to write data to process {} {}", data->executable, status);
+    }
+    for (auto it = data->stdinWrites.begin(); it != data->stdinWrites.end(); ++it) {
+        if (&(*it)->req == req) {
+            data->stdinWrites.erase(it);
+            if (data->stdinWrites.empty() && data->hadStdinFromOptions) {
+                // ### need to do this
+                // closeProcessStdin(data);
+            }
+        }
+    }
 }
 
 ScriptValue ScriptEngine::execProcess(std::vector<ScriptValue> &&args)
@@ -258,6 +270,43 @@ ScriptValue ScriptEngine::killProcess(std::vector<ScriptValue> &&args)
 
     uv_process_kill(&*(*it)->proc, *args[1].toInt());
     return {};
+}
+
+// static
+std::filesystem::path ScriptEngine::findExecutable(std::filesystem::path exec)
+{
+    if (exec.is_absolute()) {
+        return exec;
+    }
+
+    if (exec.string().find('/') != std::string::npos) {
+        return std::filesystem::absolute(exec);
+    }
+
+    const char *path = getenv("PATH");
+    if (path) {
+        const char *last = path;
+        while (true) {
+            const char *colon = strchr(last, ':');
+            int len = colon ? colon - last : strlen(last);
+            char buf[PATH_MAX];
+            int w;
+            if (colon && colon[-1] == '/') {
+                w = snprintf(buf, sizeof(buf), "%.*s%s", len, last, exec.string().c_str());
+            } else {
+                w = snprintf(buf, sizeof(buf), "%.*s/%s", len, last, exec.string().c_str());
+            }
+            if (!access(buf, S_IXUSR)) {
+                return std::string(buf, w);
+            }
+            if (colon) {
+                last = colon + 1;
+            } else {
+                break;
+            }
+        }
+    }
+    return exec;
 }
 
 std::vector<std::unique_ptr<ScriptEngine::ProcessData>>::iterator ScriptEngine::findProcessByPid(int pid)

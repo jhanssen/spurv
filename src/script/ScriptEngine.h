@@ -68,6 +68,7 @@ private:
 
     void initScriptBufferSourceIds();
     void executeMicrotasks();
+    static std::filesystem::path findExecutable(std::filesystem::path exec);
 
     // setProcessHandler(handler: (event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => void): void;
     ScriptValue setProcessHandler(std::vector<ScriptValue> &&args);
@@ -113,6 +114,7 @@ private:
 
     struct ProcessData;
     std::vector<std::unique_ptr<ProcessData>>::iterator findProcessByPid(int pid);
+    static void onWriteFinished(uv_write_t *req, int status);
     static JSValue bindHelper(JSContext *ctx, JSValueConst functionVal, int argc, JSValueConst *argv, int magic, JSValue *);
     static JSValue constructHelper(JSContext *ctx, JSValueConst functionVal, int argc, JSValueConst *argv, int magic, JSValue *);
     static void onProcessExit(uv_process_t *proc, int64_t exit_status, int term_signal);
@@ -151,6 +153,7 @@ private:
         size_t stderrBufSize { 0 };
 
         bool stringReturnValues { false };
+        bool hadStdinFromOptions { false };
         std::optional<uv_process_t> proc;
         std::optional<uv_pipe_t> stdinPipe;
         std::optional<uv_pipe_t> stdoutPipe;

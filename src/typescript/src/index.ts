@@ -65,7 +65,7 @@ spurv.setKeyEventHandler(async (event: spurv.KeyEvent): Promise<void> => {
             });
 
             try {
-                const ret = await proc.start(["/tmp/foobar"], { strings: true, stdout: true, stderr: true });
+                const ret = await proc.start(["cat"], { strings: true, stdout: true, stderr: true, stdin: "foobar" });
                 console.log("got ret", ret);
             } catch (err: unknown) {
                 console.error("got err", err);

@@ -1,5 +1,5 @@
 export interface ProcessOptions {
-    stdin?: ArrayBuffer;
+    stdin?: ArrayBuffer | string;
     env?: Record<string, string>;
     cwd?: string;
     stdout?: boolean;
