@@ -1,6 +1,7 @@
 set(SOURCES
     Builtins.cpp
     ScriptEngine.cpp
+    ScriptEngine_process.cpp
     ScriptValue.cpp
     ScriptClass.cpp
 )
