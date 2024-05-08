@@ -227,14 +227,22 @@ void ScriptEngine::onWriteFinished(uv_write_t *req, int status)
     if (status) {
         spdlog::error("Failed to write data to process {} {}", data->executable, status);
     }
-    for (auto it = data->stdinWrites.begin(); it != data->stdinWrites.end(); ++it) {
-        if (&(*it)->req == req) {
-            data->stdinWrites.erase(it);
-            if (data->stdinWrites.empty() && data->hadStdinFromOptions) {
-                // ### need to do this
-                // closeProcessStdin(data);
-            }
+
+    assert(!data->stdinWrites.empty());
+    assert(&data->stdinWrites.front()->req == req);
+    data->stdinWrites.erase(data->stdinWrites.begin());
+
+    if (data->stdinWrites.empty()) {
+        if (data->hadStdinFromOptions || data->stdinCloseCalled) {
+            uv_close(reinterpret_cast<uv_handle_t*>(&*data->stdinPipe), nullptr);
+            data->stdinPipe = {};
         }
+        return;
+    }
+    auto &first = data->stdinWrites[0];
+    const int ret = uv_write(&first->req, data->child_stdio[0].data.stream, &first->buffer, 1, &ScriptEngine::onWriteFinished);
+    if (ret) {
+        spdlog::error("Failed to queue write to process {} {}", data->executable, ret);
     }
 }
 
@@ -246,13 +254,93 @@ ScriptValue ScriptEngine::execProcess(std::vector<ScriptValue> &&args)
 
 ScriptValue ScriptEngine::writeToProcessStdin(std::vector<ScriptValue> &&args)
 {
-    static_cast<void>(args);
+    bool ok = false;
+    std::string str;
+    if (args.size() >= 2 && args[0].isInt()) {
+        if (args[1].isArrayBuffer() || args[1].isTypedArray()) {
+            auto data = args[1].arrayBufferData();
+            if (data.ok()) {
+                ok = true;
+                str.append(reinterpret_cast<const char *>(data->first), data->second);
+            }
+        } else {
+            auto string = args[1].toString();
+            if (string.ok()) {
+                ok = true;
+                str = *std::move(string);
+            }
+        }
+    }
+
+    if (!ok) {
+        return ScriptValue::makeError("Invalid arguments");
+    }
+
+    auto it = findProcessByPid(*args[0].toInt());
+    if (it == mProcesses.end()) {
+        return ScriptValue::makeError(fmt::format("Can't find process with pid {}", *args[0].toInt()));
+    }
+
+    const auto &data = *it;
+
+    if (!data->stdinPipe || data->stdinCloseCalled) {
+        return ScriptValue::makeError(fmt::format("stdin has been closed for {} {}",
+                                                  data->executable, data->proc->pid));
+    }
+
+    if (!data->stdinWrites.empty()) {
+        data->stdinWrites.push_back(std::make_unique<ProcessData::Write>(std::move(str)));
+    } else {
+        auto &first = data->stdinWrites[0];
+        const int ret = uv_write(&first->req, data->child_stdio[0].data.stream, &first->buffer, 1, &ScriptEngine::onWriteFinished);
+        if (ret) {
+            spdlog::error("Failed to queue write to process {} {}", data->executable, ret);
+        }
+    }
+
     return {};
 }
 
 ScriptValue ScriptEngine::closeProcessStdin(std::vector<ScriptValue> &&args)
 {
-    static_cast<void>(args);
+    bool ok = false;
+    std::string str;
+    if (args.size() >= 2 && args[0].isInt()) {
+        if (args[1].isArrayBuffer() || args[1].isTypedArray()) {
+            auto data = args[1].arrayBufferData();
+            if (data.ok()) {
+                ok = true;
+                str.append(reinterpret_cast<const char *>(data->first), data->second);
+            }
+        } else {
+            auto string = args[1].toString();
+            if (string.ok()) {
+                ok = true;
+                str = *std::move(string);
+            }
+        }
+    }
+
+    if (!ok) {
+        return ScriptValue::makeError("Invalid arguments");
+    }
+
+    auto it = findProcessByPid(*args[0].toInt());
+    if (it == mProcesses.end()) {
+        return ScriptValue::makeError(fmt::format("Can't find process with pid {}", *args[0].toInt()));
+    }
+
+    const auto &data = *it;
+    data->stdinCloseCalled = true;
+
+    if (data->stdinPipe) {
+        if (data->stdinWrites.empty()) {
+            // can I just close it before the callbacks have happened?
+            uv_close(reinterpret_cast<uv_handle_t*>(&*data->stdinPipe), nullptr);
+            data->stdinPipe = {};
+        }
+    }
+
     return {};
 }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <deque>
 #include <memory>
 #include <unordered_map>
 #include <functional>
@@ -154,6 +155,8 @@ private:
 
         bool stringReturnValues { false };
         bool hadStdinFromOptions { false };
+        bool stdinCloseCalled { false };
+
         std::optional<uv_process_t> proc;
         std::optional<uv_pipe_t> stdinPipe;
         std::optional<uv_pipe_t> stdoutPipe;
@@ -165,7 +168,7 @@ private:
             uv_write_t req;
             uv_buf_t buffer;
         };
-        std::vector<std::unique_ptr<Write>> stdinWrites;
+        std::deque<std::unique_ptr<Write>> stdinWrites;
     };
     std::vector<std::unique_ptr<ProcessData>> mProcesses;
 
