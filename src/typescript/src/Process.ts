@@ -184,6 +184,16 @@ export class Process {
         return spurv.execProcess(commandOrArgs, options?.env, options?.cwd, options?.stdin, flags);
     }
 
+    static start(command: string, options?: ProcessOptions): Promise<ProcessResult>;
+    static start(args: string[], options?: ProcessOptions): Promise<ProcessResult>;
+    static start(commandOrArgs: string | string[], options?: ProcessOptions): Promise<ProcessResult> {
+        const proc = new Process();
+        if (typeof commandOrArgs === "string") {
+            commandOrArgs = splitCommand(commandOrArgs);
+        }
+        return proc.start(commandOrArgs, options);
+    }
+
     private onImpl(type: Events, handler: EventHandlers): void {
         switch (type) {
             case "stdout":
