@@ -2,6 +2,8 @@
 
 #include <deque>
 #include <memory>
+#include <mutex>
+#include <condition_variable>
 #include <unordered_map>
 #include <functional>
 #include <filesystem>
@@ -145,7 +147,9 @@ private:
     static JSValue classStaticMethod(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
     static JSValue queuedMicrotask(JSContext *ctx, int argc, JSValueConst *argv);
     static void sendOutputEvent(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf, const char *type);
-
+    struct ProcessParameters;
+    std::variant<ScriptValue, ProcessParameters> prepareProcess(std::vector<ScriptValue> &&args);
+    int runProcess(uv_loop_t *loop, ProcessParameters &&params);
 
     thread_local static ScriptEngine *tScriptEngine;
     EventLoop *mEventLoop;
@@ -184,6 +188,16 @@ private:
         };
         std::deque<std::unique_ptr<Write>> stdinWrites;
     };
+
+    struct ProcessParameters {
+        ProcessFlag flags {};
+        std::optional<std::vector<std::pair<std::string, std::string>>> env;
+        std::optional<std::string> cwd;
+        std::optional<std::string> stdinWrite;
+        std::vector<std::string> arguments;
+        std::string executable;
+    };
+
     std::vector<std::unique_ptr<ProcessData>> mProcesses;
 
     unordered_dense::map<int, std::unique_ptr<FunctionData>> mFunctions;

@@ -1,6 +1,8 @@
 #include "ScriptEngine.h"
 #include <cassert>
 #include <Logger.h>
+#include <ThreadPool.h>
+#include <EventLoopUv.h>
 
 namespace spurv {
 ScriptValue ScriptEngine::setProcessHandler(std::vector<ScriptValue> &&args)
@@ -35,18 +37,90 @@ inline void ScriptEngine::sendOutputEvent(uv_stream_t *stream, ssize_t nread, co
     engine->mProcessHandler.call(std::move(object));
 }
 
-ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
+std::variant<ScriptValue, ScriptEngine::ProcessParameters> ScriptEngine::prepareProcess(std::vector<ScriptValue> &&args)
 {
     if (args.size() < 5 || !args[0].isArray() || !args[4].isNumber()) {
         return ScriptValue::makeError("Invalid arguments");
     }
 
-    uv_loop_t *loop = static_cast<uv_loop_t *>(mEventLoop->handle());
+    ProcessParameters params = {};
 
+    params.flags = static_cast<ProcessFlag>(*args[4].toInt());
+
+    if (!args[1].isNullOrUndefined()) {
+        if (!args[1].isObject()) {
+            return ScriptValue::makeError("Invalid env argument");
+        }
+        auto vec = *args[1].toObject();
+        std::vector<std::pair<std::string, std::string>> env;
+        env.reserve(vec.size());
+        for (std::pair<std::string, ScriptValue> &arg : vec) {
+            auto str = arg.second.toString();
+            if (!str.ok()) {
+                return ScriptValue::makeError("Couldn't convert env argument with key " + arg.first);
+            }
+            env.emplace_back(std::move(arg.first), *std::move(str));
+        }
+        params.env = std::move(env);
+    }
+
+    if (!args[2].isNullOrUndefined()) {
+        auto cwdArg = args[2].toString();
+        if (cwdArg.ok()) {
+            params.cwd = *std::move(cwdArg);
+        } else {
+            return ScriptValue::makeError("Invalid cwd argument");
+        }
+    }
+
+    if (args[3].isArrayBuffer() || args[3].isTypedArray()) {
+        auto arrayBufferData = *args[2].arrayBufferData(); // ### can this fail?
+        std::string pendingStdin(arrayBufferData.second, ' ');
+        memcpy(pendingStdin.data(), arrayBufferData.first, arrayBufferData.second);
+        params.stdinWrite = std::move(pendingStdin);
+    } else if (!args[3].isNullOrUndefined()) {
+        auto str = args[3].toString();
+        if (!str.ok()) {
+            return ScriptValue::makeError("Invalid stdin argument");
+        }
+        params.stdinWrite = *std::move(str);
+    }
+
+    const std::vector<ScriptValue> argv = *args[0].toArray();
+
+    params.arguments.resize(argv.size());
+    for (size_t i=0; i<argv.size(); ++i) {
+        auto str = argv[i].toString();
+        if (!str.ok()) {
+            return ScriptValue::makeError("Invalid arguments");
+        }
+        if (!i) {
+            params.executable = findExecutable(*std::move(str));
+            params.arguments[i] = params.executable;
+        } else {
+            params.arguments[i] = std::move(*std::move(str));
+        }
+    }
+    return params;
+}
+
+ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
+{
+    std::variant<ScriptValue, ProcessParameters> params = prepareProcess(std::move(args));
+    if (std::holds_alternative<ScriptValue>(params)) {
+        return std::get<ScriptValue>(std::move(params));
+    }
+
+    uv_loop_t *loop = static_cast<uv_loop_t *>(mEventLoop->handle());
+    return ScriptValue(runProcess(loop, std::get<ProcessParameters>(std::move(params))));
+}
+
+int ScriptEngine::runProcess(uv_loop_t *loop, ProcessParameters &&params)
+{
     std::unique_ptr<ProcessData> data = std::make_unique<ProcessData>();
     memset(&data->options, 0, sizeof(data->options));
 
-    data->flags = static_cast<ProcessFlag>(*args[4].toInt());
+    data->flags = params.flags;
 
     data->options.stdio = data->child_stdio;
     data->options.stdio_count = 3;
@@ -83,66 +157,30 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
         data->child_stdio[2].data.stream->data = data.get();
     }
 
-    if (!args[1].isNullOrUndefined()) {
-        if (!args[1].isObject()) {
-            return ScriptValue::makeError("Invalid env argument");
-        }
-        auto vec = *args[1].toObject();
-        data->options.env = new char*[vec.size() + 1];
-        data->options.env[vec.size()] = nullptr;
+    if (params.env) {
+        data->options.env = new char*[params.env->size() + 1];
+        data->options.env[params.env->size()] = nullptr;
         size_t i = 0;
-        for (std::pair<std::string, ScriptValue> &arg : vec) {
-            auto str = arg.second.toString();
-            if (!str.ok()) {
-                return ScriptValue::makeError("Couldn't convert env argument with key " + arg.first);
-            }
-            data->options.env[i++] = strdup(fmt::format("{}={}", arg.first, str->c_str()).c_str());
+        for (std::pair<std::string, std::string> &arg : *params.env) {
+            data->options.env[i++] = strdup(fmt::format("{}={}", arg.first, arg.second).c_str());
         }
     }
 
-    std::string cwd;
-    if (!args[2].isNullOrUndefined()) {
-        auto cwdArg = args[2].toString();
-        if (cwdArg.ok()) {
-            cwd = *cwdArg;
-            data->options.cwd = cwd.c_str();
-        } else {
-            return ScriptValue::makeError("Invalid cwd argument");
-        }
+    if (params.cwd) {
+        data->options.cwd = params.cwd->c_str();
     }
 
-    if (args[3].isArrayBuffer() || args[3].isTypedArray()) {
-        auto arrayBufferData = *args[2].arrayBufferData(); // ### can this fail?
-        std::string pendingStdin(arrayBufferData.second, ' ');
-        memcpy(pendingStdin.data(), arrayBufferData.first, arrayBufferData.second);
-        data->stdinWrites.emplace_back(std::make_unique<ProcessData::Write>(std::move(pendingStdin)));
-        data->stdinWrites.back()->req.data = data.get();
-    } else if (!args[3].isNullOrUndefined()) {
-        auto str = args[3].toString();
-        if (!str.ok()) {
-            return ScriptValue::makeError("Invalid stdin argument");
-        }
-        auto string = *str;
-        data->stdinWrites.push_back(std::make_unique<ProcessData::Write>(std::move(string)));
+    if (params.stdinWrite) {
+        data->stdinWrites.emplace_back(std::make_unique<ProcessData::Write>(*std::move(params.stdinWrite)));
         data->stdinWrites.back()->req.data = data.get();
     }
+    data->executable = std::move(params.executable);
+    data->options.args = new char*[params.arguments.size() + 1];
+    data->options.args[params.arguments.size()] = nullptr;
+    memset(data->options.args, 0, sizeof(char *) * params.arguments.size() + 1);
 
-    const std::vector<ScriptValue> argv = *args[0].toArray();
-
-    data->options.args = new char*[argv.size() + 1];
-    data->options.args[argv.size()] = nullptr;
-    memset(data->options.args, 0, sizeof(char *) * argv.size() + 1);
-
-    for (size_t i=0; i<argv.size(); ++i) {
-        auto str = argv[i].toString();
-        if (!str.ok()) {
-            return ScriptValue::makeError("Invalid arguments");
-        }
-        if (!i) {
-            data->executable = findExecutable(*str);
-            str = data->executable;
-        }
-        data->options.args[i] = strdup(str->c_str());
+    for (size_t i=0; i<params.arguments.size(); ++i) {
+        data->options.args[i] = strdup(params.arguments[i].c_str());
     }
     data->options.file = data->executable.c_str();
     data->options.exit_cb = ScriptEngine::onProcessExit;
@@ -197,7 +235,7 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
     }
 
     mProcesses.push_back(std::move(data));
-    return ScriptValue(pid);
+    return pid;
 }
 
 // static
@@ -228,7 +266,19 @@ void ScriptEngine::onWriteFinished(uv_write_t *req, int status)
 
 ScriptValue ScriptEngine::execProcess(std::vector<ScriptValue> &&args)
 {
-    static_cast<void>(args);
+    std::variant<ScriptValue, ProcessParameters> params = prepareProcess(std::move(args));
+    if (std::holds_alternative<ScriptValue>(params)) {
+        return std::get<ScriptValue>(std::move(params));
+    }
+
+    ProcessParameters parameters = std::get<ProcessParameters>(std::move(params));
+
+    ThreadPool *pool = ThreadPool::mainThreadPool();
+    pool->post([&parameters, this]() {
+        EventLoopUv eventLoop;
+        uv_loop_t *handle = static_cast<uv_loop_t *>(eventLoop.handle());
+        runProcess(handle, std::move(parameters));
+    });
     return {};
 }
 
