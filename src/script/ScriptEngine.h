@@ -160,7 +160,6 @@ private:
     EventLoop *mEventLoop;
     EventEmitter<void(int)> mOnExit;
 
-    int mMagic { 0 };
     struct FunctionData {
         ScriptValue value;
         ScriptValue::Function function;
@@ -215,7 +214,7 @@ private:
     std::mutex mProcessesMutex;
     std::vector<std::unique_ptr<ProcessData>> mProcesses;
 
-    unordered_dense::map<int, std::unique_ptr<FunctionData>> mFunctions;
+    std::vector<std::unique_ptr<FunctionData>> mFunctions;
 
     struct TimerData {
         EventLoop::TimerMode timerMode;
@@ -264,7 +263,7 @@ private:
         ScriptClass::StaticMethod call;
     };
     std::vector<std::unique_ptr<StaticMethod>> mStaticClassMethods;
-    unordered_dense::map<int, JSClassID> mConstructors;
+    std::vector<JSClassID> mConstructors;
 
     JSRuntime *mRuntime = nullptr;
     JSContext *mContext = nullptr;

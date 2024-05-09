@@ -130,12 +130,12 @@ Result<void> ScriptEngine::eval(const std::string &url, const std::string &sourc
 
 ScriptValue ScriptEngine::bindFunction(ScriptValue::Function &&function)
 {
-    const int magic = ++mMagic;
+    const int magic = mFunctions.size();
     std::unique_ptr<FunctionData> data = std::make_unique<FunctionData>();
     data->value = ScriptValue(JS_NewCFunctionData(mContext, bindHelper, 0, magic, 0, nullptr));
     data->function = std::move(function);
     ScriptValue ret = data->value.clone();
-    mFunctions[magic] = std::move(data);
+    mFunctions.push_back(std::move(data));
     return ret;
 }
 
@@ -238,7 +238,7 @@ bool ScriptEngine::addClass(ScriptClass &&clazz)
     data->prototype = ScriptValue(JS_NewObject(mContext));
     JS_SetPropertyFunctionList(mContext, *data->prototype, data->protoProperties.data(), data->protoProperties.size());
 
-    const int magic = ++mMagic;
+    const int magic = mConstructors.size();
     data->constructor = ScriptValue(JS_NewCFunctionData(mContext, constructHelper, 0, magic, 0, nullptr));
 
     auto &staticProperties = clazz.staticProperties();
@@ -265,7 +265,7 @@ bool ScriptEngine::addClass(ScriptClass &&clazz)
         auto &staticProp = data->staticProperties[idx++];
         staticProp.prop_flags = JS_PROP_C_W_E;
         staticProp.def_type = JS_DEF_CFUNC;
-        // ### is 2^31 enough static functions?
+        // ### is 2^15 enough static functions?
         staticProp.magic = static_cast<int16_t>(mStaticClassMethods.size());
         auto &func = staticProp.u.func;
         func.length = 1;
@@ -282,7 +282,7 @@ bool ScriptEngine::addClass(ScriptClass &&clazz)
     JS_SetConstructor(mContext, *data->constructor, *data->prototype);
     JS_SetClassProto(mContext, id, JS_DupValue(mContext, *data->prototype));
 
-    mConstructors[magic] = id;
+    mConstructors.push_back(id);
 
     // spdlog::error(data->name);
     mSpurv.setProperty(data->name, data->constructor.clone());
@@ -332,8 +332,7 @@ EventEmitter<void(int)>& ScriptEngine::onExit()
 JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst /*funcObject*/, int argc, JSValueConst *argv, int magic, JSValue *)
 {
     ScriptEngine *that = ScriptEngine::scriptEngine();
-    auto it = that->mFunctions.find(magic);
-    if (it == that->mFunctions.end()) {
+    if (static_cast<size_t>(magic) >= that->mFunctions.size()) {
         return JS_ThrowTypeError(ctx, "Function can't be found");
     }
 
@@ -342,7 +341,8 @@ JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst /*funcObject*/, in
         args[i] = ScriptValue(JS_DupValue(that->mContext, argv[i]));
     }
 
-    ScriptValue ret = it->second->function(std::move(args));
+    const auto &func = that->mFunctions[magic];
+    ScriptValue ret = func->function(std::move(args));
     if (ret) {
         if (ret.isError()) {
             return JS_Throw(that->mContext, ret.leakValue());
@@ -356,15 +356,15 @@ JSValue ScriptEngine::bindHelper(JSContext *ctx, JSValueConst /*funcObject*/, in
 JSValue ScriptEngine::constructHelper(JSContext *ctx, JSValueConst /*funcObject*/, int argc, JSValueConst *argv, int magic, JSValue *)
 {
     ScriptEngine *that = ScriptEngine::scriptEngine();
-    auto it = that->mConstructors.find(magic); // ### this doesn't need to be a map, could be a vector
-    if (it == that->mConstructors.end()) {
-        spdlog::error("magic is {}, known are {}", magic, keys(that->mConstructors));
+    if (static_cast<size_t>(magic) >= that->mConstructors.size()) {
         return JS_ThrowTypeError(ctx, "Constructor can't be found (1)");
     }
 
-    auto it2 = that->mClasses.find(it->second);
+    const JSClassID classId = that->mConstructors[magic];
+
+    auto it2 = that->mClasses.find(classId);
     if (it2 == that->mClasses.end()) {
-        spdlog::error("ClassId is {}, known are {}", it->second, keys(that->mClasses));
+        spdlog::error("ClassId is {}, known are {}", classId, keys(that->mClasses));
         return JS_ThrowTypeError(ctx, "Constructor can't be found (2)");
     }
 
@@ -379,7 +379,7 @@ JSValue ScriptEngine::constructHelper(JSContext *ctx, JSValueConst /*funcObject*
         delete instance;
         return JS_ThrowTypeError(ctx, "Failed to construct class %s: %s", it2->second->name.c_str(), ret->c_str());
     }
-    JSValue val = JS_NewObjectClass(ctx, it->second);
+    JSValue val = JS_NewObjectClass(ctx, classId);
     JS_SetOpaque(val, instance);
     return val;
 }
