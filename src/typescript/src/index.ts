@@ -1,6 +1,7 @@
 import { Process } from "./Process";
 import { assert } from "./assert";
 import { installConsole } from "./installConsole";
+import { splitCommand } from "./splitCommand";
 import { test } from "./test";
 import type { ProcessStderrEvent } from "./ProcessStderrEvent";
 import type { ProcessStdoutEvent } from "./ProcessStdoutEvent";
@@ -9,7 +10,9 @@ Object.defineProperty(globalThis, "Process", Process);
 installConsole();
 
 queueMicrotask(() => {
-    console.log("BALLS");
+    console.log("BALLS", splitCommand("foo"));
+    console.log("BALLS", splitCommand("\"foo\""));
+    console.log("BALLS", splitCommand("\"foo bar\" bar'foo \"bar'foo\"            \"foo    bar\""));
 });
 
 let view: spurv.View | undefined;
@@ -142,3 +145,4 @@ console.error("2", zot2);
 //     error("about to exit");
 //     exit(10);
 // }, 2000);
+
