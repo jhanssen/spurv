@@ -177,6 +177,7 @@ declare namespace spurv {
     export interface NativeSynchronousProcessResult {
         exitCode: number;
         error?: string;
+        pid: number;
         stdout?: ArrayBuffer | string;
         stderr?: ArrayBuffer | string;
     }

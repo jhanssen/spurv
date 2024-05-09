@@ -162,6 +162,28 @@ export class Process {
         });
     }
 
+    static exec(command: string, options?: ProcessOptions): ProcessResult;
+    static exec(args: string[], options?: ProcessOptions): ProcessResult;
+    static exec(commandOrArgs: string | string[], options?: ProcessOptions): ProcessResult {
+        if (typeof commandOrArgs === "string") {
+            commandOrArgs = splitCommand(commandOrArgs);
+        }
+
+        let flags: spurv.ProcessFlags = spurv.ProcessFlags.None;
+        if (options?.stderr) {
+            flags |= spurv.ProcessFlags.Stderr;
+        }
+        if (options?.stdout) {
+            flags |= spurv.ProcessFlags.Stdout;
+        }
+        if (options?.strings) {
+            flags |= spurv.ProcessFlags.Strings;
+        }
+
+        console.log("execProcess2", commandOrArgs, options?.env, options?.cwd, options?.stdin, flags);
+        return spurv.execProcess(commandOrArgs, options?.env, options?.cwd, options?.stdin, flags);
+    }
+
     private onImpl(type: Events, handler: EventHandlers): void {
         switch (type) {
             case "stdout":
@@ -189,14 +211,6 @@ export class Process {
                 throw new Error(`Invalid event: ${type}`);
         }
     }
-
-    // static exec(command: string): ProcessResult;
-    // static exec(args: string[]): ProcessResult;
-    // static exec(commandOrArgs: string | string[]): ProcessResult {
-    //     if (typeof commandOrArgs === "string") {
-    //         commandOrArgs = splitCommand(commandOrArgs);
-    //     }
-    // }
 }
 
 spurv.setProcessHandler(

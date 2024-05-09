@@ -16,25 +16,35 @@ ScriptValue ScriptEngine::setProcessHandler(std::vector<ScriptValue> &&args)
 }
 
 // static
-inline void ScriptEngine::sendOutputEvent(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf, const char *type)
+inline void ScriptEngine::sendOutputEvent(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf, OutputType type)
 {
-    ScriptEngine *engine = ScriptEngine::scriptEngine();
     ProcessData *pd = static_cast<ProcessData *>(stream->data);
-    ScriptValue object(ScriptValue::Object);
-    object.setProperty(engine->mAtoms.type, ScriptValue(type));
-    object.setProperty(engine->mAtoms.pid, ScriptValue(pd->proc->pid));
-    if (nread == UV_EOF) {
-        object.setProperty(engine->mAtoms.end, ScriptValue(true));
-    } else {
-        object.setProperty(engine->mAtoms.end, ScriptValue(false));
-        if (pd->flags & ProcessFlag::Strings) {
-            object.setProperty(engine->mAtoms.data, ScriptValue(buf->base, nread));
-        } else {
-            object.setProperty(engine->mAtoms.data, ScriptValue::makeArrayBuffer(buf->base, nread));
+    if (pd->synchronousResponse) {
+        if (nread > 0) {
+            if (type == OutputType::Stdout) {
+                pd->synchronousResponse->stdout.append(buf->base, nread);
+            } else {
+                pd->synchronousResponse->stderr.append(buf->base, nread);
+            }
         }
+    } else {
+        ScriptEngine *engine = ScriptEngine::scriptEngine();
+        ScriptValue object(ScriptValue::Object);
+        object.setProperty(engine->mAtoms.type, ScriptValue(type == OutputType::Stdout ? "stdout" : "stderr"));
+        object.setProperty(engine->mAtoms.pid, ScriptValue(pd->proc->pid));
+        if (nread == UV_EOF) {
+            object.setProperty(engine->mAtoms.end, ScriptValue(true));
+        } else {
+            object.setProperty(engine->mAtoms.end, ScriptValue(false));
+            if (pd->flags & ProcessFlag::Strings) {
+                object.setProperty(engine->mAtoms.data, ScriptValue(buf->base, nread));
+            } else {
+                object.setProperty(engine->mAtoms.data, ScriptValue::makeArrayBuffer(buf->base, nread));
+            }
+        }
+        spdlog::error("read callback {} {} {:#04x}", nread, buf->len, pd->flags);
+        engine->mProcessHandler.call(std::move(object));
     }
-    spdlog::error("read callback {} {} {:#04x}", nread, buf->len, pd->flags);
-    engine->mProcessHandler.call(std::move(object));
 }
 
 std::variant<ScriptValue, ScriptEngine::ProcessParameters> ScriptEngine::prepareProcess(std::vector<ScriptValue> &&args)
@@ -112,10 +122,20 @@ ScriptValue ScriptEngine::startProcess(std::vector<ScriptValue> &&args)
     }
 
     uv_loop_t *loop = static_cast<uv_loop_t *>(mEventLoop->handle());
-    return ScriptValue(runProcess(loop, std::get<ProcessParameters>(std::move(params))));
+    std::unique_ptr<ProcessData> data = runProcess(loop, std::get<ProcessParameters>(std::move(params)));
+    if (!data->spawnError.empty()) {
+        return ScriptValue::makeError(data->spawnError);
+    }
+    const int pid = data->proc->pid;
+    {
+        std::lock_guard<std::mutex> lock(mProcessesMutex);
+        mProcesses.push_back(std::move(data));
+    }
+    return ScriptValue(pid);
 }
 
-int ScriptEngine::runProcess(uv_loop_t *loop, ProcessParameters &&params)
+// static_cast
+std::unique_ptr<ScriptEngine::ProcessData> ScriptEngine::runProcess(uv_loop_t *loop, ProcessParameters &&params)
 {
     std::unique_ptr<ProcessData> data = std::make_unique<ProcessData>();
     memset(&data->options, 0, sizeof(data->options));
@@ -125,12 +145,16 @@ int ScriptEngine::runProcess(uv_loop_t *loop, ProcessParameters &&params)
     data->options.stdio = data->child_stdio;
     data->options.stdio_count = 3;
 
+    if (data->flags & ProcessFlag::Synchronous) {
+        data->synchronousResponse = ProcessData::SynchronousResponse();
+    }
+
     if (data->flags & ProcessFlag::StdinClosed) {
         data->child_stdio[0].flags = UV_IGNORE;
     } else {
         // ### flag for blocking reads?
         data->child_stdio[0].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_WRITABLE_PIPE | UV_NONBLOCK_PIPE);
-        data->stdinPipe = {};
+        data->stdinPipe = uv_pipe_t();
         uv_pipe_init(loop, &(*data->stdinPipe), 1);
         data->child_stdio[0].data.stream = reinterpret_cast<uv_stream_t *>(&(*data->stdinPipe));
         data->child_stdio[0].data.stream->data = data.get();
@@ -140,7 +164,7 @@ int ScriptEngine::runProcess(uv_loop_t *loop, ProcessParameters &&params)
         data->child_stdio[1].flags = UV_IGNORE;
     } else {
         data->child_stdio[1].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_WRITABLE_PIPE | UV_NONBLOCK_PIPE);
-        data->stdoutPipe = {};
+        data->stdoutPipe = uv_pipe_t();
         uv_pipe_init(loop, &(*data->stdoutPipe), 1);
         // need to open
         data->child_stdio[1].data.stream = reinterpret_cast<uv_stream_t *>(&(*data->stdoutPipe));
@@ -151,7 +175,7 @@ int ScriptEngine::runProcess(uv_loop_t *loop, ProcessParameters &&params)
         data->child_stdio[2].flags = UV_IGNORE;
     } else {
         data->child_stdio[2].flags = static_cast<uv_stdio_flags>(UV_CREATE_PIPE | UV_READABLE_PIPE | UV_WRITABLE_PIPE | UV_NONBLOCK_PIPE);
-        data->stderrPipe = {};
+        data->stderrPipe = uv_pipe_t();;
         uv_pipe_init(loop, &(*data->stderrPipe), 1);
         data->child_stdio[2].data.stream = reinterpret_cast<uv_stream_t *>(&(*data->stderrPipe));
         data->child_stdio[2].data.stream->data = data.get();
@@ -185,16 +209,16 @@ int ScriptEngine::runProcess(uv_loop_t *loop, ProcessParameters &&params)
     data->options.file = data->executable.c_str();
     data->options.exit_cb = ScriptEngine::onProcessExit;
 
-    data->proc = {};
+    data->proc = uv_process_t();
+    data->proc->data = data.get();
     const int ret = uv_spawn(loop, &(*data->proc), &data->options);
     if (ret) {
         // failed to launch
         const char *err = uv_strerror(ret);
         assert(err);
-        std::string error = fmt::format("Failed to launch {}: {}", data->options.file, err);
-        return ScriptValue(error);
+        data->spawnError = fmt::format("Failed to launch {}: {}", data->options.file, err);
+        return data;
     }
-    const int pid = data->proc->pid;
     if (data->flags & ProcessFlag::Stdout) {
         uv_read_start(data->child_stdio[1].data.stream, [](uv_handle_t *stream, size_t suggestedSize, uv_buf_t *buf) {
             ProcessData *data = static_cast<ProcessData *>(stream->data);
@@ -206,7 +230,7 @@ int ScriptEngine::runProcess(uv_loop_t *loop, ProcessParameters &&params)
             buf->base = data->stdoutBuf;
             buf->len = data->stdoutBufSize;
         }, [](uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
-            ScriptEngine::sendOutputEvent(stream, nread, buf, "stdout");
+            ScriptEngine::sendOutputEvent(stream, nread, buf, OutputType::Stdout);
         });
     }
 
@@ -221,7 +245,7 @@ int ScriptEngine::runProcess(uv_loop_t *loop, ProcessParameters &&params)
             buf->base = data->stderrBuf;
             buf->len = data->stderrBufSize;
         }, [](uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
-            ScriptEngine::sendOutputEvent(stream, nread, buf, "stderr");
+            ScriptEngine::sendOutputEvent(stream, nread, buf, OutputType::Stderr);
         });
     }
 
@@ -234,8 +258,7 @@ int ScriptEngine::runProcess(uv_loop_t *loop, ProcessParameters &&params)
         }
     }
 
-    mProcesses.push_back(std::move(data));
-    return pid;
+    return data;
 }
 
 // static
@@ -254,6 +277,7 @@ void ScriptEngine::onWriteFinished(uv_write_t *req, int status)
     if (data->stdinWrites.empty()) {
         if (data->flags & (ProcessFlag::HadStdinFromOptions|ProcessFlag::StdinClosed)) {
             uv_close(reinterpret_cast<uv_handle_t*>(&*data->stdinPipe), nullptr);
+            data->flags |= ProcessFlag::StdinCloseCalled;
         }
         return;
     }
@@ -272,14 +296,57 @@ ScriptValue ScriptEngine::execProcess(std::vector<ScriptValue> &&args)
     }
 
     ProcessParameters parameters = std::get<ProcessParameters>(std::move(params));
+    parameters.flags |= ProcessFlag::Synchronous;
+    const ProcessFlag flags = parameters.flags;
 
     ThreadPool *pool = ThreadPool::mainThreadPool();
-    pool->post([&parameters, this]() {
+    std::string spawnError;
+    ProcessData::SynchronousResponse syncResponse;
+    int pid = 0;
+    std::future<int> ret = pool->post([&parameters, &spawnError, &syncResponse, &pid]() {
         EventLoopUv eventLoop;
-        uv_loop_t *handle = static_cast<uv_loop_t *>(eventLoop.handle());
-        runProcess(handle, std::move(parameters));
+        eventLoop.install();
+        std::unique_ptr<ProcessData> data;
+        eventLoop.post([&parameters, &spawnError, &pid, &eventLoop, &data]() {
+            uv_loop_t *handle = static_cast<uv_loop_t *>(eventLoop.handle());
+            data = runProcess(handle, std::move(parameters));
+            if (!data->spawnError.empty()) {
+                spawnError = std::move(data->spawnError);
+            } else {
+                pid = data->proc->pid;
+            }
+        });
+        eventLoop.run();
+        syncResponse = std::move(*data->synchronousResponse);
+        eventLoop.uninstall();
+        return pid;
     });
-    return {};
+    ret.wait();
+    const int processPid = ret.get();
+    ScriptValue object(ScriptValue::Object);
+    object.setProperty(mAtoms.exitCode, ScriptValue(syncResponse.exitStatus));
+    object.setProperty(mAtoms.pid, ScriptValue(processPid));
+    if (!syncResponse.stdout.empty()) {
+        if (flags & ProcessFlag::Strings) {
+            object.setProperty(mAtoms.stdout, ScriptValue(syncResponse.stdout));
+        } else {
+            object.setProperty(mAtoms.stdout,
+                               ScriptValue::makeArrayBuffer(syncResponse.stdout.c_str(), syncResponse.stdout.size()));
+
+        }
+    }
+
+    if (!syncResponse.stderr.empty()) {
+        if (flags & ProcessFlag::Strings) {
+            object.setProperty(mAtoms.stderr, ScriptValue(syncResponse.stderr));
+        } else {
+            object.setProperty(mAtoms.stderr,
+                               ScriptValue::makeArrayBuffer(syncResponse.stderr.c_str(), syncResponse.stderr.size()));
+
+        }
+    }
+
+    return object;
 }
 
 ScriptValue ScriptEngine::writeToProcessStdin(std::vector<ScriptValue> &&args)
@@ -367,6 +434,7 @@ ScriptValue ScriptEngine::closeProcessStdin(std::vector<ScriptValue> &&args)
         if (data->stdinWrites.empty()) {
             // can I just close it before the callbacks have happened?
             uv_close(reinterpret_cast<uv_handle_t*>(&*data->stdinPipe), nullptr);
+            data->flags |= ProcessFlag::StdinCloseCalled;
         }
     }
 
@@ -439,6 +507,13 @@ std::vector<std::unique_ptr<ScriptEngine::ProcessData>>::iterator ScriptEngine::
 // static
 void ScriptEngine::onProcessExit(uv_process_t *proc, int64_t exit_status, int term_signal)
 {
+    ProcessData *data = static_cast<ProcessData *>(proc->data);
+    if (data->synchronousResponse) {
+        data->synchronousResponse->exitStatus = static_cast<int>(exit_status);
+        EventLoop::eventLoop()->stop(0);
+        return;
+    }
+
     ScriptEngine *that = ScriptEngine::scriptEngine();
     assert(that);
     for (auto it = that->mProcesses.begin(); it != that->mProcesses.end(); ++it) {
@@ -464,7 +539,7 @@ void ScriptEngine::onProcessExit(uv_process_t *proc, int64_t exit_status, int te
 
 ScriptEngine::ProcessData::~ProcessData()
 {
-    if (stdinPipe) {
+    if (stdinPipe && !(flags & ProcessFlag::StdinCloseCalled)) { // ### could probably check uv_handle_t's flags for this
         uv_close(reinterpret_cast<uv_handle_t*>(&*stdinPipe), nullptr);
     }
 

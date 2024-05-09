@@ -27,7 +27,8 @@ enum class ProcessFlag {
     Strings = 0x08,
     // these are not in js
     HadStdinFromOptions = 0x10,
-    Synchronous = 0x20
+    Synchronous = 0x20,
+    StdinCloseCalled = 0x40
 };
 
 template <>
@@ -146,10 +147,14 @@ private:
     static JSValue classMethod(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
     static JSValue classStaticMethod(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
     static JSValue queuedMicrotask(JSContext *ctx, int argc, JSValueConst *argv);
-    static void sendOutputEvent(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf, const char *type);
+    enum class OutputType {
+        Stdout,
+        Stderr
+    };
+    static void sendOutputEvent(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf, OutputType type);
     struct ProcessParameters;
     std::variant<ScriptValue, ProcessParameters> prepareProcess(std::vector<ScriptValue> &&args);
-    int runProcess(uv_loop_t *loop, ProcessParameters &&params);
+    static std::unique_ptr<ProcessData> runProcess(uv_loop_t *loop, ProcessParameters &&params);
 
     thread_local static ScriptEngine *tScriptEngine;
     EventLoop *mEventLoop;
@@ -175,6 +180,8 @@ private:
 
         ProcessFlag flags { ProcessFlag::None };
 
+        std::string spawnError;
+
         std::optional<uv_process_t> proc;
         std::optional<uv_pipe_t> stdinPipe;
         std::optional<uv_pipe_t> stdoutPipe;
@@ -187,6 +194,13 @@ private:
             uv_buf_t buffer;
         };
         std::deque<std::unique_ptr<Write>> stdinWrites;
+
+
+        struct SynchronousResponse {
+            std::string stdout, stderr;
+            int exitStatus { 0 };
+        };
+        std::optional<SynchronousResponse> synchronousResponse;
     };
 
     struct ProcessParameters {
@@ -198,6 +212,7 @@ private:
         std::string executable;
     };
 
+    std::mutex mProcessesMutex;
     std::vector<std::unique_ptr<ProcessData>> mProcesses;
 
     unordered_dense::map<int, std::unique_ptr<FunctionData>> mFunctions;

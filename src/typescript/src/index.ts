@@ -107,6 +107,9 @@ spurv.setKeyEventHandler(async (event: spurv.KeyEvent): Promise<void> => {
             } catch (err: unknown) {
                 console.error("got err", err);
             }
+        } else if (event.key === spurv.Key.Num_0) {
+            const ret = await Process.exec("cat", { strings: true, stdout: true, stderr: true, stdin: "foobar" });
+            console.log(ret);
         }
     } catch (err: unknown) {
         console.error("Got some error here", err);
@@ -136,4 +139,3 @@ console.error("2", zot2);
 //     error("about to exit");
 //     exit(10);
 // }, 2000);
-

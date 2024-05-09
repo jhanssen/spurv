@@ -27,6 +27,8 @@
     ScriptAtom(setTimeout)                      \
     ScriptAtom(spurv)                           \
     ScriptAtom(startProcess)                    \
+    ScriptAtom(stderr)                          \
+    ScriptAtom(stdout)                          \
     ScriptAtom(stringtoutf16)                   \
     ScriptAtom(stringtoutf16be)                 \
     ScriptAtom(stringtoutf16le)                 \
