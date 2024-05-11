@@ -1,5 +1,6 @@
 set(SOURCES
     Container.cpp
+    Cursor.cpp
     Editor.cpp
     Frame.cpp
     View.cpp

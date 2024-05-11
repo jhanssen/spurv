@@ -6,13 +6,13 @@
 
 namespace spurv {
 
-class Document;
+class View;
 
 class Cursor
 {
 public:
     Cursor() = default;
-    Cursor(const std::shared_ptr<Document>& doc);
+    Cursor(const std::shared_ptr<View>& view);
     Cursor(const Cursor&) = default;
     Cursor(Cursor&&) = default;
     ~Cursor();
@@ -20,8 +20,8 @@ public:
     Cursor& operator=(const Cursor&) = default;
     Cursor& operator=(Cursor&&) = default;
 
-    void setDocument(const std::shared_ptr<Document>& doc);
-    const std::shared_ptr<Document> document() const;
+    void setView(const std::shared_ptr<View>& doc);
+    const std::shared_ptr<View> view() const;
 
     void setOffset(std::size_t cluster);
     void setPosition(std::size_t line, uint32_t cluster);
@@ -48,12 +48,12 @@ private:
     std::size_t mLine = {};
     uint32_t mCluster = {}, mRetainedCluster = {};
 
-    std::shared_ptr<Document> mDocument = {};
+    std::shared_ptr<View> mView = {};
 };
 
-inline const std::shared_ptr<Document> Cursor::document() const
+inline const std::shared_ptr<View> Cursor::view() const
 {
-    return mDocument;
+    return mView;
 }
 
 inline std::size_t Cursor::line() const

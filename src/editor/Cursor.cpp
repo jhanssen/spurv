@@ -1,5 +1,5 @@
 #include "Cursor.h"
-#include "Document.h"
+#include "View.h"
 #include <Logger.h>
 
 using namespace spurv;
@@ -12,8 +12,8 @@ static inline uint32_t endClusterForLine(const Layout::LineInfo& line)
     return line.endCluster - line.startCluster;
 }
 
-Cursor::Cursor(const std::shared_ptr<Document>& doc)
-    : mDocument(doc)
+Cursor::Cursor(const std::shared_ptr<View>& view)
+    : mView(view)
 {
 }
 
@@ -21,17 +21,17 @@ Cursor::~Cursor()
 {
 }
 
-void Cursor::setDocument(const std::shared_ptr<Document>& doc)
+void Cursor::setView(const std::shared_ptr<View>& view)
 {
-    mDocument = doc;
+    mView = view;
 }
 
 void Cursor::setPosition(std::size_t line, uint32_t cluster)
 {
-    if (!mDocument) {
+    if (!mView) {
         return;
     }
-    const auto& layout = mDocument->mLayout;
+    const auto& layout = mView->document()->mLayout;
     const auto numLines = layout.numLines();
     if (line >= numLines) {
         return;
@@ -48,10 +48,10 @@ void Cursor::setPosition(std::size_t line, uint32_t cluster)
 
 size_t Cursor::offset() const
 {
-    if (!mDocument) {
+    if (!mView) {
         return 0;
     }
-    const auto& layout = mDocument->mLayout;
+    const auto& layout = mView->document()->mLayout;
     const auto numLines = layout.numLines();
     if (mLine >= numLines) {
         return 0;
@@ -65,10 +65,10 @@ size_t Cursor::offset() const
 
 void Cursor::setOffset(std::size_t cluster)
 {
-    if (!mDocument) {
+    if (!mView) {
         return;
     }
-    const auto& layout = mDocument->mLayout;
+    const auto& layout = mView->document()->mLayout;
     const auto numLines = layout.numLines();
     for (std::size_t line = 0; line < numLines; ++line) {
         const auto& lineInfo = layout.lineAt(line);
@@ -91,10 +91,10 @@ void Cursor::setOffset(std::size_t cluster)
 
 bool Cursor::navigate(Navigate nav)
 {
-    if (!mDocument) {
+    if (!mView) {
         return false;
     }
-    const auto& layout = mDocument->mLayout;
+    const auto& layout = mView->document()->mLayout;
     const auto numLines = layout.numLines();
     if (mLine >= numLines) {
         return false;

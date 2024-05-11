@@ -1,6 +1,6 @@
 #include "Editor.h"
+#include "Cursor.h"
 #include "View.h"
-#include <Cursor.h>
 #include <Logger.h>
 #include <MainEventLoop.h>
 #include <Renderer.h>
@@ -198,8 +198,8 @@ void Editor::load(const std::filesystem::path& path)
 
             currentDoc->setFont(Font("Inconsolata", 25));
 
-            auto navigateDoc = [currentDoc]() {
-                Cursor cursor(currentDoc);
+            auto navigateDoc = [view = mCurrentView]() {
+                Cursor cursor(view);
                 spdlog::warn("(1) cursor at {} {}", cursor.line(), cursor.cluster());
                 cursor.setPosition(24, 5);
                 spdlog::warn("(2) cursor at {} {}", cursor.line(), cursor.cluster());

@@ -1,5 +1,4 @@
 set(SOURCES
-    Cursor.cpp
     Document.cpp
     Layout.cpp
     Styleable.cpp
