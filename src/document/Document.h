@@ -79,6 +79,7 @@ public:
     std::vector<TextProperty> propertiesForLine(std::size_t line) const;
     std::vector<TextProperty> propertiesForRange(std::size_t start, std::size_t end) const;
 
+protected:
     virtual void updateLayout(const Rect& rect) override;
 
 private:

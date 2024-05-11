@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Styleable.h>
 #include <memory>
 #include <cstddef>
 #include <cstdint>
@@ -8,16 +9,14 @@ namespace spurv {
 
 class View;
 
-class Cursor
+class Cursor : public Styleable
 {
 public:
-    Cursor() = default;
+    Cursor();
     Cursor(const std::shared_ptr<View>& view);
-    Cursor(const Cursor&) = default;
     Cursor(Cursor&&) = default;
-    ~Cursor();
+    virtual ~Cursor() override;
 
-    Cursor& operator=(const Cursor&) = default;
     Cursor& operator=(Cursor&&) = default;
 
     void setView(const std::shared_ptr<View>& doc);
@@ -43,6 +42,9 @@ public:
     bool navigate(Navigate nav);
 
     void insert(char32_t unicode);
+
+protected:
+    virtual void updateLayout(const Rect&) override { }
 
 private:
     std::size_t mLine = {};

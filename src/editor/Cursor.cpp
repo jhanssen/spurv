@@ -12,18 +12,33 @@ static inline uint32_t endClusterForLine(const Layout::LineInfo& line)
     return line.endCluster - line.startCluster;
 }
 
-Cursor::Cursor(const std::shared_ptr<View>& view)
-    : mView(view)
+Cursor::Cursor()
 {
+    setSelector("cursor");
+}
+
+Cursor::Cursor(const std::shared_ptr<View>& view)
+    : Cursor()
+{
+    setView(view);
 }
 
 Cursor::~Cursor()
 {
+    if (mView) {
+        mView->removeStyleableChild(this);
+    }
 }
 
 void Cursor::setView(const std::shared_ptr<View>& view)
 {
+    if (mView) {
+        mView->removeStyleableChild(this);
+    }
     mView = view;
+    if (mView) {
+        mView->addStyleableChild(this);
+    }
 }
 
 void Cursor::setPosition(std::size_t line, uint32_t cluster)

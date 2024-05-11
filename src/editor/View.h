@@ -20,10 +20,11 @@ public:
     void setDocument(const std::shared_ptr<Document>& doc);
     const std::shared_ptr<Document> document() const;
 
-    virtual void updateLayout(const Rect& rect) override;
-
     void setActive(bool active);
     bool isActive() const;
+
+protected:
+    virtual void updateLayout(const Rect& rect) override;
 
 private:
     void processDocument();

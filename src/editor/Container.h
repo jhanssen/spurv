@@ -23,6 +23,7 @@ public:
 
     std::size_t size() const;
 
+protected:
     virtual void updateLayout(const Rect& rect) override;
 
 private:

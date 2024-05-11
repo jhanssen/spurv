@@ -67,8 +67,6 @@ public:
     void setName(const std::string& name);
     std::string name() const;
 
-    virtual void updateLayout(const Rect& rect) = 0;
-
     void setTag(const std::string& key, const std::string& value);
     void removeTag(const std::string& key);
 
@@ -100,6 +98,8 @@ public:
     EventEmitter<void()>& onAppliedStylesheet();
 
 protected:
+    virtual void updateLayout(const Rect& rect) = 0;
+
     void mergeParentStylesheet(const qss::Document& qss);
     void unmergeParentStylesheet();
 

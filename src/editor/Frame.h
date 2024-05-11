@@ -20,6 +20,7 @@ public:
 
     uint64_t frameNo() const;
 
+protected:
     virtual void updateLayout(const Rect& rect) override;
 
 private:
