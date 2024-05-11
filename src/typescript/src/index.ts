@@ -5,6 +5,7 @@ import { splitCommand } from "./splitCommand";
 import { test } from "./test";
 import type { ProcessStderrEvent } from "./ProcessStderrEvent";
 import type { ProcessStdoutEvent } from "./ProcessStdoutEvent";
+// import URL from "url-parse";
 
 Object.defineProperty(globalThis, "Process", Process);
 installConsole();

@@ -93,6 +93,8 @@ private:
     // setProcessHandler(handler: (event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => void): void;
     ScriptValue setProcessHandler(std::vector<ScriptValue> &&args);
 
+    ScriptValue fetch(std::vector<ScriptValue> &&args);
+
     // startProcess(arguments: string[], env: Record<string, string> |
     //              undefined, cwd: string | undefined, stdin: ArrayBuffer | string |
     //              undefined, flags: number): number | string;
