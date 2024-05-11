@@ -10,7 +10,8 @@ import typescript from "rollup-plugin-typescript2";
 const minify = false;
 const plugins = [
     resolve({
-        preferBuiltins: false
+        preferBuiltins: false,
+        modulePaths: ["./node_modules/"]
     }),
     commonjs(),
     typescript({

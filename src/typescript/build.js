@@ -95,6 +95,7 @@ async function copyRollupConfig() {
     }
     const contents = (await fs.readFile(rollupConfigSrc, "utf8"))
         .replaceAll("./dist/", path.join(process.cwd(), "dist", "/"))
+        .replaceAll("./node_modules/", path.join(process.cwd(), "node_modules", "/"))
         .replaceAll("./src/index.ts", path.join(__dirname, "src", "index.ts"));
 
     await fs.writeFile(rollupConfigBuild, contents);
