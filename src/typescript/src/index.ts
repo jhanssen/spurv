@@ -116,6 +116,8 @@ spurv.setKeyEventHandler(async (event: spurv.KeyEvent): Promise<void> => {
         } else if (event.key === spurv.Key.Num_1) {
             const ret = await Process.start("cat", { strings: true, stdout: true, stderr: true, stdin: "foobar" });
             console.log(ret);
+        } else if (event.key === spurv.Key.Num_2) {
+            console.log(await Process.start("touch /tmp/'foo bar'"));
         }
     } catch (err: unknown) {
         console.error("Got some error here", err);
