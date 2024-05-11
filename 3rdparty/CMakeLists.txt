@@ -1,5 +1,10 @@
 cmake_policy(SET CMP0077 NEW)
 
+find_program(CCACHE_FOUND ccache)
+if (CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+endif ()
+
 set(FMT_INSTALL OFF CACHE BOOL "")
 
 set(FT_DISABLE_ZLIB ON CACHE BOOL "")
@@ -46,6 +51,15 @@ add_subdirectory(glfw)
 add_subdirectory(harfbuzz)
 add_subdirectory(libqss)
 add_subdirectory(libuv)
+add_subdirectory(c-ares)
+
+set(CURL_DISABLE_LDAP TRUE) # warning on mac about some using some deprecated API
+set(ENABLE_WEBSOCKETS TRUE)
+set(ENABLE_ARES TRUE)
+set(BUILD_CURL_EXE OFF)
+set(BUILD_SHARED_LIBS OFF)
+set(BUILD_STATIC_LIBS ON)
+add_subdirectory(curl)
 
 # hack to make msdfgen pick up freetype
 add_library(Freetype::Freetype ALIAS freetype-interface)

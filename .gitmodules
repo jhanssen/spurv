@@ -67,3 +67,9 @@
 [submodule "3rdparty/uni-algo"]
 	path = 3rdparty/uni-algo
 	url = https://github.com/uni-algo/uni-algo.git
+[submodule "3rdparty/curl"]
+	path = 3rdparty/curl
+	url = https://github.com/curl/curl.git
+[submodule "3rdparty/c-ares"]
+	path = 3rdparty/c-ares
+	url = https://github.com/c-ares/c-ares.git
