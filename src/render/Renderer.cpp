@@ -640,7 +640,7 @@ void RendererImpl::generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer)
             if (np == nullptr || idx < np->start) {
                 return;
             }
-            if (idx <= np->end) {
+            if (idx < np->end) {
                 propMatching.set(n);
             }
         }
@@ -701,7 +701,7 @@ void RendererImpl::generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer)
 
             if (props != nullptr) {
                 // check if any of the properties match
-                if (curProp == nullptr || glyphOffset > curProp->end) {
+                if (curProp == nullptr || glyphOffset >= curProp->end) {
                     // find the first new prop (if any)
                     for (;;) {
                         curProp = getProp(propStart);
@@ -714,7 +714,7 @@ void RendererImpl::generateVBOs(ViewData& view, VkCommandBuffer cmdbuffer)
                             curProp = nullptr;
                             break;
                         }
-                        if (glyphOffset >= curProp->start && glyphOffset <= curProp->end) {
+                        if (glyphOffset >= curProp->start && glyphOffset < curProp->end) {
                             break;
                         }
                         ++propStart;
