@@ -33,6 +33,12 @@ void View::processDocument()
         auto textLines = mDocument->textForRange(0, std::min<std::size_t>(mDocument->numLines(), 500));
         renderer->addTextLines(nm, std::move(textLines));
 
+        auto props = mDocument->propertiesForRange(0, std::min<std::size_t>(mDocument->numLines(), 500));
+        for (auto& prop : props) {
+            spdlog::debug("prop {}-{}, color {}", prop.start, prop.end, prop.foreground);
+        }
+        renderer->addTextProperties(nm, std::move(props));
+
         // start animating the first line just for shits and giggles
         // auto loop = EventLoop::eventLoop();
         // int32_t from = 0, to = 5;

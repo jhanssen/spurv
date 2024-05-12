@@ -20,21 +20,25 @@ void TextClasses::destroy()
 
 uint32_t TextClasses::registerTextClass(const std::string& name)
 {
-    if (mNextAvailableClass < mRegisteredClasses.size() && !mRegisteredClasses[mNextAvailableClass].has_value()) {
-        mRegisteredClasses[mNextAvailableClass] = qss::Selector(fmt::format("text.{}", name));
-        return static_cast<uint32_t>(mNextAvailableClass) + 1;
-    } else {
-        for (std::size_t r = mNextAvailableClass; r < mRegisteredClasses.size(); ++r) {
-            if (!mRegisteredClasses[r].has_value()) {
-                mNextAvailableClass = r;
-                mRegisteredClasses[r] = qss::Selector(fmt::format("text.{}", name));
-                return static_cast<uint32_t>(r) + 1;
+    auto selector = qss::Selector(fmt::format("text.{}", name));
+    const auto sz = mRegisteredClasses.size();
+    auto nextAvailable = sz;
+    // see if this class is already registered
+    for (std::size_t idx = 0; idx < sz; ++idx) {
+        if (mRegisteredClasses[idx].has_value()) {
+            if (mRegisteredClasses[idx] == selector) {
+                return idx + 1;
             }
+        } else if (nextAvailable == sz) {
+            nextAvailable = idx;
         }
-        mRegisteredClasses.push_back(qss::Selector(fmt::format("text.{}", name)));
-        mNextAvailableClass = mRegisteredClasses.size();
-        return static_cast<uint32_t>(mNextAvailableClass);
     }
+    if (nextAvailable < sz) {
+        mRegisteredClasses[nextAvailable] = std::move(selector);
+        return nextAvailable + 1;
+    }
+    mRegisteredClasses.push_back(std::move(selector));
+    return mRegisteredClasses.size();
 }
 
 bool TextClasses::unregisterTextClass(uint32_t clazz)
@@ -45,7 +49,6 @@ bool TextClasses::unregisterTextClass(uint32_t clazz)
     }
     if (clazz < mRegisteredClasses.size() && mRegisteredClasses[clazz - 1].has_value()) {
         mRegisteredClasses[clazz - 1] = {};
-        mNextAvailableClass = clazz - 1;
         return true;
     }
     return false;
@@ -54,5 +57,4 @@ bool TextClasses::unregisterTextClass(uint32_t clazz)
 void TextClasses::clearRegisteredTextClasses()
 {
     mRegisteredClasses.clear();
-    mNextAvailableClass = 0;
 }

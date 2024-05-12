@@ -25,6 +25,9 @@ public:
     void setOffset(std::size_t cluster);
     void setPosition(std::size_t line, uint32_t cluster);
 
+    bool visible() const;
+    void setVisible(bool v);
+
     std::size_t offset() const;
     std::size_t line() const;
     uint32_t cluster() const;
@@ -47,8 +50,13 @@ protected:
     virtual void updateLayout(const Rect&) override { }
 
 private:
+    uint32_t globalCluster() const;
+
+private:
     std::size_t mLine = {};
     uint32_t mCluster = {}, mRetainedCluster = {};
+    uint32_t mTextClass = {};
+    bool mVisible = false;
 
     std::shared_ptr<View> mView = {};
 };
@@ -66,6 +74,11 @@ inline std::size_t Cursor::line() const
 inline uint32_t Cursor::cluster() const
 {
     return mCluster;
+}
+
+inline bool Cursor::visible() const
+{
+    return mVisible;
 }
 
 } // namespace spurv

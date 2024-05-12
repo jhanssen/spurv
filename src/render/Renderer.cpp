@@ -1976,12 +1976,10 @@ void Renderer::render()
                 vkCmdDraw(cmdbuffer, vbo.size(), 1, 0, 0);
             }
         }
-
-        if (rendered) {
-            vkCmdEndRenderPass(cmdbuffer);
-        }
     }
-    if (!rendered) {
+    if (rendered) {
+        vkCmdEndRenderPass(cmdbuffer);
+    } else {
         VkImageMemoryBarrier presentBarrier = {};
         presentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         presentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;

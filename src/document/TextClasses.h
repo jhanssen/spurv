@@ -24,7 +24,6 @@ public:
 
 private:
     std::vector<std::optional<qss::Selector>> mRegisteredClasses;
-    std::size_t mNextAvailableClass = 0;
 
 private:
     static std::unique_ptr<TextClasses> sInstance;

@@ -1,6 +1,7 @@
 #include "Cursor.h"
 #include "View.h"
 #include <Logger.h>
+#include <TextClasses.h>
 
 using namespace spurv;
 
@@ -15,6 +16,7 @@ static inline uint32_t endClusterForLine(const Layout::LineInfo& line)
 Cursor::Cursor()
 {
     setSelector("cursor");
+    mTextClass = TextClasses::instance()->registerTextClass("cursor");
 }
 
 Cursor::Cursor(const std::shared_ptr<View>& view)
@@ -245,6 +247,39 @@ bool Cursor::navigate(Navigate nav)
     }
 
     return false;
+}
+
+uint32_t Cursor::globalCluster() const
+{
+    const auto& layout = mView->document()->mLayout;
+    const auto numLines = layout.numLines();
+    if (mLine >= numLines) {
+        return std::numeric_limits<uint32_t>::max();
+    }
+    auto c = mCluster;
+    if (mLine > 0) {
+        const auto& lineInfo = layout.lineAt(mLine - 1);
+        c += lineInfo.endCluster;
+    }
+    return c;
+}
+
+void Cursor::setVisible(bool v)
+{
+    if (v == mVisible) {
+        return;
+    }
+    mVisible = v;
+
+    const auto offset = globalCluster();
+    if (offset == std::numeric_limits<uint32_t>::max()) {
+        return;
+    }
+    if (v) {
+        mView->document()->addTextClassAtRange(offset, offset + 1, mTextClass);
+    } else {
+        mView->document()->removeTextClassAtRange(offset, offset + 1, mTextClass);
+    }
 }
 
 void Cursor::insert(char32_t unicode)
