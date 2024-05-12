@@ -527,6 +527,7 @@ JSValue ScriptEngine::classStaticMethod(JSContext *ctx, JSValueConst /*this_val*
 // static
 JSValue ScriptEngine::queuedMicrotask(JSContext *ctx, int argc, JSValueConst *argv)
 {
+    (void)argc;
     assert(argc == 1);
     assert(JS_IsFunction(ctx, argv[0]));
     ScriptEngine::CallScope scope(ScriptEngine::scriptEngine()); // ### should this be here?
