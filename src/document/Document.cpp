@@ -9,28 +9,6 @@
 #include <atomic>
 #include <cstdio>
 
-namespace spurv {
-bool operator==(const Document::TextClass& t1, const Document::TextClass& t2)
-{
-    return t1.start == t2.start && t1.end == t2.end;
-}
-
-bool operator<(const Document::TextClass& t1, const Document::TextClass& t2)
-{
-    return t1.start < t2.start || (t1.start == t2.start && t1.end < t2.end);
-}
-
-bool overlaps(const Document::TextClass& t1, const Document::TextClass& t2)
-{
-    return t1.start < t2.end && t2.start < t1.end;
-}
-
-bool contains(const Document::TextClass& t1, const Document::TextClass& t2)
-{
-    return t2.start >= t1.start && t2.end <= t1.end;
-}
-} // namespace spurv
-
 using namespace spurv;
 
 static inline bool isTextClass(const std::vector<uint32_t>& classes, uint32_t clazz)
@@ -74,6 +52,7 @@ static inline std::vector<uint32_t> removedTextClass(const std::vector<uint32_t>
 }
 
 Document::Document()
+    : mTextClasses(TextClasses::instance())
 {
     setSelector("document");
 }
@@ -322,8 +301,9 @@ TextProperty Document::propertyForClasses(std::size_t start, std::size_t end, co
     for (auto dit = mQss.cbegin(); dit < mQss.cend(); ++dit) {
         const auto& fragment = dit->first;
         for (auto clazz : classes) {
-            const auto& selector = mRegisteredClasses[clazz].value();
-            if (Styleable::isGeneralizedFrom(selector, fragment.selector())) {
+            const auto& maybeSelector = mTextClasses->mRegisteredClasses[clazz];
+            assert(maybeSelector.has_value());
+            if (Styleable::isGeneralizedFrom(maybeSelector.value(), fragment.selector())) {
                 const auto& block = fragment.block();
                 for (auto bit = block.cbegin(); bit != block.cend(); ++bit) {
                     // ### should extract the relevant code that handles these in Styleable.cpp
@@ -348,13 +328,33 @@ TextProperty Document::propertyForClasses(std::size_t start, std::size_t end, co
     return prop;
 }
 
+bool Document::TextClassEntry::operator==(const Document::TextClassEntry& other) const
+{
+    return start == other.start && end == other.end;
+}
+
+bool Document::TextClassEntry::operator<(const Document::TextClassEntry& other) const
+{
+    return start < other.start || (start == other.start && end < other.end);
+}
+
+bool Document::overlaps(const Document::TextClassEntry& t1, const Document::TextClassEntry& t2)
+{
+    return t1.start < t2.end && t2.start < t1.end;
+}
+
+bool Document::contains(const Document::TextClassEntry& t1, const Document::TextClassEntry& t2)
+{
+    return t2.start >= t1.start && t2.end <= t1.end;
+}
+
 std::vector<TextProperty> Document::propertiesForRange(std::size_t start, std::size_t end) const
 {
     if (start >= mLayout.numLines() || end > mLayout.numLines() || start > end) {
         return {};
     }
 
-    TextClass findClass = {
+    TextClassEntry findClass = {
         start, end, {}
     };
 
@@ -363,14 +363,14 @@ std::vector<TextProperty> Document::propertiesForRange(std::size_t start, std::s
 
     std::vector<TextProperty> props;
 
-    auto it = std::lower_bound(mTextClasses.begin(), mTextClasses.end(), findClass);
+    auto it = std::lower_bound(mTextClassEntries.begin(), mTextClassEntries.end(), findClass);
     // find the first entry that goes before us
-    while (it != mTextClasses.begin()) {
+    while (it != mTextClassEntries.begin()) {
         if (!overlaps(*(it - 1), findClass))
             break;
         --it;
     }
-    while (it != mTextClasses.end() && overlaps(*it, findClass)) {
+    while (it != mTextClassEntries.end() && overlaps(*it, findClass)) {
         props.push_back(propertyForClasses(it->start, it->end, it->classes));
         ++it;
     }
@@ -388,59 +388,19 @@ void Document::setFont(const Font& font)
     mLayout.setFont(font);
 }
 
-uint32_t Document::registerTextClass(const std::string& name)
-{
-    if (mNextAvailableClass < mRegisteredClasses.size() && !mRegisteredClasses[mNextAvailableClass].has_value()) {
-        mRegisteredClasses[mNextAvailableClass] = qss::Selector(fmt::format("text.{}", name));
-        return 1 << static_cast<uint32_t>(mNextAvailableClass);
-    } else {
-        for (std::size_t r = mNextAvailableClass; r < mRegisteredClasses.size(); ++r) {
-            if (!mRegisteredClasses[r].has_value()) {
-                mNextAvailableClass = r;
-                mRegisteredClasses[r] = qss::Selector(fmt::format("text.{}", name));
-                return 1 << static_cast<uint32_t>(r);
-            }
-        }
-        mRegisteredClasses.push_back(qss::Selector(fmt::format("text.{}", name)));
-        mNextAvailableClass = mRegisteredClasses.size();
-        return 1 << static_cast<uint32_t>(mNextAvailableClass - 1);
-    }
-}
-
-bool Document::unregisterTextClass(uint32_t clazz)
-{
-    if (clazz == 0) {
-        // should never happen
-        return false;
-    }
-    const auto idx = static_cast<uint32_t>(__builtin_ctz(clazz));
-    if (idx < mRegisteredClasses.size() && mRegisteredClasses[idx].has_value()) {
-        mRegisteredClasses[idx] = {};
-        mNextAvailableClass = idx;
-        return true;
-    }
-    return false;
-}
-
-void Document::clearRegisteredTextClasses()
-{
-    mRegisteredClasses.clear();
-    mNextAvailableClass = 0;
-}
-
 void Document::addTextClassAtRange(uint32_t clazz, std::size_t start, std::size_t end)
 {
-    TextClass newClass = {
+    TextClassEntry newClass = {
         start, end, { clazz }
     };
-    auto it = std::lower_bound(mTextClasses.begin(), mTextClasses.end(), newClass);
-    if (it == mTextClasses.end()) {
-        mTextClasses.push_back(newClass);
+    auto it = std::lower_bound(mTextClassEntries.begin(), mTextClassEntries.end(), newClass);
+    if (it == mTextClassEntries.end()) {
+        mTextClassEntries.push_back(newClass);
     } else {
         if (it->start == start && it->end == end) {
             addTextClass(it->classes, clazz);
         } else {
-            mTextClasses.insert(it, newClass);
+            mTextClassEntries.insert(it, newClass);
         }
     }
 }
@@ -448,12 +408,12 @@ void Document::addTextClassAtRange(uint32_t clazz, std::size_t start, std::size_
 void Document::removeTextClassAtRange(uint32_t clazz, std::size_t start, std::size_t end)
 {
     assert(end >= start);
-    TextClass findClass = {
+    TextClassEntry findClass = {
         start, end, { clazz }
     };
-    auto it = std::lower_bound(mTextClasses.begin(), mTextClasses.end(), findClass);
+    auto it = std::lower_bound(mTextClassEntries.begin(), mTextClassEntries.end(), findClass);
     // find the first entry that goes before us
-    while (it != mTextClasses.begin()) {
+    while (it != mTextClassEntries.begin()) {
         if (!overlaps(*(it - 1), findClass))
             break;
         --it;
@@ -463,18 +423,18 @@ void Document::removeTextClassAtRange(uint32_t clazz, std::size_t start, std::si
         assert(it->end > start);
         if (hasTextClass(it->classes, clazz)) {
             // split
-            TextClass newClass = {
+            TextClassEntry newClass = {
                 start,
                 it->end,
                 removedTextClass(it->classes, clazz)
             };
-            it = mTextClasses.insert(it, newClass);
+            it = mTextClassEntries.insert(it, newClass);
             (it - 1)->end = start;
             ++it;
         }
     }
     // remove clazz from all entries up until end
-    while (it != mTextClasses.end()) {
+    while (it != mTextClassEntries.end()) {
         if (it->start > end) {
             return;
         }
@@ -486,22 +446,22 @@ void Document::removeTextClassAtRange(uint32_t clazz, std::size_t start, std::si
             // this entry has an end that goes beyond our end, we might have to split
             if (hasTextClass(it->classes, clazz)) {
                 // if the previous entry equals us then we don't have to split
-                if (it != mTextClasses.begin() &&
+                if (it != mTextClassEntries.begin() &&
                     (it - 1)->start == it->start &&
                     (it - 1)->end == end) {
                     addTextClass((it - 1)->classes, removedTextClass(it->classes, clazz));
                 } else {
                     // we need to split
-                    TextClass newClass = {
+                    TextClassEntry newClass = {
                         it->start,
                         end,
                         removedTextClass(it->classes, clazz)
                     };
                     // put it past the inserted value, which should be the value
                     // we're currently looking at
-                    assert(it == mTextClasses.begin() || *(it - 1) < newClass);
+                    assert(it == mTextClassEntries.begin() || *(it - 1) < newClass);
 
-                    it = mTextClasses.insert(it, newClass) + 1;
+                    it = mTextClassEntries.insert(it, newClass) + 1;
                     it->start = end + 1;
                     assert(it->start < it->end);
                 }
@@ -514,12 +474,12 @@ void Document::removeTextClassAtRange(uint32_t clazz, std::size_t start, std::si
 void Document::overwriteTextClassesAtRange(uint32_t clazz, std::size_t start, std::size_t end)
 {
     assert(end >= start);
-    TextClass findClass = {
+    TextClassEntry findClass = {
         start, end, { clazz }
     };
-    auto it = std::lower_bound(mTextClasses.begin(), mTextClasses.end(), findClass);
+    auto it = std::lower_bound(mTextClassEntries.begin(), mTextClassEntries.end(), findClass);
     // find the first entry that goes before us
-    while (it != mTextClasses.begin()) {
+    while (it != mTextClassEntries.begin()) {
         if (!overlaps(*(it - 1), findClass))
             break;
         --it;
@@ -529,17 +489,17 @@ void Document::overwriteTextClassesAtRange(uint32_t clazz, std::size_t start, st
         assert(it->end > start);
         if (!isTextClass(it->classes, clazz)) {
             // split
-            TextClass newClass = {
+            TextClassEntry newClass = {
                 start,
                 it->end,
                 { clazz }
             };
-            it = mTextClasses.insert(it, newClass);
+            it = mTextClassEntries.insert(it, newClass);
             (it - 1)->end = start;
             ++it;
         }
     }
-    while (it != mTextClasses.end()) {
+    while (it != mTextClassEntries.end()) {
         if (it->start > end) {
             return;
         }
@@ -551,22 +511,22 @@ void Document::overwriteTextClassesAtRange(uint32_t clazz, std::size_t start, st
             // this entry has an end that goes beyond our end, we might have to split
             if (!isTextClass(it->classes, clazz)) {
                 // if the previous entry equals us then we don't have to split
-                if (it != mTextClasses.begin() &&
+                if (it != mTextClassEntries.begin() &&
                     (it - 1)->start == it->start &&
                     (it - 1)->end == end) {
                     (it - 1)->classes = { clazz };
                 } else {
                     // we need to split
-                    TextClass newClass = {
+                    TextClassEntry newClass = {
                         it->start,
                         end,
                         { clazz }
                     };
                     // put it past the inserted value, which should be the value
                     // we're currently looking at
-                    assert(it == mTextClasses.begin() || *(it - 1) < newClass);
+                    assert(it == mTextClassEntries.begin() || *(it - 1) < newClass);
 
-                    it = mTextClasses.insert(it, newClass) + 1;
+                    it = mTextClassEntries.insert(it, newClass) + 1;
                     it->start = end + 1;
                     assert(it->start < it->end);
                 }
@@ -579,12 +539,12 @@ void Document::overwriteTextClassesAtRange(uint32_t clazz, std::size_t start, st
 void Document::clearTextClassesAtRange(std::size_t start, std::size_t end)
 {
     assert(end >= start);
-    TextClass findClass = {
+    TextClassEntry findClass = {
         start, end, {}
     };
-    auto it = std::lower_bound(mTextClasses.begin(), mTextClasses.end(), findClass);
+    auto it = std::lower_bound(mTextClassEntries.begin(), mTextClassEntries.end(), findClass);
     // find the first entry that goes before us
-    while (it != mTextClasses.begin()) {
+    while (it != mTextClassEntries.begin()) {
         if (!overlaps(*(it - 1), findClass))
             break;
         --it;
@@ -596,14 +556,14 @@ void Document::clearTextClassesAtRange(std::size_t start, std::size_t end)
         it->end = start;
         ++it;
     }
-    while (it != mTextClasses.end()) {
+    while (it != mTextClassEntries.end()) {
         if (it->start > end) {
             return;
         }
         assert(overlaps(*it, findClass));
         if (end >= it->end) {
             assert(contains(findClass, *it));
-            it = mTextClasses.erase(it);
+            it = mTextClassEntries.erase(it);
         } else {
             // this entry has an end that goes beyond our end, adjust start
             it->start = end;
@@ -615,5 +575,5 @@ void Document::clearTextClassesAtRange(std::size_t start, std::size_t end)
 
 void Document::clearTextClasses()
 {
-    mTextClasses.clear();
+    mTextClassEntries.clear();
 }

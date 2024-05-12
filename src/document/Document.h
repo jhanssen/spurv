@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Layout.h"
+#include "TextClasses.h"
 #include "Styleable.h"
 #include <EventEmitter.h>
 #include <Font.h>
@@ -35,30 +36,12 @@ public:
     // styling
     void setFont(const Font& font);
 
-    uint32_t registerTextClass(const std::string& name);
-    bool unregisterTextClass(uint32_t clazz);
-    void clearRegisteredTextClasses();
-
-    // bitfield
     void addTextClassAtRange(uint32_t clazz, std::size_t start, std::size_t end);
     void removeTextClassAtRange(uint32_t clazz, std::size_t start, std::size_t end);
     void overwriteTextClassesAtRange(uint32_t clazz, std::size_t start, std::size_t end);
 
     void clearTextClassesAtRange(std::size_t start, std::size_t end);
     void clearTextClasses();
-
-    // navigate
-    // enum class Navigate
-    // {
-    //     Forward,
-    //     Backward,
-    //     Up,
-    //     Down
-    // };
-    // void navigate(
-
-    // insert utf32
-    void insert(char32_t uc);
 
     enum class Remove { Forward, Backward };
     void remove(Remove mode);
@@ -106,28 +89,30 @@ private:
     std::size_t mChunkStart = 0, mChunkOffset = 0;
     std::size_t mDocumentSize = 0, mDocumentLines = 0;
 
-    struct TextClass
+    TextClasses* mTextClasses = nullptr;
+
+    struct TextClassEntry
     {
         std::size_t start;
         std::size_t end;
         std::vector<uint32_t> classes;
+
+        bool operator==(const TextClassEntry& other) const;
+        bool operator<(const TextClassEntry& other) const;
     };
-    std::vector<TextClass> mTextClasses;
-    std::vector<std::optional<qss::Selector>> mRegisteredClasses;
-    std::size_t mNextAvailableClass = 0;
+    std::vector<TextClassEntry> mTextClassEntries;
+
+    static bool overlaps(const TextClassEntry& t1, const TextClassEntry& t2);
+    static bool contains(const TextClassEntry& t1, const TextClassEntry& t2);
 
     bool mReady = false;
     EventEmitter<void()> mOnReady;
 
     friend class Cursor;
     friend struct DocumentSelectorInternal;
-
-    friend bool operator==(const Document::TextClass& t1, const Document::TextClass& t2);
-    friend bool operator<(const Document::TextClass& t1, const Document::TextClass& t2);
-    friend bool overlaps(const Document::TextClass& t1, const Document::TextClass& t2);
-    friend bool contains(const Document::TextClass& t1, const Document::TextClass& t2);
 };
 
+/*
 inline void Document::insert(char32_t uc)
 {
     if (!mReady) {
@@ -146,6 +131,7 @@ inline void Document::insert(char32_t uc)
         commit(Commit::Reinitialize);
     }
 }
+*/
 
 inline void Document::remove(Remove mode)
 {

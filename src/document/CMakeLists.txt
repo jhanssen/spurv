@@ -2,6 +2,7 @@ set(SOURCES
     Document.cpp
     Layout.cpp
     Styleable.cpp
+    TextClasses.cpp
     rope/rope.cpp
     rope/node.cpp
 )
