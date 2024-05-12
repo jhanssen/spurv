@@ -694,6 +694,23 @@ bool Styleable::matchesSelector(const qss::Selector& selector) const
     return matchesSelector(this, selector);
 }
 
+bool Styleable::isGeneralizedFrom(const qss::Selector& from, const qss::Selector& to)
+{
+    if (from.fragmentCount() == 0 || to.fragmentCount() == 0 || to.fragmentCount() < from.fragmentCount()) {
+        return false;
+    }
+    auto fidx = from.fragmentCount();
+    auto tidx = to.fragmentCount();
+    while (fidx > 0) {
+        if (!from[fidx - 1].isGeneralizedFrom(to[tidx - 1])) {
+            return false;
+        }
+        --fidx;
+        --tidx;
+    }
+    return true;
+}
+
 uint64_t Styleable::selectorSpecificity(const qss::Selector& selector)
 {
     uint16_t ids = 0, attrs = 0, elems = 0;

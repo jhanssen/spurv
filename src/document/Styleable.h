@@ -52,6 +52,7 @@ public:
     bool matchesSelector(const qss::Selector& selector) const;
     static bool matchesSelector(const Styleable* styleable, const qss::Selector& selector);
     static uint64_t selectorSpecificity(const qss::Selector& selector);
+    static bool isGeneralizedFrom(const qss::Selector& from, const qss::Selector& to);
 
     enum class StylesheetMode : uint32_t {
         Replace,

@@ -1,5 +1,6 @@
 #include "Document.h"
 #include <EventLoop.h>
+#include <Formatting.h>
 #include <Logger.h>
 #include <ThreadPool.h>
 #include <simdutf.h>
@@ -9,28 +10,68 @@
 #include <cstdio>
 
 namespace spurv {
-
-struct DocumentSelectorInternal : public std::enable_shared_from_this<DocumentSelectorInternal>
+bool operator==(const Document::TextClass& t1, const Document::TextClass& t2)
 {
-    DocumentSelectorInternal(Document* d, std::size_t s, std::size_t e, const std::string& n)
-        : document(d), start(s), end(e), name(n)
-    {
-    }
-    ~DocumentSelectorInternal()
-    {
-        if (document) {
-            document->removeSelector(this);
-        }
-    }
+    return t1.start == t2.start && t1.end == t2.end;
+}
 
-    Document* document;
-    std::size_t start, end;
-    std::string name;
-};
+bool operator<(const Document::TextClass& t1, const Document::TextClass& t2)
+{
+    return t1.start < t2.start || (t1.start == t2.start && t1.end < t2.end);
+}
 
+bool overlaps(const Document::TextClass& t1, const Document::TextClass& t2)
+{
+    return t1.start < t2.end && t2.start < t1.end;
+}
+
+bool contains(const Document::TextClass& t1, const Document::TextClass& t2)
+{
+    return t2.start >= t1.start && t2.end <= t1.end;
+}
 } // namespace spurv
 
 using namespace spurv;
+
+static inline bool isTextClass(const std::vector<uint32_t>& classes, uint32_t clazz)
+{
+    return classes.size() == 1 && classes[0] == clazz;
+}
+
+static inline bool hasTextClass(const std::vector<uint32_t>& classes, uint32_t clazz)
+{
+    return std::find(classes.begin(), classes.end(), clazz) != classes.end();
+}
+
+static inline void addTextClass(std::vector<uint32_t>& classes, uint32_t clazz)
+{
+    classes.push_back(clazz);
+}
+
+static inline void addTextClass(std::vector<uint32_t>& classes, const std::vector<uint32_t>& newClasses)
+{
+    classes.reserve(classes.size() + newClasses.size());
+    classes.insert(classes.end(), newClasses.begin(), newClasses.end());
+}
+
+static inline void removeTextClass(std::vector<uint32_t>& classes, uint32_t clazz)
+{
+    auto it = std::find(classes.begin(), classes.end(), clazz);
+    if (it != classes.end()) {
+        classes.erase(it);
+    }
+}
+
+static inline std::vector<uint32_t> removedTextClass(const std::vector<uint32_t>& classes, uint32_t clazz)
+{
+    auto it = std::find(classes.begin(), classes.end(), clazz);
+    if (it == classes.end()) {
+        return classes;
+    }
+    auto newClasses = classes;
+    newClasses.erase(it);
+    return newClasses;
+}
 
 Document::Document()
 {
@@ -274,29 +315,34 @@ std::vector<TextLine> Document::textForRange(std::size_t start, std::size_t end)
     return out;
 }
 
-TextProperty Document::propertyForSelector(std::size_t start, std::size_t end, const std::string& selector) const
+TextProperty Document::propertyForClasses(std::size_t start, std::size_t end, const std::vector<uint32_t>& classes) const
 {
     // ### should parse these up front
     TextProperty prop = { start, end };
     for (auto dit = mQss.cbegin(); dit < mQss.cend(); ++dit) {
         const auto& fragment = dit->first;
-        if (fragment.selector() == selector) {
-            const auto& block = fragment.block();
-            for (auto bit = block.cbegin(); bit != block.cend(); ++bit) {
-                const auto& name = bit->first;
-                if (name == "background-color") {
-                    auto color = parseColor(bit->second.first);
-                    if (color.has_value()) {
-                        prop.background = *color;
-                    }
-                } else if (name == "color") {
-                    auto color = parseColor(bit->second.first);
-                    if (color.has_value()) {
-                        prop.foreground = *color;
+        for (auto clazz : classes) {
+            const auto& selector = mRegisteredClasses[clazz].value();
+            if (Styleable::isGeneralizedFrom(selector, fragment.selector())) {
+                const auto& block = fragment.block();
+                for (auto bit = block.cbegin(); bit != block.cend(); ++bit) {
+                    // ### should extract the relevant code that handles these in Styleable.cpp
+                    // into a function that's callable from both there and here
+                    const auto& name = bit->first;
+                    if (name == "background-color") {
+                        auto color = parseColor(bit->second.first);
+                        if (color.has_value()) {
+                            prop.background = *color;
+                        }
+                    } else if (name == "color") {
+                        auto color = parseColor(bit->second.first);
+                        if (color.has_value()) {
+                            prop.foreground = *color;
+                        }
                     }
                 }
+                break;
             }
-            break;
         }
     }
     return prop;
@@ -308,26 +354,27 @@ std::vector<TextProperty> Document::propertiesForRange(std::size_t start, std::s
         return {};
     }
 
-    const auto& sinfo = mLayout.lineAt(start);
-    const auto& einfo = mLayout.lineAt(end);
+    TextClass findClass = {
+        start, end, {}
+    };
+
+    //const auto& sinfo = mLayout.lineAt(start);
+    //const auto& einfo = mLayout.lineAt(end);
 
     std::vector<TextProperty> props;
-    auto pit = mSelectors.begin();
-    const auto pitend = mSelectors.cend();
-    while (pit != pitend) {
-        const auto& ptr = *pit;
-        if (sinfo.startOffset > ptr->end) {
-            ++pit;
-            continue;
-        }
-        if (einfo.endOffset < ptr->start) {
-            break;
-        }
 
-        assert(ptr->start < einfo.endOffset && sinfo.startOffset < ptr->end);
-        props.push_back(propertyForSelector(ptr->start, ptr->end, ptr->name));
-        ++pit;
+    auto it = std::lower_bound(mTextClasses.begin(), mTextClasses.end(), findClass);
+    // find the first entry that goes before us
+    while (it != mTextClasses.begin()) {
+        if (!overlaps(*(it - 1), findClass))
+            break;
+        --it;
     }
+    while (it != mTextClasses.end() && overlaps(*it, findClass)) {
+        props.push_back(propertyForClasses(it->start, it->end, it->classes));
+        ++it;
+    }
+
     return props;
 }
 
@@ -341,37 +388,232 @@ void Document::setFont(const Font& font)
     mLayout.setFont(font);
 }
 
-Document::Selector Document::addSelector(std::size_t start, std::size_t end, const std::string& name)
+uint32_t Document::registerTextClass(const std::string& name)
 {
-    auto intern = std::make_shared<DocumentSelectorInternal>(this, start, end, name);
-    // mSelectors.push_back(intern);
-    auto it = std::lower_bound(mSelectors.begin(), mSelectors.end(), intern, [](const auto& a, const auto& b) -> bool {
-        return a->start < b->start || (a->start == b->start && a->end < b->end);
-    });
-    mSelectors.insert(it, intern);
-    return Document::Selector(std::move(intern));
-}
-
-void Document::removeSelector(const DocumentSelectorInternal* selector)
-{
-    auto it = std::find_if(mSelectors.begin(), mSelectors.end(), [selector](const auto& cand) {
-        return cand.get() == selector;
-    });
-    if (it != mSelectors.end()) {
-        mSelectors.erase(it);
+    if (mNextAvailableClass < mRegisteredClasses.size() && !mRegisteredClasses[mNextAvailableClass].has_value()) {
+        mRegisteredClasses[mNextAvailableClass] = qss::Selector(fmt::format("text.{}", name));
+        return 1 << static_cast<uint32_t>(mNextAvailableClass);
+    } else {
+        for (std::size_t r = mNextAvailableClass; r < mRegisteredClasses.size(); ++r) {
+            if (!mRegisteredClasses[r].has_value()) {
+                mNextAvailableClass = r;
+                mRegisteredClasses[r] = qss::Selector(fmt::format("text.{}", name));
+                return 1 << static_cast<uint32_t>(r);
+            }
+        }
+        mRegisteredClasses.push_back(qss::Selector(fmt::format("text.{}", name)));
+        mNextAvailableClass = mRegisteredClasses.size();
+        return 1 << static_cast<uint32_t>(mNextAvailableClass - 1);
     }
 }
 
-Document::Selector::Selector(std::shared_ptr<DocumentSelectorInternal>&& intern)
-    : internal(std::move(intern))
+bool Document::unregisterTextClass(uint32_t clazz)
 {
+    if (clazz == 0) {
+        // should never happen
+        return false;
+    }
+    const auto idx = static_cast<uint32_t>(__builtin_ctz(clazz));
+    if (idx < mRegisteredClasses.size() && mRegisteredClasses[idx].has_value()) {
+        mRegisteredClasses[idx] = {};
+        mNextAvailableClass = idx;
+        return true;
+    }
+    return false;
 }
 
-Document::Selector::~Selector()
+void Document::clearRegisteredTextClasses()
 {
+    mRegisteredClasses.clear();
+    mNextAvailableClass = 0;
 }
 
-void Document::Selector::remove()
+void Document::addTextClassAtRange(uint32_t clazz, std::size_t start, std::size_t end)
 {
-    internal.reset();
+    TextClass newClass = {
+        start, end, { clazz }
+    };
+    auto it = std::lower_bound(mTextClasses.begin(), mTextClasses.end(), newClass);
+    if (it == mTextClasses.end()) {
+        mTextClasses.push_back(newClass);
+    } else {
+        if (it->start == start && it->end == end) {
+            addTextClass(it->classes, clazz);
+        } else {
+            mTextClasses.insert(it, newClass);
+        }
+    }
+}
+
+void Document::removeTextClassAtRange(uint32_t clazz, std::size_t start, std::size_t end)
+{
+    assert(end >= start);
+    TextClass findClass = {
+        start, end, { clazz }
+    };
+    auto it = std::lower_bound(mTextClasses.begin(), mTextClasses.end(), findClass);
+    // find the first entry that goes before us
+    while (it != mTextClasses.begin()) {
+        if (!overlaps(*(it - 1), findClass))
+            break;
+        --it;
+    }
+    // we may have to split at the start
+    if (it->start < start) {
+        assert(it->end > start);
+        if (hasTextClass(it->classes, clazz)) {
+            // split
+            TextClass newClass = {
+                start,
+                it->end,
+                removedTextClass(it->classes, clazz)
+            };
+            it = mTextClasses.insert(it, newClass);
+            (it - 1)->end = start;
+            ++it;
+        }
+    }
+    // remove clazz from all entries up until end
+    while (it != mTextClasses.end()) {
+        if (it->start > end) {
+            return;
+        }
+        assert(overlaps(*it, findClass));
+        if (end >= it->end) {
+            assert(contains(findClass, *it));
+            removeTextClass(it->classes, clazz);
+        } else {
+            // this entry has an end that goes beyond our end, we might have to split
+            if (hasTextClass(it->classes, clazz)) {
+                // if the previous entry equals us then we don't have to split
+                if (it != mTextClasses.begin() &&
+                    (it - 1)->start == it->start &&
+                    (it - 1)->end == end) {
+                    addTextClass((it - 1)->classes, removedTextClass(it->classes, clazz));
+                } else {
+                    // we need to split
+                    TextClass newClass = {
+                        it->start,
+                        end,
+                        removedTextClass(it->classes, clazz)
+                    };
+                    // put it past the inserted value, which should be the value
+                    // we're currently looking at
+                    assert(it == mTextClasses.begin() || *(it - 1) < newClass);
+
+                    it = mTextClasses.insert(it, newClass) + 1;
+                    it->start = end + 1;
+                    assert(it->start < it->end);
+                }
+            }
+        }
+        ++it;
+    }
+}
+
+void Document::overwriteTextClassesAtRange(uint32_t clazz, std::size_t start, std::size_t end)
+{
+    assert(end >= start);
+    TextClass findClass = {
+        start, end, { clazz }
+    };
+    auto it = std::lower_bound(mTextClasses.begin(), mTextClasses.end(), findClass);
+    // find the first entry that goes before us
+    while (it != mTextClasses.begin()) {
+        if (!overlaps(*(it - 1), findClass))
+            break;
+        --it;
+    }
+    // we may have to split at the start
+    if (it->start < start) {
+        assert(it->end > start);
+        if (!isTextClass(it->classes, clazz)) {
+            // split
+            TextClass newClass = {
+                start,
+                it->end,
+                { clazz }
+            };
+            it = mTextClasses.insert(it, newClass);
+            (it - 1)->end = start;
+            ++it;
+        }
+    }
+    while (it != mTextClasses.end()) {
+        if (it->start > end) {
+            return;
+        }
+        assert(overlaps(*it, findClass));
+        if (end >= it->end) {
+            assert(contains(findClass, *it));
+            it->classes = { clazz };
+        } else {
+            // this entry has an end that goes beyond our end, we might have to split
+            if (!isTextClass(it->classes, clazz)) {
+                // if the previous entry equals us then we don't have to split
+                if (it != mTextClasses.begin() &&
+                    (it - 1)->start == it->start &&
+                    (it - 1)->end == end) {
+                    (it - 1)->classes = { clazz };
+                } else {
+                    // we need to split
+                    TextClass newClass = {
+                        it->start,
+                        end,
+                        { clazz }
+                    };
+                    // put it past the inserted value, which should be the value
+                    // we're currently looking at
+                    assert(it == mTextClasses.begin() || *(it - 1) < newClass);
+
+                    it = mTextClasses.insert(it, newClass) + 1;
+                    it->start = end + 1;
+                    assert(it->start < it->end);
+                }
+            }
+        }
+        ++it;
+    }
+}
+
+void Document::clearTextClassesAtRange(std::size_t start, std::size_t end)
+{
+    assert(end >= start);
+    TextClass findClass = {
+        start, end, {}
+    };
+    auto it = std::lower_bound(mTextClasses.begin(), mTextClasses.end(), findClass);
+    // find the first entry that goes before us
+    while (it != mTextClasses.begin()) {
+        if (!overlaps(*(it - 1), findClass))
+            break;
+        --it;
+    }
+    if (it->start < start) {
+        assert(it->end > start);
+
+        // adjust end
+        it->end = start;
+        ++it;
+    }
+    while (it != mTextClasses.end()) {
+        if (it->start > end) {
+            return;
+        }
+        assert(overlaps(*it, findClass));
+        if (end >= it->end) {
+            assert(contains(findClass, *it));
+            it = mTextClasses.erase(it);
+        } else {
+            // this entry has an end that goes beyond our end, adjust start
+            it->start = end;
+            assert(it->start < it->end);
+            ++it;
+        }
+    }
+}
+
+void Document::clearTextClasses()
+{
+    mTextClasses.clear();
 }

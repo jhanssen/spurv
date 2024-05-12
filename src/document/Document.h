@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -34,23 +35,17 @@ public:
     // styling
     void setFont(const Font& font);
 
-    class Selector
-    {
-    public:
-        ~Selector();
+    uint32_t registerTextClass(const std::string& name);
+    bool unregisterTextClass(uint32_t clazz);
+    void clearRegisteredTextClasses();
 
-        void remove();
+    // bitfield
+    void addTextClassAtRange(uint32_t clazz, std::size_t start, std::size_t end);
+    void removeTextClassAtRange(uint32_t clazz, std::size_t start, std::size_t end);
+    void overwriteTextClassesAtRange(uint32_t clazz, std::size_t start, std::size_t end);
 
-    private:
-        Selector(std::shared_ptr<DocumentSelectorInternal>&&);
-
-    private:
-        std::shared_ptr<DocumentSelectorInternal> internal;
-
-        friend class Document;
-    };
-
-    Selector addSelector(std::size_t start, std::size_t end, const std::string& name);
+    void clearTextClassesAtRange(std::size_t start, std::size_t end);
+    void clearTextClasses();
 
     // navigate
     // enum class Navigate
@@ -99,7 +94,7 @@ private:
 
     void removeSelector(const DocumentSelectorInternal* selector);
 
-    TextProperty propertyForSelector(std::size_t start, std::size_t end, const std::string& selector) const;
+    TextProperty propertyForClasses(std::size_t start, std::size_t end, const std::vector<uint32_t>& classes) const;
 
 private:
     Font mFont;
@@ -110,13 +105,27 @@ private:
     std::u16string mChunk;
     std::size_t mChunkStart = 0, mChunkOffset = 0;
     std::size_t mDocumentSize = 0, mDocumentLines = 0;
-    std::vector<std::shared_ptr<DocumentSelectorInternal>> mSelectors = {};
+
+    struct TextClass
+    {
+        std::size_t start;
+        std::size_t end;
+        std::vector<uint32_t> classes;
+    };
+    std::vector<TextClass> mTextClasses;
+    std::vector<std::optional<qss::Selector>> mRegisteredClasses;
+    std::size_t mNextAvailableClass = 0;
 
     bool mReady = false;
     EventEmitter<void()> mOnReady;
 
     friend class Cursor;
     friend struct DocumentSelectorInternal;
+
+    friend bool operator==(const Document::TextClass& t1, const Document::TextClass& t2);
+    friend bool operator<(const Document::TextClass& t1, const Document::TextClass& t2);
+    friend bool overlaps(const Document::TextClass& t1, const Document::TextClass& t2);
+    friend bool contains(const Document::TextClass& t1, const Document::TextClass& t2);
 };
 
 inline void Document::insert(char32_t uc)
