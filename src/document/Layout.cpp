@@ -24,17 +24,18 @@ public:
     bool running = false;
     Layout* layout = nullptr;
 
-    static void runJob(std::shared_ptr<LayoutJob> job, std::size_t prevProcessed);
+    static void runJob(std::shared_ptr<LayoutJob> job, std::size_t prevProcessed, std::size_t startCluster);
 };
 
-void LayoutJob::runJob(std::shared_ptr<LayoutJob> job, std::size_t prevProcessed)
+void LayoutJob::runJob(std::shared_ptr<LayoutJob> job, std::size_t prevProcessed, std::size_t startCluster)
 {
     job->running = true;
     auto loop = EventLoop::eventLoop();
-    ThreadPool::mainThreadPool()->post([job = std::move(job), loop, prevProcessed]() -> void {
+    ThreadPool::mainThreadPool()->post([job = std::move(job), loop, prevProcessed, startCluster]() -> void {
         std::size_t processed = 0, processedStart = 0, total = 0;
         std::size_t currentChunk = 0;
         std::size_t currentLinebreak = 0;
+        std::size_t prevEndCluster = startCluster;
         LayoutChunk chunk;
         std::vector<Linebreak> linebreaks;
         std::vector<Layout::LineInfo> buffers;
@@ -45,9 +46,10 @@ void LayoutJob::runJob(std::shared_ptr<LayoutJob> job, std::size_t prevProcessed
                 if (!buffers.empty()) {
                     ++job->posted;
                     loop->post([buffers = std::move(buffers), layout = job->layout, total]() -> void {
+                        const auto endCluster = buffers.empty() ? 0 : buffers.back().endCluster + 1;
                         layout->mLines.reserve(layout->mLines.size() + buffers.size());
                         layout->mLines.insert(layout->mLines.end(), buffers.begin(), buffers.end());
-                        layout->notifyLines(total);
+                        layout->notifyLines(total, endCluster);
                     });
                 }
                 if (currentChunk == job->chunks.size()) {
@@ -94,7 +96,6 @@ void LayoutJob::runJob(std::shared_ptr<LayoutJob> job, std::size_t prevProcessed
 
             // for each linebreak
             std::size_t prev = 0, accum = 0;
-            std::size_t prevEndCluster = 0;
             for (const auto& lb : linebreaks) {
                 const auto line = std::u16string_view(chunk.data.begin() + prev, chunk.data.begin() + (lb.first - processedStart));
 
@@ -196,7 +197,7 @@ void Layout::calculate(std::u16string&& data, std::vector<Linebreak>&& linebreak
             mJob = std::make_shared<LayoutJob>();
         }
         mJob->layout = this;
-        LayoutJob::runJob(mJob, mProcessed);
+        LayoutJob::runJob(mJob, mProcessed, mEndCluster);
     }
     const auto dataSize = data.size();
     mJob->chunks.push_back({ std::move(data), mFont });
@@ -230,10 +231,11 @@ void Layout::calculate(std::u16string&& data, std::vector<Linebreak>&& linebreak
     mJob->length += dataSize;
 }
 
-void Layout::notifyLines(std::size_t processed)
+void Layout::notifyLines(std::size_t processed, std::size_t endCluster)
 {
     ++mReceived;
     mProcessed += processed;
+    mEndCluster = endCluster;
     if (mMode == Mode::Single) {
         mOnReady.emit();
     } else if (mFinalized) {
@@ -267,4 +269,22 @@ void Layout::clearLines()
         }
     }
     mLines.clear();
+}
+
+std::pair<std::size_t, const Layout::LineInfo*> Layout::lineForCluster(std::size_t cluster) const
+{
+    const LineInfo findLine = {
+        nullptr, 0, 0, cluster
+    };
+    auto it = std::upper_bound(mLines.begin(), mLines.end(), findLine, [](const LineInfo& i1, const LineInfo& i2) -> bool {
+        return i1.startCluster < i2.startCluster;
+    });
+    if (it != mLines.begin()) {
+        return std::make_pair(static_cast<std::size_t>(it - mLines.begin() - 1), &*(it - 1));
+    }
+    if (!mLines.empty()) {
+        assert(cluster < mLines.front().startCluster);
+        return std::make_pair(static_cast<std::size_t>(0), &mLines.front());
+    }
+    return std::make_pair(static_cast<std::size_t>(0), nullptr);
 }

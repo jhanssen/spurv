@@ -35,13 +35,14 @@ public:
         Font font = {};
     };
     const LineInfo& lineAt(std::size_t idx) const;
+    std::pair<std::size_t, const LineInfo*> lineForCluster(std::size_t cluster) const;
     std::size_t numLines() const;
 
     EventEmitter<void()>& onReady();
 
 private:
     void clearLines();
-    void notifyLines(std::size_t processed);
+    void notifyLines(std::size_t processed, std::size_t endCluster);
 
 private:
     Layout(const Layout&) = delete;
@@ -54,7 +55,7 @@ private:
 
     Mode mMode = Mode::Single;
     Font mFont = {};
-    std::size_t mReceived = 0, mProcessed = 0;
+    std::size_t mReceived = 0, mProcessed = 0, mEndCluster = 0;
     bool mFinalized = false;
 
     std::vector<LineInfo> mLines;

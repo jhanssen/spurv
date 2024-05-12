@@ -36,10 +36,39 @@ void Cursor::setView(const std::shared_ptr<View>& view)
 {
     if (mView) {
         mView->removeStyleableChild(this);
+        if (mOnDocReady != EventLoop::ConnectKey {}) {
+            if (mView->document()) {
+                mView->document()->onReady().disconnect(mOnDocReady);
+            }
+            mOnDocReady = {};
+        }
+        if (mOnDocChanged != EventLoop::ConnectKey {}) {
+            mView->onDocumentChanged().disconnect(mOnDocChanged);
+            mOnDocChanged = {};
+        }
     }
     mView = view;
     if (mView) {
         mView->addStyleableChild(this);
+        if (mView->document()) {
+            mOnDocReady = mView->document()->onReady().connect([this]() {
+                updatePosition();
+            });
+        }
+        mOnDocChanged = mView->onDocumentChanged().connect([this](const std::shared_ptr<Document>& oldDoc) {
+            if (mOnDocReady != EventLoop::ConnectKey {}) {
+                if (oldDoc) {
+                    oldDoc->onReady().disconnect(mOnDocReady);
+                }
+                mOnDocReady = {};
+            }
+            const auto& newDoc = mView->document();
+            if (newDoc) {
+                mOnDocReady = newDoc->onReady().connect([this]() {
+                    updatePosition();
+                });
+            }
+        });
     }
 }
 
@@ -276,9 +305,20 @@ void Cursor::setVisible(bool v)
         return;
     }
     if (v) {
-        mView->document()->addTextClassAtRange(offset, offset + 1, mTextClass);
+        mView->document()->addTextClassAtCluster(mTextClass, offset, offset + 1);
     } else {
-        mView->document()->removeTextClassAtRange(offset, offset + 1, mTextClass);
+        mView->document()->removeTextClassAtCluster(mTextClass, offset, offset + 1);
+    }
+}
+
+void Cursor::updatePosition()
+{
+    if (mVisible) {
+        const auto offset = globalCluster();
+        if (offset == std::numeric_limits<uint32_t>::max()) {
+            return;
+        }
+        mView->document()->addTextClassAtCluster(mTextClass, offset, offset + 1);
     }
 }
 

@@ -298,10 +298,10 @@ TextProperty Document::propertyForClasses(std::size_t start, std::size_t end, co
 {
     // ### should parse these up front
     TextProperty prop = { start, end };
-    for (auto dit = mQss.cbegin(); dit < mQss.cend(); ++dit) {
+    for (auto dit = mMergedQss.cbegin(); dit < mMergedQss.cend(); ++dit) {
         const auto& fragment = dit->first;
         for (auto clazz : classes) {
-            const auto& maybeSelector = mTextClasses->mRegisteredClasses[clazz];
+            const auto& maybeSelector = mTextClasses->mRegisteredClasses[clazz - 1];
             assert(maybeSelector.has_value());
             if (Styleable::isGeneralizedFrom(maybeSelector.value(), fragment.selector())) {
                 const auto& block = fragment.block();
@@ -354,12 +354,15 @@ std::vector<TextProperty> Document::propertiesForRange(std::size_t start, std::s
         return {};
     }
 
-    TextClassEntry findClass = {
-        start, end, {}
-    };
+    const auto& sinfo = mLayout.lineAt(start);
+    const auto& einfo = mLayout.lineAt(end > start ? end - 1 : start);
 
-    //const auto& sinfo = mLayout.lineAt(start);
-    //const auto& einfo = mLayout.lineAt(end);
+    const std::size_t startCluster = sinfo.startCluster;
+    const std::size_t endCluster = einfo.endCluster + 1;
+
+    TextClassEntry findClass = {
+        startCluster, endCluster, {}
+    };
 
     std::vector<TextProperty> props;
 
@@ -388,8 +391,20 @@ void Document::setFont(const Font& font)
     mLayout.setFont(font);
 }
 
-void Document::addTextClassAtRange(uint32_t clazz, std::size_t start, std::size_t end)
+void Document::emitPropertiesChanged(std::size_t start, std::size_t end)
 {
+    assert(start < end);
+    const auto [ startLine, startLineInfo ] = mLayout.lineForCluster(start);
+    const auto [ endLine, endLineInfo ] = mLayout.lineForCluster(end);
+    assert(startLineInfo != nullptr && endLineInfo != nullptr);
+    (void)startLineInfo;
+    (void)endLineInfo;
+    mOnPropertiesChanged.emit(startLine, endLine);
+}
+
+void Document::addTextClassAtCluster(uint32_t clazz, std::size_t start, std::size_t end)
+{
+    assert(start < end);
     TextClassEntry newClass = {
         start, end, { clazz }
     };
@@ -403,11 +418,12 @@ void Document::addTextClassAtRange(uint32_t clazz, std::size_t start, std::size_
             mTextClassEntries.insert(it, newClass);
         }
     }
+    emitPropertiesChanged(start, end);
 }
 
-void Document::removeTextClassAtRange(uint32_t clazz, std::size_t start, std::size_t end)
+void Document::removeTextClassAtCluster(uint32_t clazz, std::size_t start, std::size_t end)
 {
-    assert(end >= start);
+    assert(start < end);
     TextClassEntry findClass = {
         start, end, { clazz }
     };
@@ -436,7 +452,7 @@ void Document::removeTextClassAtRange(uint32_t clazz, std::size_t start, std::si
     // remove clazz from all entries up until end
     while (it != mTextClassEntries.end()) {
         if (it->start > end) {
-            return;
+            break;
         }
         assert(overlaps(*it, findClass));
         if (end >= it->end) {
@@ -469,11 +485,12 @@ void Document::removeTextClassAtRange(uint32_t clazz, std::size_t start, std::si
         }
         ++it;
     }
+    emitPropertiesChanged(start, end);
 }
 
-void Document::overwriteTextClassesAtRange(uint32_t clazz, std::size_t start, std::size_t end)
+void Document::overwriteTextClassesAtCluster(uint32_t clazz, std::size_t start, std::size_t end)
 {
-    assert(end >= start);
+    assert(start < end);
     TextClassEntry findClass = {
         start, end, { clazz }
     };
@@ -501,7 +518,7 @@ void Document::overwriteTextClassesAtRange(uint32_t clazz, std::size_t start, st
     }
     while (it != mTextClassEntries.end()) {
         if (it->start > end) {
-            return;
+            break;
         }
         assert(overlaps(*it, findClass));
         if (end >= it->end) {
@@ -534,11 +551,12 @@ void Document::overwriteTextClassesAtRange(uint32_t clazz, std::size_t start, st
         }
         ++it;
     }
+    emitPropertiesChanged(start, end);
 }
 
-void Document::clearTextClassesAtRange(std::size_t start, std::size_t end)
+void Document::clearTextClassesAtCluster(std::size_t start, std::size_t end)
 {
-    assert(end >= start);
+    assert(start < end);
     TextClassEntry findClass = {
         start, end, {}
     };
@@ -558,7 +576,7 @@ void Document::clearTextClassesAtRange(std::size_t start, std::size_t end)
     }
     while (it != mTextClassEntries.end()) {
         if (it->start > end) {
-            return;
+            break;
         }
         assert(overlaps(*it, findClass));
         if (end >= it->end) {
@@ -571,9 +589,11 @@ void Document::clearTextClassesAtRange(std::size_t start, std::size_t end)
             ++it;
         }
     }
+    emitPropertiesChanged(start, end);
 }
 
 void Document::clearTextClasses()
 {
     mTextClassEntries.clear();
+    emitPropertiesChanged(0, std::numeric_limits<std::size_t>::max());
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <EventLoop.h>
 #include <Styleable.h>
 #include <memory>
 #include <cstddef>
@@ -51,11 +52,13 @@ protected:
 
 private:
     uint32_t globalCluster() const;
+    void updatePosition();
 
 private:
     std::size_t mLine = {};
     uint32_t mCluster = {}, mRetainedCluster = {};
     uint32_t mTextClass = {};
+    EventLoop::ConnectKey mOnDocReady = {}, mOnDocChanged = {};
     bool mVisible = false;
 
     std::shared_ptr<View> mView = {};

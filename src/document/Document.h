@@ -36,11 +36,11 @@ public:
     // styling
     void setFont(const Font& font);
 
-    void addTextClassAtRange(uint32_t clazz, std::size_t start, std::size_t end);
-    void removeTextClassAtRange(uint32_t clazz, std::size_t start, std::size_t end);
-    void overwriteTextClassesAtRange(uint32_t clazz, std::size_t start, std::size_t end);
+    void addTextClassAtCluster(uint32_t clazz, std::size_t start, std::size_t end);
+    void removeTextClassAtCluster(uint32_t clazz, std::size_t start, std::size_t end);
+    void overwriteTextClassesAtCluster(uint32_t clazz, std::size_t start, std::size_t end);
 
-    void clearTextClassesAtRange(std::size_t start, std::size_t end);
+    void clearTextClassesAtCluster(std::size_t start, std::size_t end);
     void clearTextClasses();
 
     enum class Remove { Forward, Backward };
@@ -48,6 +48,7 @@ public:
 
     bool isReady() const;
     EventEmitter<void()>& onReady();
+    EventEmitter<void(std::size_t, std::size_t)>& onPropertiesChanged();
 
     std::size_t numLines() const;
 
@@ -78,6 +79,7 @@ private:
     void removeSelector(const DocumentSelectorInternal* selector);
 
     TextProperty propertyForClasses(std::size_t start, std::size_t end, const std::vector<uint32_t>& classes) const;
+    void emitPropertiesChanged(std::size_t start, std::size_t end);
 
 private:
     Font mFont;
@@ -107,6 +109,7 @@ private:
 
     bool mReady = false;
     EventEmitter<void()> mOnReady;
+    EventEmitter<void(std::size_t, std::size_t)> mOnPropertiesChanged;
 
     friend class Cursor;
     friend struct DocumentSelectorInternal;
@@ -177,6 +180,11 @@ inline bool Document::isReady() const
 inline EventEmitter<void()>& Document::onReady()
 {
     return mOnReady;
+}
+
+inline EventEmitter<void(std::size_t, std::size_t)>& Document::onPropertiesChanged()
+{
+    return mOnPropertiesChanged;
 }
 
 } // namespace spurv

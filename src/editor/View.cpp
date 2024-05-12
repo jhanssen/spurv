@@ -61,10 +61,22 @@ void View::setDocument(const std::shared_ptr<Document>& doc)
 {
     if (mDocument) {
         removeStyleableChild(mDocument.get());
+        mDocument->onPropertiesChanged().disconnectAll();
     }
+
+    auto oldDocument = mDocument;
+
     mDocument = doc;
     if (mDocument) {
         addStyleableChild(mDocument.get());
+        mDocument->onPropertiesChanged().connect([this](std::size_t start, std::size_t end) {
+            auto props = mDocument->propertiesForRange(start, end);
+            for (auto& prop : props) {
+                spdlog::debug("updated prop {}-{}, color {}", prop.start, prop.end, prop.foreground);
+            }
+            auto renderer = Renderer::instance();
+            renderer->addTextProperties(frameNo(), std::move(props));
+        });
     }
 
     if (mDocument->isReady()) {
@@ -74,6 +86,8 @@ void View::setDocument(const std::shared_ptr<Document>& doc)
             processDocument();
         });
     }
+
+    mOnDocumentChanged.emit(oldDocument);
 }
 
 void View::updateLayout(const Rect& rect)

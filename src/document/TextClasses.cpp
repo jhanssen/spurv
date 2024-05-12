@@ -20,7 +20,7 @@ void TextClasses::destroy()
 
 uint32_t TextClasses::registerTextClass(const std::string& name)
 {
-    auto selector = qss::Selector(fmt::format("text.{}", name));
+    auto selector = qss::Selector(fmt::format(".text-{}", name));
     const auto sz = mRegisteredClasses.size();
     auto nextAvailable = sz;
     // see if this class is already registered
