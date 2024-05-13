@@ -51,11 +51,11 @@ add_subdirectory(glfw)
 add_subdirectory(harfbuzz)
 add_subdirectory(libqss)
 add_subdirectory(libuv)
-add_subdirectory(c-ares)
+# add_subdirectory(c-ares)
 
 set(CURL_DISABLE_LDAP TRUE) # warning on mac about some using some deprecated API
 set(ENABLE_WEBSOCKETS TRUE)
-set(ENABLE_ARES TRUE)
+# set(ENABLE_ARES TRUE)
 set(BUILD_CURL_EXE OFF)
 set(BUILD_SHARED_LIBS OFF)
 set(BUILD_STATIC_LIBS ON)
