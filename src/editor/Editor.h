@@ -20,7 +20,7 @@ class Editor
 public:
     ~Editor();
 
-    static void initialize(const std::filesystem::path &appPath);
+    static void initialize(const std::filesystem::path &appPath, int argc, char **argv, char **envp);
     static void destroy();
     static Editor* instance();
     static EventLoop* eventLoop();
@@ -37,8 +37,12 @@ public:
     void setStylesheet(const qss::Document& qss, StylesheetMode mode = StylesheetMode::Replace);
     const qss::Document& stylesheet() const;
 
+    int argc() const;
+    char **argv() const;
+    char **envp() const;
+
 private:
-    Editor(const std::filesystem::path &appPath);
+    Editor(const std::filesystem::path &appPath, int argc, char **argv, char **envp);
 
     Editor(Editor&&) = delete;
     Editor(const Editor&) = delete;
@@ -68,6 +72,9 @@ private:
     std::shared_ptr<View> mCurrentView = {};
     EventEmitter<void()> mOnReady;
     EditorImpl* mImpl;
+    const int mArgc;
+    char **const mArgv;
+    char **const mEnvp;
 
     bool mInitialized = false;
 

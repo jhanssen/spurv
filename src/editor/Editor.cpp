@@ -30,8 +30,8 @@ public:
     int32_t pos { 0 };
 };
 
-Editor::Editor(const std::filesystem::path &appPath)
-    : mEventLoop(new EventLoopUv())
+Editor::Editor(const std::filesystem::path &appPath, int argc, char **argv, char **envp)
+    : mEventLoop(new EventLoopUv()), mArgc(argc), mArgv(argv), mEnvp(envp)
 {
     mImpl = new EditorImpl();
     mImpl->appPath = appPath;
@@ -153,10 +153,10 @@ void Editor::stop()
     mThread.join();
 }
 
-void Editor::initialize(const std::filesystem::path &appPath)
+void Editor::initialize(const std::filesystem::path &appPath, int argc, char **argv, char **envp)
 {
     assert(!sInstance);
-    sInstance = std::unique_ptr<Editor>(new Editor(appPath));
+    sInstance = std::unique_ptr<Editor>(new Editor(appPath, argc, argv, envp));
 }
 
 void Editor::load(const std::filesystem::path& path)
@@ -304,4 +304,19 @@ void Editor::relayout()
     YGNodeCalculateLayout(root->mYogaNode, YGUndefined, YGUndefined, YGDirectionLTR);
 
     root->relayout();
+}
+
+int Editor::argc() const
+{
+    return mArgc;
+}
+
+char **Editor::argv() const
+{
+    return mArgv;
+}
+
+char **Editor::envp() const
+{
+    return mEnvp;
 }

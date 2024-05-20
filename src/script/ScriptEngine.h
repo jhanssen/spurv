@@ -196,7 +196,6 @@ private:
         };
         std::deque<std::unique_ptr<Write>> stdinWrites;
 
-
         struct SynchronousResponse {
             std::string stdout, stderr;
             int exitStatus { 0 };

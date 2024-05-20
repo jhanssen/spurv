@@ -492,7 +492,8 @@ bool Styleable::matchesSelector(const Styleable* styleable, const qss::Selector&
     }
 
     const Styleable* topStyleable = styleable;
-    auto inputCopy = inputSelector;
+    qss::Selector inputCopy;
+    inputCopy.operator=(inputSelector);
     // spdlog::info("matches {} {}", inputCopy.toString(), styleSelector.toString());
 
     auto matchSelectorElement = [](const qss::SelectorElement& styleElem, const qss::SelectorElement& inputElem) -> bool {

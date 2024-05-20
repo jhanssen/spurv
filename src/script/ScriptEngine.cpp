@@ -1,6 +1,7 @@
 #include "ScriptEngine.h"
 #include "Builtins.h"
 #include <Keys.h>
+#include <Editor.h>
 
 #include <cassert>
 

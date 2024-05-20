@@ -89,6 +89,7 @@ include(base64.cmake)
 add_library(glfw::glfw ALIAS glfw)
 add_library(harfbuzz::harfbuzz ALIAS harfbuzz)
 add_library(yogacore::yogacore ALIAS yogacore)
+add_library(curl::curl ALIAS libcurl_static)
 
 # remove fmt as an interface library for spdlog, we don't want it appearing on our link line twice
 get_target_property(SPDLOG_IFACE_LINKED_LIBS spdlog INTERFACE_LINK_LIBRARIES)

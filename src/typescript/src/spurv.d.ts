@@ -244,6 +244,9 @@ declare namespace spurv {
 
     export function exit(number?: number): void;
 
+    const argv: string[];
+    const env: Record<string, string>;
+
     class View {
         readonly currentLine: number;
 
