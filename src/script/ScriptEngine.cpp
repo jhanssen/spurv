@@ -26,10 +26,35 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
 #undef ScriptAtom
 
     mGlobal = ScriptValue(JS_GetGlobalObject(mContext));
-    printf("[ScriptEngine.cpp:%d]: initScriptBufferSourceIds();\n", __LINE__); fflush(stdout);
     initScriptBufferSourceIds();
     mSpurv = ScriptValue(std::vector<std::pair<std::string, ScriptValue>>());
     mGlobal.setProperty(mAtoms.spurv, mSpurv.clone());
+
+    Editor *editor = Editor::instance();
+    {
+        const int argc = editor->argc();
+        char **const argv = editor->argv();
+        std::vector<ScriptValue> args(argc);
+        for (int i=0; i<argc; ++i) {
+            args[i] = ScriptValue(argv[i]);
+        }
+        mSpurv.setProperty(mAtoms.argv, ScriptValue(std::move(args)));
+    }
+
+    {
+        std::vector<std::pair<std::string, ScriptValue>> object;
+        char **envp = editor->envp();
+        while (*envp) {
+            char *eq = strchr(*envp, '=');
+            if (eq) {
+                object.push_back(std::make_pair(std::string(*envp, eq), ScriptValue(eq + 1)));
+            } else {
+                object.push_back(std::make_pair(std::string(*envp), ScriptValue(std::string())));
+            }
+            ++envp;
+        }
+        mSpurv.setProperty(mAtoms.env, ScriptValue(std::move(object)));
+    }
 
     bindSpurvFunction(mAtoms.log, &Builtins::log);
     bindSpurvFunction(mAtoms.setProcessHandler, std::bind(&ScriptEngine::setProcessHandler, this, std::placeholders::_1));

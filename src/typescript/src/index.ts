@@ -29,6 +29,9 @@ spurv.setKeyEventHandler(async (event: spurv.KeyEvent): Promise<void> => {
         if (event.key === spurv.Key.Q) {
             // q
             spurv.exit(0);
+        } else if (event.key === spurv.Key.V) {
+            console.log(spurv.env);
+            console.log(spurv.argv);
         } else if (event.key === spurv.Key.Up) {
             // up
             console.log("up", typeof view, typeof spurv.View);

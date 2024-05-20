@@ -1,5 +1,6 @@
 #define FOREACH_SCRIPTATOM(ScriptAtom)          \
     ScriptAtom(action)                          \
+    ScriptAtom(argv)                            \
     ScriptAtom(atob)                            \
     ScriptAtom(btoa)                            \
     ScriptAtom(byteLength)                      \
@@ -9,6 +10,7 @@
     ScriptAtom(constructor)                     \
     ScriptAtom(data)                            \
     ScriptAtom(end)                             \
+    ScriptAtom(env)                             \
     ScriptAtom(execProcess)                     \
     ScriptAtom(exit)                            \
     ScriptAtom(exitCode)                        \
@@ -41,4 +43,3 @@
     ScriptAtom(utf32tostring)                   \
     ScriptAtom(utf8tostring)                    \
     ScriptAtom(writeToProcessStdin)
-
