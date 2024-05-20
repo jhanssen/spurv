@@ -15,8 +15,8 @@ const plugins = [
     }),
     commonjs(),
     typescript({
-        tsconfig: "./tsconfig.json"
-        // cacheRoot: ".cache",
+        tsconfig: "./tsconfig.json",
+        clean: true
     }),
     ...(minify
         ? [
