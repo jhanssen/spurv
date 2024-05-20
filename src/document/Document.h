@@ -43,9 +43,6 @@ public:
     void clearTextClassesAtCluster(std::size_t start, std::size_t end);
     void clearTextClasses();
 
-    enum class Remove { Forward, Backward };
-    void remove(Remove mode);
-
     bool isReady() const;
     EventEmitter<void()>& onReady();
     EventEmitter<void(std::size_t, std::size_t)>& onPropertiesChanged();
@@ -135,37 +132,6 @@ inline void Document::insert(char32_t uc)
     }
 }
 */
-
-inline void Document::remove(Remove mode)
-{
-    if (!mReady) {
-        return;
-    }
-    switch (mode) {
-    case Remove::Forward:
-        if (mChunkOffset == mChunk.size()) {
-            if (mChunkStart + mChunk.size() < mDocumentSize) {
-                commit(Commit::Reinitialize, mChunkStart + mChunk.size());
-            } else {
-                break;
-            }
-        }
-        mChunk.erase(mChunk.begin() + mChunkOffset);
-        --mDocumentSize;
-        break;
-    case Remove::Backward:
-        if (mChunkOffset == 0) {
-            if (mChunkStart > 0) {
-                commit(Commit::Reinitialize, mChunkStart > ChunkSize ? mChunkStart - ChunkSize : 0);
-            } else {
-                break;
-            }
-        }
-        mChunk.erase(mChunk.begin() + (--mChunkOffset));
-        --mDocumentSize;
-        break;
-    };
-}
 
 inline std::size_t Document::numLines() const
 {
