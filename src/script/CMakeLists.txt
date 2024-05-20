@@ -1,5 +1,6 @@
 set(SOURCES
     Builtins.cpp
+    Promise.cpp
     ScriptEngine.cpp
     ScriptEngine_process.cpp
     ScriptEngine_fetch.cpp
