@@ -3,6 +3,7 @@
 #include <Logger.h>
 #include <ThreadPool.h>
 #include <EventLoopUv.h>
+#include <unistd.h>
 
 namespace spurv {
 ScriptValue ScriptEngine::setProcessHandler(std::vector<ScriptValue> &&args)
