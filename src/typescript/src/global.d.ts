@@ -101,7 +101,6 @@ declare class FetchError extends Error {
     constructor();
 }
 
-
 declare class AbortController {
     readonly signal: AbortSignal;
 
@@ -260,7 +259,7 @@ declare interface IReadableStream<T> {
             readable: IReadableStream<T>;
             writable: IWritableStream<T>;
         },
-        options?: IReadableStreamPipeOptions,
+        options?: IReadableStreamPipeOptions
     ): IReadableStream<T>;
 
     pipeTo(dest: IWritableStream<T>, options?: IReadableStreamPipeOptions): Promise<void>;

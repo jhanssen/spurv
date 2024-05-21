@@ -81,12 +81,6 @@ ScriptEngine::ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &ap
     bindGlobalFunction(mAtoms.clearInterval, std::bind(&ScriptEngine::clearTimeout, this, std::placeholders::_1));
     bindGlobalFunction(mAtoms.atob, &Builtins::atob);
     bindGlobalFunction(mAtoms.btoa, &Builtins::btoa);
-
-    const std::filesystem::path file = mAppPath / "../src/typescript/dist/spurv.js";
-    auto ret = eval(file);
-    if (ret.hasError()) {
-        spdlog::critical("{}", ret.error().message);
-    }
 }
 
 ScriptEngine::~ScriptEngine()
@@ -109,6 +103,15 @@ ScriptEngine::~ScriptEngine()
     JS_FreeRuntime(mRuntime);
     assert(tScriptEngine = this);
     tScriptEngine = nullptr;
+}
+
+void ScriptEngine::start()
+{
+    const std::filesystem::path file = mAppPath / "../src/typescript/dist/spurv.js";
+    auto ret = eval(file);
+    if (ret.hasError()) {
+        spdlog::critical("{}", ret.error().message);
+    }
 }
 
 void ScriptEngine::onKey(int key, int scancode, int action, int mods, const std::optional<std::string> &keyName)

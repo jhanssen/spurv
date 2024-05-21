@@ -77,14 +77,14 @@ void View::setDocument(const std::shared_ptr<Document>& doc)
             auto renderer = Renderer::instance();
             renderer->addTextProperties(frameNo(), std::move(props));
         });
-    }
 
-    if (mDocument->isReady()) {
-        processDocument();
-    } else {
-        mDocument->onReady().connect([this]() {
+        if (mDocument->isReady()) {
             processDocument();
-        });
+        } else {
+            mDocument->onReady().connect([this]() {
+                processDocument();
+            });
+        }
     }
 
     mOnDocumentChanged.emit(oldDocument);

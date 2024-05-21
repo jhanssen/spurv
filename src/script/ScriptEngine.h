@@ -42,6 +42,8 @@ public:
     ScriptEngine(EventLoop *eventLoop, const std::filesystem::path &appPath);
     ~ScriptEngine();
 
+    void start();
+
     Result<void> eval(const std::filesystem::path &file);
     Result<void> eval(const std::string &url, const std::string &source);
 
@@ -60,6 +62,8 @@ public:
     bool addClass(ScriptClass &&clazz);
 
     EventEmitter<void(int)>& onExit();
+
+    JSClassID classId(const std::string &clazz) const;
 
 private:
     friend class ScriptValue;

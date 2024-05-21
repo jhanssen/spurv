@@ -8,6 +8,7 @@
 #include <EnumClassBitmask.h>
 #include <Result.h>
 #include <UnorderedDense.h>
+#include "ScriptClassInstance.h"
 
 namespace spurv {
 class ScriptValue
@@ -78,6 +79,9 @@ public:
     bool isBigDecimal() const;
     bool isFunction() const;
     bool isConstructor() const;
+
+    template <typename T>
+    T *instanceOf() const;
 
     std::string slowType() const;
 
@@ -198,4 +202,17 @@ inline bool ScriptValue::isExceptionOrError() const
     return isException() || isError();
 }
 
+template <typename T>
+inline T *ScriptValue::instanceOf() const
+{
+    if (!mValue)
+        return nullptr;
+
+    const JSClassID id = JS_GetClassID(*mValue);
+    void *opaque = JS_GetOpaque(*mValue, id);
+    if (!opaque) {
+        return nullptr;
+    }
+    return dynamic_cast<T *>(static_cast<ScriptClassInstance *>(opaque));
+}
 } // namespace spurv

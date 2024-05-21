@@ -1,6 +1,32 @@
 /* eslint-disable @typescript-eslint/naming-convention */
+/* eslint-disable max-classes-per-file */
+// import { EventEmitter } from "./EventEmitter";
 
 declare namespace spurv {
+    type IArguments<T> = [T] extends [(...args: infer U) => unknown] ? U : [T] extends [void] ? [] : [T];
+    class IEventEmitter<Events> {
+        eventListenerAdded?: (event: string) => void;
+        addEventListener<E extends keyof Events>(event: E, listener: Events[E]): void;
+        addListener<E extends keyof Events>(event: E, listener: Events[E]): void;
+        addOnceListener<E extends keyof Events>(event: E, listener: Events[E]): void;
+        dumpEventListeners(): string;
+        on<E extends keyof Events>(event: E, listener: Events[E]): void;
+        once<E extends keyof Events>(event: E, listener: Events[E]): void;
+        prependListener<E extends keyof Events>(event: E, listener: Events[E]): void;
+        prependOnceListener<E extends keyof Events>(event: E, listener: Events[E]): void;
+        off<E extends keyof Events>(event: E, listener: Events[E]): void;
+        removeAllListeners<E extends keyof Events>(event?: E): void;
+        removeListener<E extends keyof Events>(event: E, listener: Events[E]): void;
+        removeEventListener<E extends keyof Events>(event: E, listener: Events[E]): void;
+        emit<E extends keyof Events>(event: E, ...args: IArguments<Events[E]>): boolean;
+        eventNames(): Array<string | number | symbol>;
+        listeners<E extends keyof Events>(event: E): Array<Events[E]>;
+        _getEventListeners<E extends keyof Events>(event: E): Array<Events[E]>;
+        listenerCount<E extends keyof Events>(event: E): number;
+        hasListeners(): boolean;
+        hasListener<E extends keyof Events>(event: E): boolean;
+    }
+
     export const enum Key {
         Space = 32,
         Apostrophe = 39,
@@ -247,12 +273,34 @@ declare namespace spurv {
     const argv: string[];
     const env: Record<string, string>;
 
-    class View {
+    interface ViewEvents {
+        documentChanged: () => void;
+    }
+
+    class View extends IEventEmitter<ViewEvents> {
         readonly currentLine: number;
+
+        document?: Document;
 
         constructor();
 
         scrollUp(): void;
         scrollDown(): void;
+    }
+
+    interface DocumentEvents {
+        ready: () => void;
+        propertiesChanged: (start: number, end: number) => void;
+    }
+
+    class Document extends IEventEmitter<DocumentEvents> {
+        font: string;
+        readonly ready: boolean;
+        readonly lines: number;
+
+        constructor();
+
+        loadFile(path: string): Promise<void>;
+        setContents(contents: string): Promise<void>;
     }
 }

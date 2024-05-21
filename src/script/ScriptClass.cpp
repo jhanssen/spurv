@@ -1,7 +1,6 @@
 #include "ScriptClass.h"
 
 namespace spurv {
-ScriptClassInstance::~ScriptClassInstance() = default;
 
 ScriptClass::ScriptClass(const std::string &name, Constructor &&constructor)
     : mName(name), mConstructor(std::move(constructor))

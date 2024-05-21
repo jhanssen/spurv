@@ -65,10 +65,10 @@ int app(int argc, char** argv, char** envp)
         spdlog::info("renderer ready");
 
         Editor::initialize(self, argc, argv, envp);
-        Editor::instance()->onReady().connect([filename = std::move(filename)]() {
-            spdlog::info("editor ready");
-            Editor::instance()->load(std::filesystem::path(filename));
-        });
+        // Editor::instance()->onReady().connect([filename = std::move(filename)]() {
+        //     spdlog::info("editor ready");
+        //     Editor::instance()->load(std::filesystem::path(filename));
+        // });
     });
     const int32_t ret = loop.run();
     ThreadPool::destroyMainThreadPool();

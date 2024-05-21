@@ -6,6 +6,7 @@ set(SOURCES
     ScriptEngine_fetch.cpp
     ScriptValue.cpp
     ScriptClass.cpp
+    ScriptClassInstance.cpp
 )
 
 add_library(spurv-script-object OBJECT ${SOURCES})

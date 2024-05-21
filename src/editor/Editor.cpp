@@ -8,6 +8,7 @@
 #include <Window.h>
 #include <EventLoopUv.h>
 #include <fmt/core.h>
+#include <Promise.h>
 #include <uv.h>
 #include <Thread.h>
 
@@ -26,8 +27,23 @@ std::unique_ptr<Editor> Editor::sInstance = {};
 class ViewInstance : public ScriptClassInstance
 {
 public:
-    std::shared_ptr<View> view {};
+    std::shared_ptr<View> view;
     int32_t pos { 0 };
+    ScriptValue document;
+};
+
+class DocumentInstance : public ScriptClassInstance
+{
+public:
+    ~DocumentInstance()
+    {
+        if (document && onReadyConnectKey != EventLoop::ConnectKey {}) {
+            document->onReady().disconnect(onReadyConnectKey);
+        }
+    }
+    std::shared_ptr<Document> document;
+    std::shared_ptr<Promise> loadPromise;
+    EventLoop::ConnectKey onReadyConnectKey {};
 };
 
 Editor::Editor(const std::filesystem::path &appPath, int argc, char **argv, char **envp)
@@ -65,35 +81,107 @@ void Editor::thread_internal()
 
         auto mainEventLoop = static_cast<MainEventLoop*>(EventLoop::mainEventLoop());
         mScriptEngine = std::make_unique<ScriptEngine>(mEventLoop.get(), mImpl->appPath);
-        ScriptClass clazz("View",
-                          [this](ScriptClassInstance *&instance, std::vector<ScriptValue> &&/*args*/) -> std::optional<std::string> {
-                              ViewInstance *v = new ViewInstance;
-                              v->view = mCurrentView;
-                              instance = v;
-                              return {};
-                          });
+        {
+            ScriptClass clazz("View",
+                              [this](ScriptClassInstance *&instance, std::vector<ScriptValue> &&/*args*/) -> std::optional<std::string> {
+                                  ViewInstance *v = new ViewInstance;
+                                  v->view = std::make_shared<View>();
+                                  mContainer->addFrame(v->view);
+                                  instance = v;
+                                  return {};
+                              });
 
-        clazz.addMethod("scrollDown", [](ScriptClassInstance *instance, std::vector<ScriptValue> &&) -> ScriptValue {
-            ViewInstance *v = static_cast<ViewInstance *>(instance);
-            auto renderer = Renderer::instance();
-            renderer->animatePropertyFloat(v->view->frameNo(), Renderer::Property::FirstLine, static_cast<float>(++v->pos), 100, Ease::InOutQuad);
-            return {};
-        });
-
-
-        clazz.addMethod("scrollUp", [](ScriptClassInstance *instance, std::vector<ScriptValue> &&) -> ScriptValue {
-            ViewInstance *v = static_cast<ViewInstance *>(instance);
-            if (v->pos > 0) {
+            clazz.addMethod("scrollDown", [](ScriptClassInstance *instance, std::vector<ScriptValue> &&) -> ScriptValue {
+                ViewInstance *v = static_cast<ViewInstance *>(instance);
                 auto renderer = Renderer::instance();
-                renderer->animatePropertyFloat(v->view->frameNo(), Renderer::Property::FirstLine, static_cast<float>(--v->pos), 100, Ease::InOutQuad);
-            }
-            return {};
-        });
-        clazz.addProperty("currentLine", [](ScriptClassInstance *instance) -> ScriptValue {
-            ViewInstance *v = static_cast<ViewInstance *>(instance);
-            return ScriptValue(v->pos);
-        });
-        ScriptEngine::scriptEngine()->addClass(std::move(clazz));
+                renderer->animatePropertyFloat(v->view->frameNo(), Renderer::Property::FirstLine, static_cast<float>(++v->pos), 100, Ease::InOutQuad);
+                return {};
+            });
+
+            clazz.addMethod("scrollUp", [](ScriptClassInstance *instance, std::vector<ScriptValue> &&) -> ScriptValue {
+                ViewInstance *v = static_cast<ViewInstance *>(instance);
+                if (v->pos > 0) {
+                    auto renderer = Renderer::instance();
+                    renderer->animatePropertyFloat(v->view->frameNo(), Renderer::Property::FirstLine, static_cast<float>(--v->pos), 100, Ease::InOutQuad);
+                }
+                return {};
+            });
+            clazz.addProperty("currentLine", [](ScriptClassInstance *instance) -> ScriptValue {
+                ViewInstance *v = static_cast<ViewInstance *>(instance);
+                return ScriptValue(v->pos);
+            });
+
+            clazz.addProperty("document", [](ScriptClassInstance *instance) -> ScriptValue {
+                ViewInstance *v = static_cast<ViewInstance *>(instance);
+                return v->document.clone();
+            }, [this](ScriptClassInstance *instance, ScriptValue &&value) -> std::optional<std::string> {
+                    ViewInstance *v = static_cast<ViewInstance *>(instance);
+                    if (auto doc = value.instanceOf<DocumentInstance>()) {
+                        v->view->setName("hello");
+                        v->view->setActive(false);
+                        v->view->addClass("border");
+                        doc->document->setName("doccy");
+
+                        setStylesheet(
+                            "frame { border-radius: 10; box-shadow: 0 10 30 }\n"
+                            "frame.border { border: 6 #229922; }\n"
+                            "editor { flex-direction: column;flex: 1; padding: 5 }\n"
+                            "editor > view { flex: 1; background-color: #ff0000; padding: 10 }\n"
+                            "editor document { flex: 1; margin: 5   2; }");
+
+                        doc->document->setFont(Font("Inconsolata", 25));
+                        v->view->setDocument(doc->document);
+                        v->document = std::move(value);
+
+                        relayout();
+                        return {};
+                    } else if (value.isNullOrUndefined()) {
+                        v->view->setDocument({});
+                        v->document = {};
+                        return {};
+                    }
+                    return std::string("Invalid document");
+                });
+            ScriptEngine::scriptEngine()->addClass(std::move(clazz));
+        }
+
+        {
+            ScriptClass clazz("Document",
+                              [](ScriptClassInstance *&instance, std::vector<ScriptValue> &&/*args*/) -> std::optional<std::string> {
+                                  DocumentInstance *d = new DocumentInstance;
+                                  d->document = std::make_shared<Document>();
+                                  d->onReadyConnectKey = d->document->onReady().connect([d]() {
+                                      if (d->loadPromise) {
+                                          std::shared_ptr<Promise> promise;
+                                          std::swap(promise, d->loadPromise);
+                                          promise->resolve();
+                                      }
+                                  });
+                                  instance = d;
+                                  return {};
+                              });
+
+            clazz.addMethod("loadFile", [](ScriptClassInstance *instance, std::vector<ScriptValue> &&args) -> ScriptValue {
+                if (args.empty()) {
+                    return ScriptValue::makeError("Not enough arguments");
+                }
+
+                auto path = args[0].toString();
+                if (!path.ok()) {
+                    return ScriptValue::makeError("Bad arg");
+                }
+                DocumentInstance *d = static_cast<DocumentInstance *>(instance);
+                if (d->loadPromise) {
+                    // ### could reject the previous one
+                    return ScriptValue::makeError("Already loading");
+                }
+                d->loadPromise = std::make_shared<Promise>();
+                d->document->load(std::filesystem::path(*path));
+                return d->loadPromise->value();
+            });
+
+            ScriptEngine::scriptEngine()->addClass(std::move(clazz));
+        }
 
         mScriptEngine->onExit().connect([this, mainEventLoop](int exitCode) {
             mEventLoop->stop(0);
@@ -101,9 +189,7 @@ void Editor::thread_internal()
                 mainEventLoop->stop(exitCode);
             });
         });
-        mainEventLoop->post([editor = this]() {
-            editor->mOnReady.emit();
-        });
+
         mConnectKeys[0] = mainEventLoop->onKey().connect([this](int key, int scancode, int action, int mods, const std::optional<std::string> &keyName) {
             mScriptEngine->onKey(key, scancode, action, mods, keyName);
         });
@@ -119,6 +205,19 @@ void Editor::thread_internal()
         const auto& windowRect = window->rect();
         mWidth = windowRect.width;
         mHeight = windowRect.height;
+
+        mScriptEngine->start();
+        mContainer = std::make_unique<Container>();
+        mContainer->makeRoot();
+        // addStyleableChild(mContainer.get());
+
+        mContainer->setSelector("editor");
+        mContainer->mutableSelector()[0].id(mName);
+        mContainer->setStylesheet(mQss);
+
+        mainEventLoop->post([this]() {
+            mOnReady.emit();
+        });
 
     });
     mEventLoop->run();

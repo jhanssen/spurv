@@ -12,8 +12,8 @@ installConsole();
 
 queueMicrotask(() => {
     console.log("BALLS", splitCommand("foo"));
-    console.log("BALLS", splitCommand("\"foo\""));
-    console.log("BALLS", splitCommand("\"foo bar\" bar'foo \"bar'foo\"            \"foo    bar\""));
+    console.log("BALLS", splitCommand('"foo"'));
+    console.log("BALLS", splitCommand('"foo bar" bar\'foo "bar\'foo"            "foo    bar"'));
 });
 
 let view: spurv.View | undefined;
@@ -152,3 +152,11 @@ console.error("2", zot2);
 //     exit(10);
 // }, 2000);
 
+(async (): Promise<void> => {
+    if (spurv.argv.length > 1) {
+        const doc = new spurv.Document();
+        await doc.loadFile(spurv.argv[1]!);
+        const v = new spurv.View();
+        v.document = doc;
+    }
+})();

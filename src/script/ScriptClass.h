@@ -6,14 +6,9 @@
 #include <vector>
 #include <ScriptValue.h>
 #include <UnorderedDense.h>
+#include "ScriptClassInstance.h"
 
 namespace spurv {
-class ScriptClassInstance
-{
-public:
-    virtual ~ScriptClassInstance();
-};
-
 class ScriptClass
 {
 public:
