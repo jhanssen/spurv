@@ -5,7 +5,7 @@ set(SOURCES
 add_library(spurv-text-object OBJECT ${SOURCES})
 add_library(Text::Object ALIAS spurv-text-object)
 target_link_libraries(spurv-text-object PRIVATE Event)
-target_link_libraries_system(spurv-text-object PRIVATE harfbuzz::harfbuzz)
+target_link_libraries_system(spurv-text-object PRIVATE harfbuzz::harfbuzz FontConfig::FontConfig)
 target_include_directories(spurv-text-object PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 
 add_library(spurv-text-interface INTERFACE)
