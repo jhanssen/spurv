@@ -111,6 +111,8 @@ public:
 
     void forEach(std::function<void(const ScriptValue &value, int idx)> function);
 
+    bool hasProperty(JSAtom atom) const;
+    bool hasProperty(const std::string &name) const;
     ScriptValue getProperty(JSAtom atom) const;
     ScriptValue getProperty(const std::string &name) const;
     ScriptValue getPropertyIdx(uint32_t value) const;

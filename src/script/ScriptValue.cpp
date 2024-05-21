@@ -341,6 +341,26 @@ void ScriptValue::forEach(std::function<void(const ScriptValue &value, int idx)>
     }
 }
 
+bool ScriptValue::hasProperty(JSAtom atom) const
+{
+    if (isObject()) {
+        return JS_HasProperty(ScriptEngine::scriptEngine()->context(), *mValue, atom);
+    }
+    return false;
+}
+
+bool ScriptValue::hasProperty(const std::string &name) const
+{
+    if (isObject()) {
+        auto ctx = ScriptEngine::scriptEngine()->context();
+        JSAtom atom = JS_NewAtom(ctx, name.c_str());
+        const bool ret = JS_HasProperty(ctx, *mValue, atom);
+        JS_FreeAtom(ctx, atom);
+        return ret;
+    }
+    return false;
+}
+
 ScriptValue ScriptValue::getProperty(JSAtom atom) const
 {
     if (isObject()) {

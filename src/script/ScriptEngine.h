@@ -96,8 +96,10 @@ private:
 
     // setProcessHandler(handler: (event: NativeProcessFinishedEvent | NativeProcessStdoutEvent | NativeProcessStderrEvent) => void): void;
     ScriptValue setProcessHandler(std::vector<ScriptValue> &&args);
+    ScriptValue setFetchNativeHandler(std::vector<ScriptValue> &&args);
 
-    ScriptValue fetch(std::vector<ScriptValue> &&args);
+    ScriptValue fetchNative(std::vector<ScriptValue> &&args);
+    ScriptValue abortFetchNative(std::vector<ScriptValue> &&args);
 
     // startProcess(arguments: string[], env: Record<string, string> |
     //              undefined, cwd: string | undefined, stdin: ArrayBuffer | string |
@@ -279,5 +281,6 @@ private:
     ScriptValue mSpurv;
     ScriptValue mProcessHandler;
     ScriptValue mKeyHandler;
+    ScriptValue mFetchNativeHandler;
 };
 } // namespace spurv

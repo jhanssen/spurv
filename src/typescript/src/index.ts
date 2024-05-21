@@ -156,7 +156,9 @@ console.error("2", zot2);
     if (spurv.argv.length > 1) {
         const doc = new spurv.Document();
         await doc.loadFile(spurv.argv[1]!);
+        console.log("fuck uou");
         const v = new spurv.View();
         v.document = doc;
+        console.log("good doc");
     }
 })();

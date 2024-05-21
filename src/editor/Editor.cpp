@@ -154,6 +154,7 @@ void Editor::thread_internal()
                                       if (d->loadPromise) {
                                           std::shared_ptr<Promise> promise;
                                           std::swap(promise, d->loadPromise);
+                                          printf("[Editor.cpp:%d]: promise->resolve();\n", __LINE__); fflush(stdout);
                                           promise->resolve();
                                       }
                                   });

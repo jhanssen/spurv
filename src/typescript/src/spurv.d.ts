@@ -270,6 +270,36 @@ declare namespace spurv {
 
     export function exit(number?: number): void;
 
+    export interface FetchNativeHeaders {
+        type: "headers";
+        statusCode: number;
+        headers: Record<string, string>;
+    }
+
+    export interface FetchNativeError {
+        type: "error";
+        error: string;
+    }
+
+    export interface FetchNativeData {
+        type: "data";
+        data: ArrayBuffer;
+        end?: boolean;
+    }
+
+    export interface FetchNativeOptions {
+        url: string;
+        headers?: Record<string, string>;
+        method?: "GET" | "POST" | "PUT" | "OPTIONS" | "DELETE" | "PATCH";
+        body: string | ArrayBuffer | undefined;
+    }
+
+    export function fetchNative(options: FetchNativeOptions): number;
+    export function abortFetchNative(id: number): void;
+    export function setFetchNativeHandler(
+        handler: (event: FetchNativeHeaders | FetchNativeData | FetchNativeError) => void
+    ): void;
+
     const argv: string[];
     const env: Record<string, string>;
 
