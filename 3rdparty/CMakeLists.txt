@@ -1,10 +1,5 @@
 cmake_policy(SET CMP0077 NEW)
 
-find_program(CCACHE_FOUND ccache)
-if (CCACHE_FOUND)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
-endif ()
-
 set(FMT_INSTALL OFF CACHE BOOL "")
 
 set(FT_DISABLE_ZLIB ON CACHE BOOL "")
