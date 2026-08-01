@@ -167,6 +167,7 @@ declare namespace spurv {
     }
 
     // logging
+    /** @native spurv::LogLevel */
     export const enum LogLevel {
         Trace = 0,
         Debug = 1,
@@ -176,6 +177,7 @@ declare namespace spurv {
         Critical = 5
     }
 
+    /** @native */
     export function log(level: LogLevel, message: string): void;
 
     // process
@@ -307,9 +309,11 @@ declare namespace spurv {
         documentChanged: () => void;
     }
 
+    /** @native spurv::View @header View.h */
     class View extends IEventEmitter<ViewEvents> {
         readonly currentLine: number;
 
+        /** @native document */
         document?: Document;
 
         constructor();
@@ -323,9 +327,14 @@ declare namespace spurv {
         propertiesChanged: (start: number, end: number) => void;
     }
 
+    /** @native spurv::Document @header Document.h */
     class Document extends IEventEmitter<DocumentEvents> {
         font: string;
+
+        /** @native isReady */
         readonly ready: boolean;
+
+        /** @native numLines */
         readonly lines: number;
 
         constructor();

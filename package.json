@@ -12,6 +12,7 @@
         "clean": "cmake-js clean"
     },
     "devDependencies": {
-        "cmake-js": "^7.3.0"
+        "cmake-js": "^7.3.0",
+        "typescript": "^6.0.0"
     }
 }

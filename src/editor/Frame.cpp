@@ -32,16 +32,20 @@ Frame::~Frame()
         onAppliedStylesheet().disconnect(mOnAppliedStylesheetKey);
     }
     if (mFrameNo != 0) {
-        auto renderer = Renderer::instance();
-        renderer->frameDeleted(mFrameNo);
+        auto* renderer = Renderer::instance();
+        if (renderer != nullptr) {
+            renderer->frameDeleted(mFrameNo);
+        }
     }
 }
 
 Frame& Frame::operator=(Frame&& other)
 {
     if (mFrameNo != 0) {
-        auto renderer = Renderer::instance();
-        renderer->frameDeleted(mFrameNo);
+        auto* renderer = Renderer::instance();
+        if (renderer != nullptr) {
+            renderer->frameDeleted(mFrameNo);
+        }
     }
 
     mFrameNo = other.mFrameNo;
