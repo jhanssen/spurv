@@ -2,7 +2,7 @@
 #include <FS.h>
 #include <Formatting.h>
 #include <VulkanCommon.h>
-#include <fmt/core.h>
+#include <fmt/format.h>
 #include <array>
 
 namespace spurv {

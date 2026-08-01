@@ -3,5 +3,3 @@ add_library(base64 INTERFACE
 )
 
 add_library(base64::base64 ALIAS base64)
-
-target_include_directories(quickjs INTERFACE ${THIRDPARTY_DIR}/base64/include/)

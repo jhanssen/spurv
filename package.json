@@ -1,0 +1,17 @@
+{
+    "name": "spurv",
+    "version": "0.1.0",
+    "main": "index.js",
+    "license": "ISC",
+    "binary": {
+        "napi_versions": [8]
+    },
+    "scripts": {
+        "build": "cmake-js build",
+        "rebuild": "cmake-js rebuild",
+        "clean": "cmake-js clean"
+    },
+    "devDependencies": {
+        "cmake-js": "^7.3.0"
+    }
+}

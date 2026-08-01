@@ -8,7 +8,8 @@ set(SOURCES
 
 add_library(spurv-editor-object OBJECT ${SOURCES})
 add_library(Editor::Object ALIAS spurv-editor-object)
-target_link_libraries(spurv-editor-object PRIVATE Event Document Render Script Window)
+target_link_libraries(spurv-editor-object PRIVATE Event Document Render Window)
+target_link_libraries_system(spurv-editor-object PRIVATE libuv::libuv)
 
 add_library(spurv-editor-interface INTERFACE)
 add_library(Editor ALIAS spurv-editor-interface)

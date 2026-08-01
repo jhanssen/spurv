@@ -78,7 +78,6 @@ add_subdirectory(yoga/yoga)
 # hack to make freetype pick up harfbuzz
 target_link_libraries(freetype PRIVATE harfbuzz)
 
-include(quickjs.cmake)
 include(base64.cmake)
 
 add_library(glfw::glfw ALIAS glfw)

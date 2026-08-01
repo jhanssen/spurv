@@ -4,11 +4,9 @@
 #include <Logger.h>
 #include <MainEventLoop.h>
 #include <Renderer.h>
-#include <ScriptEngine.h>
 #include <Window.h>
 #include <EventLoopUv.h>
 #include <fmt/core.h>
-#include <Promise.h>
 #include <uv.h>
 #include <Thread.h>
 
@@ -23,28 +21,6 @@ struct EditorImpl
 } // namespace spurv
 
 std::unique_ptr<Editor> Editor::sInstance = {};
-
-class ViewInstance : public ScriptClassInstance
-{
-public:
-    std::shared_ptr<View> view;
-    int32_t pos { 0 };
-    ScriptValue document;
-};
-
-class DocumentInstance : public ScriptClassInstance
-{
-public:
-    ~DocumentInstance()
-    {
-        if (document && onReadyConnectKey != EventLoop::ConnectKey {}) {
-            document->onReady().disconnect(onReadyConnectKey);
-        }
-    }
-    std::shared_ptr<Document> document;
-    std::shared_ptr<Promise> loadPromise;
-    EventLoop::ConnectKey onReadyConnectKey {};
-};
 
 Editor::Editor(const std::filesystem::path &appPath, int argc, char **argv, char **envp)
     : mEventLoop(new EventLoopUv()), mArgc(argc), mArgv(argv), mEnvp(envp)
@@ -80,123 +56,11 @@ void Editor::thread_internal()
         }
 
         auto mainEventLoop = static_cast<MainEventLoop*>(EventLoop::mainEventLoop());
-        mScriptEngine = std::make_unique<ScriptEngine>(mEventLoop.get(), mImpl->appPath);
-        {
-            ScriptClass clazz("View",
-                              [this](ScriptClassInstance *&instance, std::vector<ScriptValue> &&/*args*/) -> std::optional<std::string> {
-                                  ViewInstance *v = new ViewInstance;
-                                  v->view = std::make_shared<View>();
-                                  mContainer->addFrame(v->view);
-                                  instance = v;
-                                  return {};
-                              });
 
-            clazz.addMethod("scrollDown", [](ScriptClassInstance *instance, std::vector<ScriptValue> &&) -> ScriptValue {
-                ViewInstance *v = static_cast<ViewInstance *>(instance);
-                auto renderer = Renderer::instance();
-                renderer->animatePropertyFloat(v->view->frameNo(), Renderer::Property::FirstLine, static_cast<float>(++v->pos), 100, Ease::InOutQuad);
-                return {};
-            });
-
-            clazz.addMethod("scrollUp", [](ScriptClassInstance *instance, std::vector<ScriptValue> &&) -> ScriptValue {
-                ViewInstance *v = static_cast<ViewInstance *>(instance);
-                if (v->pos > 0) {
-                    auto renderer = Renderer::instance();
-                    renderer->animatePropertyFloat(v->view->frameNo(), Renderer::Property::FirstLine, static_cast<float>(--v->pos), 100, Ease::InOutQuad);
-                }
-                return {};
-            });
-            clazz.addProperty("currentLine", [](ScriptClassInstance *instance) -> ScriptValue {
-                ViewInstance *v = static_cast<ViewInstance *>(instance);
-                return ScriptValue(v->pos);
-            });
-
-            clazz.addProperty("document", [](ScriptClassInstance *instance) -> ScriptValue {
-                ViewInstance *v = static_cast<ViewInstance *>(instance);
-                return v->document.clone();
-            }, [this](ScriptClassInstance *instance, ScriptValue &&value) -> std::optional<std::string> {
-                    ViewInstance *v = static_cast<ViewInstance *>(instance);
-                    if (auto doc = value.instanceOf<DocumentInstance>()) {
-                        v->view->setName("hello");
-                        v->view->setActive(false);
-                        v->view->addClass("border");
-                        doc->document->setName("doccy");
-
-                        setStylesheet(
-                            "frame { border-radius: 10; box-shadow: 0 10 30 }\n"
-                            "frame.border { border: 6 #229922; }\n"
-                            "editor { flex-direction: column;flex: 1; padding: 5 }\n"
-                            "editor > view { flex: 1; background-color: #ff0000; padding: 10 }\n"
-                            "editor document { flex: 1; margin: 5   2; }");
-
-                        doc->document->setFont(Font("Inconsolata", 25));
-                        v->view->setDocument(doc->document);
-                        v->document = std::move(value);
-
-                        relayout();
-                        return {};
-                    } else if (value.isNullOrUndefined()) {
-                        v->view->setDocument({});
-                        v->document = {};
-                        return {};
-                    }
-                    return std::string("Invalid document");
-                });
-            ScriptEngine::scriptEngine()->addClass(std::move(clazz));
-        }
-
-        {
-            ScriptClass clazz("Document",
-                              [](ScriptClassInstance *&instance, std::vector<ScriptValue> &&/*args*/) -> std::optional<std::string> {
-                                  DocumentInstance *d = new DocumentInstance;
-                                  d->document = std::make_shared<Document>();
-                                  d->onReadyConnectKey = d->document->onReady().connect([d]() {
-                                      if (d->loadPromise) {
-                                          std::shared_ptr<Promise> promise;
-                                          std::swap(promise, d->loadPromise);
-                                          printf("[Editor.cpp:%d]: promise->resolve();\n", __LINE__); fflush(stdout);
-                                          promise->resolve();
-                                      }
-                                  });
-                                  instance = d;
-                                  return {};
-                              });
-
-            clazz.addMethod("loadFile", [](ScriptClassInstance *instance, std::vector<ScriptValue> &&args) -> ScriptValue {
-                if (args.empty()) {
-                    return ScriptValue::makeError("Not enough arguments");
-                }
-
-                auto path = args[0].toString();
-                if (!path.ok()) {
-                    return ScriptValue::makeError("Bad arg");
-                }
-                DocumentInstance *d = static_cast<DocumentInstance *>(instance);
-                if (d->loadPromise) {
-                    // ### could reject the previous one
-                    return ScriptValue::makeError("Already loading");
-                }
-                d->loadPromise = std::make_shared<Promise>();
-                d->document->load(std::filesystem::path(*path));
-                return d->loadPromise->value();
-            });
-
-            ScriptEngine::scriptEngine()->addClass(std::move(clazz));
-        }
-
-        mScriptEngine->onExit().connect([this, mainEventLoop](int exitCode) {
-            mEventLoop->stop(0);
-            mainEventLoop->post([mainEventLoop, exitCode]() {
-                mainEventLoop->stop(exitCode);
-            });
-        });
-
-        mConnectKeys[0] = mainEventLoop->onKey().connect([this](int key, int scancode, int action, int mods, const std::optional<std::string> &keyName) {
-            mScriptEngine->onKey(key, scancode, action, mods, keyName);
-        });
-        // mConnectKeys[1] = mainEventLoop->onUnicode().connect([](uint32_t uc) {
-        //     spdlog::error("editor uc {}", uc);
-        // });
+        // The old quickjs-based scripting engine (ScriptEngine) and its
+        // View/Document bindings have been removed. The app is now a native
+        // node module; scripting will come back through generated N-API
+        // bindings.
         mConnectKeys[2] = window->onResize().connect([this](uint32_t w, uint32_t h) {
             mWidth = w;
             mHeight = h;
@@ -207,7 +71,6 @@ void Editor::thread_internal()
         mWidth = windowRect.width;
         mHeight = windowRect.height;
 
-        mScriptEngine->start();
         mContainer = std::make_unique<Container>();
         mContainer->makeRoot();
         // addStyleableChild(mContainer.get());
@@ -225,7 +88,6 @@ void Editor::thread_internal()
 
     if (mInitialized) {
         auto mainEventLoop = static_cast<MainEventLoop*>(EventLoop::mainEventLoop());
-        mainEventLoop->onKey().disconnect(mConnectKeys[0]);
         mainEventLoop->onUnicode().disconnect(mConnectKeys[1]);
         window->onResize().disconnect(mConnectKeys[2]);
     }
@@ -234,7 +96,6 @@ void Editor::thread_internal()
     {
         std::unique_lock lock(mMutex);
         mEventLoop.reset();
-        mScriptEngine.reset();
         mDocuments.clear();
         mCurrentView = nullptr;
         mCond.notify_one();

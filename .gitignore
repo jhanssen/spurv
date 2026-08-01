@@ -1,1 +1,3 @@
 *.~undo-tree~
+node_modules/
+build/

@@ -1,8 +1,6 @@
 #include "View.h"
 #include <Logger.h>
 #include <Renderer.h>
-#include <ScriptClass.h>
-#include <ScriptEngine.h>
 #include <Formatting.h>
 
 using namespace spurv;

@@ -13,7 +13,6 @@
 namespace spurv {
 
 struct EditorImpl;
-class ScriptEngine;
 
 class Editor
 {
@@ -59,7 +58,6 @@ private:
 
     mutable std::mutex mMutex;
 
-    std::unique_ptr<ScriptEngine> mScriptEngine;
     std::condition_variable mCond;
     std::thread mThread;
     std::unique_ptr<EventLoop> mEventLoop;
